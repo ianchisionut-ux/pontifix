@@ -65,7 +65,7 @@ export function ResponsiveShell({
   logoLabel: string
   profileName?: string // numele afacerii/profilului, afișat sus, deasupra ceasului
   navItems: { href: string; label: string; badge?: number; icon?: string }[]
-  accentColor?: string // culoarea aleasă de business în Setări — dacă lipsește, folosim culoarea implicită bookeasy
+  accentColor?: string // culoarea aleasă de business în Setări — dacă lipsește, folosim culoarea implicită Pontifix
   accountContent: React.ReactNode // blocul de cont/ieșire — separat, ca să nu intre în carusel
   children: React.ReactNode
   enableLiveBadges?: boolean // interoghează periodic numărul de notificări, ca badge-urile să se actualizeze fără reîncărcare de pagină

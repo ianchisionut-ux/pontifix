@@ -4,67 +4,9 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
 import Link from 'next/link'
-import Image from 'next/image'
-import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
 
 export default function LoginPage() {
-  const router = useRouter()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
-
-    const result = await signIn('credentials', { email, password, redirect: false })
-
-    if (result?.error) {
-      setError('Email sau parolă greșită.')
-      setLoading(false)
-      return
-    }
-
-    router.push('/dashboard')
-    router.refresh()
-  }
-
-  return (
-    <main className="min-h-screen flex items-center justify-center bg-[var(--surface-muted)] px-6">
-      <div className="w-full max-w-sm flex flex-col items-center gap-6">
-        <Link href="/">
-          <Image src="/logo.png" alt="bookeasy.ro" width={200} height={133} priority className="w-[160px] h-auto" />
-        </Link>
-
-        <Card className="w-full">
-          <h1 className="text-lg font-semibold mb-4">Intră în cont</h1>
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <div>
-              <label className="text-sm text-gray-500 block mb-1.5">Email</label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-            </div>
-            <div>
-              <label className="text-sm text-gray-500 block mb-1.5">Parolă</label>
-              <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-            </div>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-
-            <Button type="submit" disabled={loading} className="mt-2">
-              {loading ? 'Se conectează...' : 'Intră în cont'}
-            </Button>
-          </form>
-
-          <Link href="/forgot-password" className="text-sm text-gray-500 block text-center mt-4">
-            Am uitat parola
-          </Link>
-        </Card>
-      </div>
-    </main>
-  )
+  const router=useRouter(); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [loading,setLoading]=useState(false)
+  async function submit(e:React.FormEvent){e.preventDefault();setError('');setLoading(true);const result=await signIn('credentials',{email,password,redirect:false});if(result?.error){setError('Email sau parolă greșită.');setLoading(false);return}router.push('/dashboard');router.refresh()}
+  return <main className="min-h-screen bg-[#f5f6f2] grid lg:grid-cols-[1.1fr_.9fr]"><section className="hidden lg:flex p-12 flex-col justify-between bg-slate-950 text-white"><div className="text-2xl font-semibold">Pontifix</div><div className="max-w-xl"><p className="text-violet-400 font-medium mb-4">Pontaj simplu. Echipă organizată.</p><h1 className="text-5xl font-semibold leading-tight tracking-tight">Orele echipei tale, clare în fiecare zi.</h1><p className="text-slate-400 text-lg mt-5">Prezență în timp real, foi de pontaj, concedii și statistici — într-un singur loc.</p></div><p className="text-sm text-slate-500">Administrarea timpului de lucru, fără complicații.</p></section><section className="flex items-center justify-center p-6"><div className="w-full max-w-md"><div className="lg:hidden text-2xl font-semibold mb-8">Pontifix</div><p className="text-sm text-violet-600 font-medium mb-2">Bine ai revenit</p><h2 className="text-3xl font-semibold tracking-tight">Intră în cont</h2><p className="text-slate-500 mt-2 mb-8">Accesează pontajele și datele echipei tale.</p><form onSubmit={submit} className="space-y-4"><label className="block text-sm font-medium">Email<input className="input-field w-full mt-2 h-12" type="email" value={email} onChange={e=>setEmail(e.target.value)} required/></label><label className="block text-sm font-medium">Parolă<input className="input-field w-full mt-2 h-12" type="password" value={password} onChange={e=>setPassword(e.target.value)} required/></label>{error&&<p className="text-sm text-rose-600">{error}</p>}<button className="btn-primary w-full h-12 mt-2" disabled={loading}>{loading?'Se conectează...':'Intră în Pontifix'}</button></form><Link href="/forgot-password" className="text-sm text-slate-500 block text-center mt-5">Am uitat parola</Link></div></section></main>
 }

@@ -30,3 +30,6 @@ next-env.d.ts
 
 # Vercel
 .vercel
+
+# Arhiva locala nerepublicata
+legacy-bookeasy/

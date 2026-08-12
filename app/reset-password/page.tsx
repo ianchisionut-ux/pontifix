@@ -4,7 +4,6 @@ import { fetchWithTimeout } from '@/lib/fetch-with-timeout'
 import { useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -92,7 +91,7 @@ export default function ResetPasswordPage() {
     <main className="min-h-screen flex items-center justify-center bg-[var(--surface-muted)] px-6">
       <div className="w-full max-w-sm flex flex-col items-center gap-6">
         <Link href="/">
-          <Image src="/logo.png" alt="bookeasy.ro" width={200} height={133} priority className="w-[160px] h-auto" />
+          <span className="text-2xl font-semibold">Pontifix</span>
         </Link>
         <Suspense fallback={<p className="text-sm text-gray-500">Se încarcă...</p>}>
           <ResetPasswordForm />
