@@ -307,3 +307,36 @@ body {
 .schedule-progress span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#60a5fa,#bfdbfe); transition:width .4s ease; }
 .schedule-edit-link { padding:9px 13px; border:1px solid rgba(191,219,254,.24); border-radius:999px; color:#dbeafe; font-size:12px; font-weight:700; background:rgba(255,255,255,.08); }
 .schedule-edit-link:hover { background:rgba(255,255,255,.14); }
+
+/* Grilă fizică stabilă pentru imprimare — dimensiuni în mm, fără erori de subpixel */
+@media print {
+  .attendance-sheet {
+    width:283mm !important;
+    min-width:283mm !important;
+    border-collapse:collapse !important;
+    border-spacing:0 !important;
+    table-layout:fixed !important;
+  }
+  .attendance-col-nr { width:7mm !important; }
+  .attendance-col-name { width:42mm !important; }
+  .attendance-col-day { width:6.87mm !important; }
+  .attendance-col-total { width:7mm !important; }
+  .attendance-sheet th,
+  .attendance-sheet td {
+    box-sizing:border-box !important;
+    border:0.32mm solid #7b8797 !important;
+    background-clip:padding-box !important;
+  }
+  .attendance-sheet thead th,
+  .attendance-sheet tbody th,
+  .attendance-sheet tbody td {
+    position:static !important;
+  }
+  .attendance-sheet td button {
+    box-sizing:border-box !important;
+    width:100% !important;
+    height:100% !important;
+    margin:0 !important;
+    padding:0 !important;
+  }
+}
