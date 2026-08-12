@@ -244,6 +244,14 @@ body {
 .attendance-sheet thead .is-weekend { background:#d8e2ee; }
 .attendance-sheet td button { width:100%; height:100%; display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:800; transition:transform .1s, box-shadow .1s; }
 .attendance-sheet td button:hover { position:relative; z-index:2; box-shadow:inset 0 0 0 2px var(--accent); transform:scale(1.04); }
+.attendance-group-row th { position:sticky; left:0; z-index:3; height:30px !important; padding:0 12px !important; text-align:left !important; border-top:2px solid #93c5fd; background:#dbeafe !important; color:#1e40af; font-size:11px; font-weight:900; letter-spacing:.12em; }
+.attendance-order-row { cursor:grab; }
+.attendance-order-row:active, .employee-draggable:active { cursor:grabbing; }
+.attendance-order-row:hover th, .attendance-order-row:hover td { box-shadow:inset 0 1px #60a5fa, inset 0 -1px #60a5fa; }
+.copy-source { position:relative; box-shadow:inset 0 0 0 3px #2563eb !important; }
+.copy-source::after { content:'COPIAT'; position:absolute; left:50%; top:-18px; z-index:9; transform:translateX(-50%); padding:2px 5px; border-radius:5px; background:#1d4ed8; color:white; font-size:7px; font-weight:800; }
+.employee-count { display:inline-flex; align-items:center; min-height:27px; padding:0 10px; border-radius:999px; background:#eff6ff; color:#1d4ed8; font-size:11px; font-weight:750; }
+.employee-draggable { cursor:grab; border-color:#93c5fd; box-shadow:0 0 0 2px #dbeafe; }
 .attendance-present { background:#dbeafe !important; color:#1d4ed8 !important; }
 .attendance-remote { background:#e0e7ff !important; color:#4338ca !important; }
 .attendance-vacation { background:#fef3c7 !important; color:#a16207 !important; }
@@ -339,4 +347,9 @@ body {
     margin:0 !important;
     padding:0 !important;
   }
+}
+
+@media print {
+  .attendance-group-row th { position:static !important; height:5.5mm !important; padding:0 1.5mm !important; border:0.32mm solid #7b8797 !important; background:#dbeafe !important; color:#172554 !important; font-size:6.5pt !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+  .copy-source::after { display:none !important; }
 }

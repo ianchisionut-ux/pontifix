@@ -18,7 +18,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
 
   const [business, employees, entries] = await Promise.all([
     prisma.business.findUnique({ where: { id: businessId }, select: { name: true, break1Start: true, break1End: true, workingHours: { orderBy: { weekday: 'asc' } } } }),
-    prisma.attendanceEmployee.findMany({ where: { businessId, active: true }, orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }], select: { id: true, firstName: true, lastName: true, position: true, dailyHours: true } }),
+    prisma.attendanceEmployee.findMany({ where: { businessId, active: true }, orderBy: [{ category: 'desc' }, { sortOrder: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }], select: { id: true, firstName: true, lastName: true, position: true, dailyHours: true, category: true, sortOrder: true } }),
     prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: start, lt: end } }, select: { id: true, employeeId: true, workDate: true, status: true, hours: true, note: true } }),
   ])
 

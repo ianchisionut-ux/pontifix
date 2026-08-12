@@ -10,6 +10,7 @@ const fields = {
   phone: z.string().trim().optional(),
   position: z.string().trim().optional(),
   department: z.string().trim().optional(),
+  category: z.enum(['TESA', 'PRODUCTIE']).default('PRODUCTIE'),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACTOR']).default('FULL_TIME'),
   weeklyHours: z.coerce.number().min(1).max(80).default(40),
   dailyHours: z.coerce.number().min(0.5).max(24).default(8),
@@ -25,7 +26,7 @@ async function businessFromSession() {
 export async function GET() {
   const businessId = await businessFromSession()
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
-  const employees = await prisma.attendanceEmployee.findMany({ where: { businessId }, orderBy: [{ active: 'desc' }, { lastName: 'asc' }] })
+  const employees = await prisma.attendanceEmployee.findMany({ where: { businessId }, orderBy: [{ active: 'desc' }, { category: 'desc' }, { sortOrder: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }] })
   return NextResponse.json(employees)
 }
 
@@ -49,5 +50,28 @@ export async function PATCH(req: NextRequest) {
     data: { ...data, email: data.email || null },
   })
   if (!result.count) return NextResponse.json({ error: 'Angajatul nu există.' }, { status: 404 })
+  return NextResponse.json({ success: true })
+}
+
+const reorderSchema = z.object({
+  employees: z.array(z.object({
+    id: z.string().min(1),
+    category: z.enum(['TESA', 'PRODUCTIE']),
+    sortOrder: z.number().int().min(0),
+  })).max(500),
+})
+
+export async function PUT(req: NextRequest) {
+  const businessId = await businessFromSession()
+  if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
+  const parsed = reorderSchema.safeParse(await req.json())
+  if (!parsed.success) return NextResponse.json({ error: 'Ordinea nu este validă.' }, { status: 400 })
+  const owned = await prisma.attendanceEmployee.count({ where: { businessId, id: { in: parsed.data.employees.map((item) => item.id) } } })
+  if (owned !== parsed.data.employees.length) return NextResponse.json({ error: 'Lista conține angajați invalizi.' }, { status: 400 })
+  await prisma.$transaction(parsed.data.employees.map((item) => prisma.attendanceEmployee.update({
+    where: { id: item.id },
+    data: { category: item.category, sortOrder: item.sortOrder },
+    select: { id: true },
+  })))
   return NextResponse.json({ success: true })
 }

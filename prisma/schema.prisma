@@ -715,6 +715,11 @@ enum SubscriptionStatus {
   UNPAID
 }
 
+enum EmployeeCategory {
+  TESA
+  PRODUCTIE
+}
+
 enum EmploymentType {
   FULL_TIME
   PART_TIME
@@ -760,9 +765,11 @@ model AttendanceEmployee {
   phone            String?
   position         String?
   department       String?
+  category         EmployeeCategory  @default(PRODUCTIE)
   employmentType   EmploymentType    @default(FULL_TIME)
   weeklyHours      Float             @default(40)
   dailyHours       Float             @default(8)
+  sortOrder        Int               @default(0)
   active           Boolean           @default(true)
   hiredAt          DateTime          @default(now())
   createdAt        DateTime          @default(now())
@@ -776,20 +783,22 @@ model AttendanceEmployee {
 }
 
 model DailyAttendance {
-  id         String              @id @default(cuid())
-  businessId String
-  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  employeeId String
-  employee   AttendanceEmployee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  workDate   DateTime            @db.Date
-  status     AttendanceDayStatus
-  hours      Float               @default(0)
-  note       String?
-  createdAt  DateTime            @default(now())
-  updatedAt  DateTime            @updatedAt
+  id             String              @id @default(cuid())
+  businessId     String
+  business       Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId     String
+  employee       AttendanceEmployee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  workDate       DateTime            @db.Date
+  status         AttendanceDayStatus
+  hours          Float               @default(0)
+  note           String?
+  leaveRequestId String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
 
   @@unique([employeeId, workDate])
   @@index([businessId, workDate])
+  @@index([leaveRequestId])
 }
 
 model TimeEntry {
