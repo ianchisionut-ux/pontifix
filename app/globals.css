@@ -273,11 +273,11 @@ body {
   .attendance-sheet .attendance-name { width:150px; min-width:150px; }
 }
 
-@page { size: A4 landscape; margin: 7mm; }
+@page { size: A4 landscape; margin: 10mm; }
 @media print {
   html, body { background:white !important; }
-  .attendance-page { width:283mm; }
-  .attendance-paper { width:283mm; min-height:196mm; margin:0; padding:0; border:0; border-radius:0; box-shadow:none; overflow:visible; }
+  .attendance-page { width:277mm; margin:0 auto !important; }
+  .attendance-paper { width:277mm; min-height:190mm; margin:0 auto !important; padding:0; border:0; border-radius:0; box-shadow:none; overflow:visible; }
   .attendance-sheet-wrap { overflow:visible !important; border:none !important; border-radius:0 !important; }
   .attendance-sheet { width:100%; min-width:0; table-layout:fixed; font-size:7pt; }
   .attendance-sheet thead { display:table-header-group; }
@@ -285,7 +285,7 @@ body {
   .attendance-sheet th, .attendance-sheet td { position:static !important; height:8.2mm; min-width:0 !important; border-color:#9ca3af !important; box-shadow:none !important; }
   .attendance-sheet thead th { height:9mm; }
   .attendance-sheet .attendance-nr { width:6mm; }
-  .attendance-sheet .attendance-name { width:39mm; padding:0 1.5mm; }
+  .attendance-sheet .attendance-name { width:40mm; padding:0 1.5mm; }
   .attendance-sheet .attendance-total { width:7mm; }
   .attendance-sheet tbody .attendance-name span { font-size:7.2pt; }
   .attendance-sheet tbody .attendance-name small { display:none; }
@@ -319,15 +319,15 @@ body {
 /* Grilă fizică stabilă pentru imprimare — dimensiuni în mm, fără erori de subpixel */
 @media print {
   .attendance-sheet {
-    width:283mm !important;
-    min-width:283mm !important;
+    width:277mm !important;
+    min-width:277mm !important;
     border-collapse:collapse !important;
     border-spacing:0 !important;
     table-layout:fixed !important;
   }
-  .attendance-col-nr { width:7mm !important; }
-  .attendance-col-name { width:42mm !important; }
-  .attendance-col-day { width:6.87mm !important; }
+  .attendance-col-nr { width:6mm !important; }
+  .attendance-col-name { width:40mm !important; }
+  .attendance-col-day { width:6.774mm !important; }
   .attendance-col-total { width:7mm !important; }
   .attendance-sheet th,
   .attendance-sheet td {
