@@ -69,7 +69,7 @@ export default function BrandColorCard({ initialColor, usesAppointments }: { ini
         ))}
         <button
           onClick={() => save(null)}
-          aria-label="Implicit bookeasy"
+          aria-label="Implicit Pontifix"
           className="w-9 h-9 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center text-[10px] text-gray-400 font-medium"
           style={{
             boxShadow: !color ? '0 0 0 2px white, 0 0 0 4px var(--accent)' : 'none',

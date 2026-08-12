@@ -95,7 +95,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <ResponsiveShell
       logoHref="/dashboard"
-      logoLabel="bookeasy.ro"
+      logoLabel="Pontifix"
       profileName={businessName ?? undefined}
       navItems={navItems}
       accentColor={brandColor ?? undefined}

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { User, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import {
@@ -124,7 +123,7 @@ export function ResponsiveShell({
       <div className="lg:hidden sticky top-0 z-40 border-b border-[var(--border-soft)] screen-only" style={{ background: accentColor ? softTint : 'white' }}>
         <div className="flex items-center justify-between px-4 py-3">
           <Link href={logoHref} className="flex items-center gap-2">
-            <Image src="/logo-mark-square.png" alt="bookeasy.ro" width={24} height={24} />
+            <span className="w-6 h-6 rounded-md bg-gray-900 text-white inline-flex items-center justify-center text-xs font-bold" aria-hidden="true">P</span>
             <span className="font-semibold">{logoLabel}</span>
           </Link>
           <button
@@ -214,7 +213,7 @@ export function ResponsiveShell({
           )
         })}
         {!sidebarCollapsed && <div className="mt-auto px-3 pb-2">
-          <Image src="/logo.png" alt="bookeasy.ro" width={800} height={471} className="w-full h-auto opacity-50" />
+          <span className="text-sm font-semibold text-gray-400">Pontifix</span>
         </div>}
         {!sidebarCollapsed && accountContent}
       </aside>

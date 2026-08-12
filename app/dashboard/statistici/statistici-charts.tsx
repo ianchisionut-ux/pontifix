@@ -84,7 +84,7 @@ export default function StatisticiCharts({ analytics, category }: { analytics: A
     const csv = rows.map((row) => row.join(',')).join('\n')
     const link = document.createElement('a')
     link.href = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
-    link.download = `bookeasy-statistici-${period}-zile.csv`
+    link.download = `pontifix-statistici-${period}-zile.csv`
     link.click()
     URL.revokeObjectURL(link.href)
   }

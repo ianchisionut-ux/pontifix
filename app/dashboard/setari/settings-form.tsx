@@ -258,7 +258,7 @@ export default function SettingsForm({
           <option value="60">Din oră în oră</option>
         </select>
         <p className="text-xs text-gray-400 mt-2">
-          Automat, BookEasy combină duratele serviciilor profilului pentru a reduce golurile. O valoare manuală
+          Automat, Pontifix combină duratele serviciilor profilului pentru a reduce golurile. O valoare manuală
           poate face orele mai rare, dar sistemul nu va fragmenta programul sub pasul util al serviciilor.
         </p>
       </Card>
@@ -341,7 +341,7 @@ export default function SettingsForm({
           <div>
             <h2 className="font-medium">Vizibil pe harta publică</h2>
             <p className="text-sm text-gray-500 mt-0.5">
-              Afacerea apare pe /harta și pe pagina publică bookeasy.ro
+              Afacerea apare pe hartă și pe pagina publică Pontifix
             </p>
           </div>
           <button

@@ -18,7 +18,7 @@ function CopyableLink({ path, label }: { path: string; label: string }) {
       <p className="text-xs text-gray-500 mb-1">{label}</p>
       <div className="flex items-center gap-2">
         <a href={path} target="_blank" rel="noopener noreferrer" className="input-field flex-1 truncate text-[var(--accent)]">
-          bookeasy.ro{path}
+          {url}
         </a>
         <button onClick={copy} className="btn-secondary text-sm whitespace-nowrap">
           {copied ? 'Copiat!' : 'Copiază'}
