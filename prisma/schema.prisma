@@ -860,6 +860,7 @@ model Project {
   certificateNumber               String?
   certificateDate                 DateTime?         @db.Date
   beneficiary                     String?
+  beneficiaryPhone                String?
   address                         String?
   description                     String?
   status                          ProjectStatus     @default(ACTIVE)
