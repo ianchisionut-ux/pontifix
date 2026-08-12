@@ -1,0 +1,32 @@
+# dependențe
+node_modules/
+
+# build Next.js
+.next/
+out/
+build/
+
+# env — nu urca niciodată secrete în git
+.env
+.env*.local
+
+# Prisma
+prisma/generated/
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel

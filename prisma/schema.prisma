@@ -1,0 +1,711 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// Business & auth
+// ─────────────────────────────────────────────
+
+model Business {
+  id                 String       @id @default(cuid())
+  name               String
+  slug               String       @unique
+  category           BusinessType
+  contactPhone       String?
+  city               String?
+  latitude           Float?
+  longitude          Float?
+  address            String?
+  heroImageUrl       String?
+  publicListed       Boolean      @default(true)
+  accountActive      Boolean      @default(true)
+  teamSize           Int          @default(1)
+  paymentProcessor    PaymentProcessor? // NULL = plata online dezactivată pentru acest business
+  stripeSecretKey     String?
+  stripeWebhookSecret String?
+  netopiaApiKey        String?
+  netopiaPosSignature  String?
+  netopiaPublicKey     String?
+  netopiaIsLive        Boolean  @default(false)
+  euplatescMerchantId  String?
+  euplatescSecretKey   String?
+  euplatescIsLive      Boolean  @default(false)
+  timezone           String       @default("Europe/Bucharest")
+  slotIntervalMinutes Int?        // null = automat, după durata fiecărui serviciu; altfel interval fix (10/15/30...)
+  minLeadTimeMinutes  Int          @default(120) // rezervările/anulările din exterior (bot, site) nu se pot face mai aproape de această limită; admin-ul manual e scutit
+  reminderMinutesBefore Int        @default(1440) // cu cât timp înainte de programare trimitem reminder-ul + cererea de confirmare pe WhatsApp (implicit 24h)
+  operatorSilenceMinutes Int       @default(30) // cât timp tace botul complet după ce clientul cere un operator, ca omul să poată prelua conversația fără suprapuneri
+  botBookingEnabled      Boolean   @default(true) // dacă e oprit, opțiunea "Fă o programare" dispare din meniul de start al botului — rămân doar Operator și link spre site
+  break1Start         String? // pauze zilnice (ex: masă) — aceleași ore în fiecare zi lucrătoare, nu se pot face programări
+  break1End           String?
+  break2Start         String?
+  break2End           String?
+  break3Start         String?
+  break3End           String?
+  brandColor          String?      // culoarea de accent aleasă de business pentru pagina publică (hex); null = culoarea implicită bookeasy
+  planName           String?      // numele planului, gestionat manual de admin până se configurează plata online
+  billingStatus      BillingStatus @default(NEPLATIT)
+  billingNote        String?      // notă liberă pentru superadmin (ex: "plătit cash august")
+  onboardingStep     Int          @default(1)
+  onboardingDone     Boolean      @default(false)
+  stripeCustomerId   String?
+  googlePlaceId      String?
+  rating             Decimal?
+  reviewCount        Int?
+  createdAt          DateTime     @default(now())
+
+  users              User[]
+  staff              Staff[]
+  resources          Resource[]
+  services           Service[]
+  customers          Customer[]
+  bookings           Booking[]
+  googleCalendarConnections GoogleCalendarConnection[]
+  waitlistEntries    WaitlistEntry[]
+  supportTickets     SupportTicket[]
+  chatMessages       ChatMessage[]
+  messageTemplates   MessageTemplate[]
+  channels           Channel[]
+  workingHours       WorkingHours[]
+  conversations      Conversation[]
+  reviews            Review[]
+  practitioners      Practitioner[]
+  patientDocuments   PatientDocument[]
+  medicalLetters     MedicalLetter[]
+  photos             BusinessPhoto[]
+  blockedSlots       BlockedSlot[]
+  subscription       Subscription?
+  missedMessageAlerts MissedMessageAlert[]
+}
+
+enum BillingStatus {
+  GRATUIT   // cont demo/de test, nu se taxează
+  NEPLATIT  // implicit — cont nou, încă nu s-a stabilit plata
+  PLATIT
+  RESTANT
+}
+
+enum PaymentProcessor {
+  STRIPE
+  NETOPIA
+  EUPLATESC
+}
+
+enum BusinessType {
+  SALON
+  EVENT_VENUE
+  HOTEL
+  PENSIUNE
+  CLINICA
+}
+
+model User {
+  id                  String                @id @default(cuid())
+  email               String                @unique
+  password            String
+  role                Role                  @default(OWNER)
+  businessId          String?
+  business            Business?             @relation(fields: [businessId], references: [id])
+  passwordResetTokens PasswordResetToken[]
+
+  @@index([businessId])
+}
+
+enum Role {
+  OWNER
+  STAFF
+  SUPER_ADMIN
+}
+
+// ─────────────────────────────────────────────
+// Resources: staff (SALON) / resources (EVENT_VENUE)
+// ─────────────────────────────────────────────
+
+model Staff {
+  id           String   @id @default(cuid())
+  businessId   String
+  business     Business @relation(fields: [businessId], references: [id])
+  name         String
+  active       Boolean  @default(true)
+  bookings     Booking[]
+}
+
+model Resource {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  name        String
+  capacity    Int?
+  basePrice   Decimal?
+  bookings    Booking[]
+}
+
+model Service {
+  id              String      @id @default(cuid())
+  businessId      String
+  business        Business    @relation(fields: [businessId], references: [id])
+  name            String
+  type            ServiceType @default(APPOINTMENT)
+  durationMin     Int?
+  price           Decimal?
+  active          Boolean     @default(true)
+  requiresDeposit Boolean     @default(false)
+  depositAmount   Decimal?
+  bookings        Booking[]
+  practitioners   ServicePractitioner[]
+  waitlistEntries WaitlistEntry[]
+
+  @@index([businessId, active])
+}
+
+enum ServiceType {
+  APPOINTMENT
+  VENUE_RENTAL
+}
+
+// ─────────────────────────────────────────────
+// Customers & bookings
+// ─────────────────────────────────────────────
+
+model Customer {
+  id               String   @id @default(cuid())
+  businessId       String
+  business         Business @relation(fields: [businessId], references: [id])
+  name             String?
+  phone            String
+  email            String?
+  instagramUserId  String?
+  facebookUserId   String?
+  notes            String?
+  dateOfBirth      DateTime? // relevant medical, folosit doar de clinici — niciodată expus public
+  allergies        String?   // alergii cunoscute — câmp separat, vizibil clar pe fișă
+  medicalNotes     String?   // istoric medical/notă liberă — vizibilă STRICT în dashboard-ul clinicii
+  createdAt        DateTime @default(now())
+  bookings         Booking[]
+  waitlistEntries  WaitlistEntry[]
+  medicalRecord    PatientMedicalRecord?
+  documents        PatientDocument[]
+  medicalLetters   MedicalLetter[]
+
+  @@unique([businessId, phone])
+  @@unique([businessId, instagramUserId])
+  @@unique([businessId, facebookUserId])
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  businessId      String
+  business        Business      @relation(fields: [businessId], references: [id])
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  serviceId       String
+  service         Service       @relation(fields: [serviceId], references: [id])
+  staffId         String?
+  staff           Staff?        @relation(fields: [staffId], references: [id])
+  resourceId      String?
+  resource        Resource?     @relation(fields: [resourceId], references: [id])
+  practitionerId  String?       // doar pentru afaceri de tip CLINICA — medicul ales (opțional, dacă lipsește = orice medic disponibil)
+  practitioner    Practitioner? @relation(fields: [practitionerId], references: [id])
+  startAt         DateTime
+  endAt           DateTime
+  status          BookingStatus @default(PENDING)
+  sequenceNumber  Int?          // numărul rezervării în luna curentă (ex: #007) — resetat lunar per business
+  channel         ChannelType
+  notes           String?
+  depositPaid     Boolean       @default(false)
+  reminder24hSent Boolean       @default(false) // reminder-ul principal, trimis cu o zi înainte la ora 16:00 — cere reconfirmare activă
+  reminder1hSent  Boolean       @default(false) // reminder-ul scurt, trimis cu 2 ore înainte, în ziua programării
+  confirmationRequestSent Boolean @default(false) // am cerut deja confirmare activă clientului
+  customerConfirmed       Boolean? // null = fără răspuns încă, true = a confirmat (status devine CONFIRMED), false = a anulat (status devine CANCELLED)
+  confirmationSeenByAdmin Boolean  @default(true) // false = clientul tocmai a confirmat, admin-ul n-a văzut încă (notificare în meniu)
+  unconfirmedAlertSent    Boolean @default(false) // am anunțat deja proprietarul că rezervarea asta n-a fost confirmată
+  createdAt       DateTime      @default(now())
+  googleCalendarEventId String?
+  googleCalendarSyncedAt DateTime?
+  googleCalendarSyncError String?
+  review          Review?
+
+  // interogările reale (calendar, disponibilitate, reminder-e, statistici) filtrează
+  // aproape mereu după businessId + un al doilea criteriu — fără aceste indexuri,
+  // Postgres scanează tabelul întreg de fiecare dată, la orice volum mai mare
+  @@index([businessId, startAt])
+  @@index([businessId, status])
+  @@index([businessId, confirmationSeenByAdmin])
+  @@index([customerId])
+  @@index([practitionerId])
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+  NO_SHOW
+}
+
+model WorkingHours {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  weekday    Int
+  startTime  String
+  endTime    String
+
+  @@index([businessId, weekday])
+}
+
+// ─────────────────────────────────────────────
+// Channels (WhatsApp / Instagram / Facebook / Google)
+// ─────────────────────────────────────────────
+
+model Channel {
+  id             String        @id @default(cuid())
+  businessId     String
+  business       Business      @relation(fields: [businessId], references: [id])
+  type           ChannelType
+  externalId     String
+  wabaId         String?       // doar pentru WHATSAPP — WhatsApp Business Account ID, diferit de phone_number_id
+  accessToken    String
+  refreshToken   String?
+  expiresAt      DateTime?
+  status         ChannelStatus @default(ACTIVE)
+  enabledByOwner Boolean       @default(true)
+  connectedAt    DateTime      @default(now())
+
+  @@unique([type, externalId])
+  @@index([businessId, type])
+}
+
+enum ChannelType {
+  WHATSAPP
+  INSTAGRAM
+  FACEBOOK
+  GOOGLE_BUSINESS
+  WEB
+  MANUAL
+}
+
+enum ChannelStatus {
+  ACTIVE
+  EXPIRING_SOON
+  EXPIRED
+  DISCONNECTED
+}
+
+model Conversation {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id])
+  channel        ChannelType
+  externalUserId String
+  state          Json
+  needsOperator  Boolean  @default(false) // clientul a cerut un operator, așteaptă răspuns uman
+  operatorRequestedAt DateTime? // momentul exact al ultimei cereri de operator — inbox-ul arată mesajele doar de-atunci încolo, nu tot istoricul cu botul
+  updatedAt      DateTime @updatedAt
+
+  @@index([businessId, needsOperator])
+  @@index([businessId, channel, externalUserId])
+}
+
+model MessageTemplate {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  title      String // eticheta scurtă, pentru identificare rapidă în listă
+  text       String
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+}
+
+model ChatMessage {
+  id             String            @id @default(cuid())
+  businessId     String
+  business       Business          @relation(fields: [businessId], references: [id])
+  channel        ChannelType
+  externalUserId String
+  direction      MessageDirection
+  text           String
+  createdAt      DateTime          @default(now())
+
+  @@index([businessId, channel, externalUserId, createdAt])
+}
+
+enum MessageDirection {
+  IN
+  OUT
+}
+
+model BusinessPhoto {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  url        String
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+}
+
+model Review {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  bookingId  String?  @unique
+  booking    Booking? @relation(fields: [bookingId], references: [id])
+  source     String   @default("bookeasy") // "bookeasy" = recenzie reală de la client, "google" = sincronizată din Google Business Profile
+  externalReviewId String? // ID-ul recenziei la sursă (Google etc.) — evită duplicate la resincronizare
+  authorName String
+  rating     Int
+  comment    String?
+  reply      String?
+  createdAt  DateTime @default(now())
+
+  @@unique([businessId, source, externalReviewId])
+  @@index([businessId])
+}
+
+model BlockedSlot {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  startAt    DateTime
+  endAt      DateTime
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId, startAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id])
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+}
+
+// ─── Clinici (medici cu program propriu, separat de programul general al afacerii) ───
+
+model Practitioner {
+  id             String                     @id @default(cuid())
+  businessId     String
+  business       Business                   @relation(fields: [businessId], references: [id])
+  name           String
+  specialization String?
+  photoUrl       String?
+  bio            String?
+  active         Boolean                    @default(true)
+  break1Start    String? // pauze zilnice (ex: masă) — aceleași ore în fiecare zi lucrătoare
+  break1End      String?
+  break2Start    String?
+  break2End      String?
+  break3Start    String?
+  break3End      String?
+  createdAt      DateTime                   @default(now())
+  workingHours   PractitionerWorkingHours[]
+  services       ServicePractitioner[]
+  bookings       Booking[]
+  googleCalendar GoogleCalendarConnection?
+
+  @@index([businessId, active])
+}
+
+model GoogleCalendarConnection {
+  id                    String       @id @default(cuid())
+  businessId            String
+  business              Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  practitionerId        String       @unique
+  practitioner          Practitioner @relation(fields: [practitionerId], references: [id], onDelete: Cascade)
+  googleEmail            String?
+  calendarId             String
+  calendarName           String
+  accessToken            String
+  refreshToken           String?
+  expiresAt              DateTime?
+  syncEnabled            Boolean      @default(true)
+  includeCustomerDetails Boolean      @default(false)
+  lastSyncAt              DateTime?
+  lastError               String?
+  createdAt               DateTime     @default(now())
+  updatedAt               DateTime     @updatedAt
+
+  @@index([businessId])
+}
+
+model PractitionerWorkingHours {
+  id             String       @id @default(cuid())
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
+  weekday        Int
+  startTime      String
+  endTime        String
+}
+
+// legătură many-to-many: un serviciu poate fi oferit de mai mulți medici, un medic poate
+// oferi mai multe servicii — dacă un serviciu nu are niciun medic asociat, e considerat
+// disponibil la orice medic (comportament implicit, mai simplu pentru clinici mici)
+model ServicePractitioner {
+  id             String       @id @default(cuid())
+  serviceId      String
+  service        Service      @relation(fields: [serviceId], references: [id])
+  practitionerId String
+  practitioner   Practitioner @relation(fields: [practitionerId], references: [id])
+
+  @@unique([serviceId, practitionerId])
+}
+
+// ─── Fișă medicală completă (opțională, doar clinici) — inspirată din fișele
+// stomatologice/medicale reale. Câmpurile "des consultate" rămân dedicate, iar
+// listele lungi de tip da/nu (afecțiuni, temeri) sunt stocate ca JSON, ca fișa să
+// rămână ușor de extins fără migrări noi de fiecare dată ───
+
+model PatientMedicalRecord {
+  id         String   @id @default(cuid())
+  customerId String   @unique
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  cnp                     String?
+  address                 String?
+  city                    String?
+  occupation              String?
+  emergencyContactName    String?
+  emergencyContactPhone   String?
+
+  familyDoctor            String?
+  familyDoctorLastVisit   String?
+  previousDentist         String?
+  previousDentistLastVisit String?
+
+  hospitalized            Boolean?
+  hospitalizedDetails     String?
+  surgeries               Boolean?
+  surgeriesDetails        String?
+  onMedication            Boolean?
+  medicationDetails       String?
+  smoker                  Boolean?
+
+  allergyAnesthesia       Boolean?
+  allergyAntibiotics      Boolean?
+  allergyAspirin          Boolean?
+  allergyIodine           Boolean?
+  allergyLatex            Boolean?
+  allergyNickel           Boolean?
+  allergyOther            String?
+
+  pregnant                Boolean?
+  pregnantMonth           String?
+  breastfeeding           Boolean?
+  menstruationStarted     Boolean?
+  contraceptives          Boolean?
+  menopause               Boolean?
+
+  medicalConditions       Json?    // checklist tip {hipertensiune: true, diabet: false, ...}
+  dentalHistory            Json?   // păstrat pentru compatibilitate — nu mai e folosit de fișa generală
+  clinicalHistory          Json?   // fișă generală, orice specialitate: motivul vizitei, istoric familial, semne vitale
+  pediatricInfo            Json?   // înălțime, greutate, obiceiuri copii — doar dacă e cazul
+
+  generalNotes             String?
+
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+}
+
+model PatientDocument {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  url        String
+  filename   String
+  uploadedAt DateTime @default(now())
+
+  @@index([customerId])
+}
+
+model MedicalLetter {
+  id         String   @id @default(cuid())
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+
+  providerName    String? // Denumire Furnizor
+  doctorName      String? // Medic
+  contractNumber  String? // Contract/convenție nr.
+  casName         String? // CAS
+
+  patientName     String?
+  patientBirthDate String?
+  patientCnp      String?
+  consultationDate String?
+  hospitalizationPeriod String?
+  fileNumber      String? // nr. F.O. / Registrul de consultații
+
+  presentationReasons String?
+  oncologicalDiagnosis Boolean?
+  diagnosis           String?
+
+  anamnesis           String?
+  riskFactors         String?
+
+  clinicalExamGeneral String?
+  clinicalExamLocal   String?
+
+  labNormal           String?
+  labPathological     String?
+
+  ekg                 String?
+  eco                 String?
+  rx                  String?
+  otherParaclinical    String?
+
+  treatmentGiven      String?
+  otherHealthInfo     String?
+  recommendedTreatment String?
+
+  returnForHospitalization String? // "da, in termen de X" / "nu"
+  prescriptionStatus  String? // una din cele 3 opțiuni
+  medicalLeaveStatus  String? // una din cele 3 opțiuni
+  homeCareStatus      String? // una din cele 2 opțiuni
+  deviceStatus        String? // una din cele 2 opțiuni
+
+  letterDate          String?
+
+  createdAt           DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@index([customerId])
+}
+
+model AccessRequest {
+  id           String              @id @default(cuid())
+  name         String
+  businessName String
+  email        String
+  phone        String
+  category     BusinessType?
+  message      String?
+  status       AccessRequestStatus @default(NEW)
+  createdAt    DateTime            @default(now())
+}
+
+model SupportTicket {
+  id         String             @id @default(cuid())
+  businessId String
+  business   Business           @relation(fields: [businessId], references: [id])
+  subject    String
+  message    String
+  status     SupportTicketStatus @default(NEW)
+  reply      String? // răspunsul tău, vizibil apoi și adminului afacerii
+  repliedAt  DateTime?
+  createdAt  DateTime           @default(now())
+
+  @@index([businessId])
+}
+
+enum SupportTicketStatus {
+  NEW
+  IN_PROGRESS
+  RESOLVED
+}
+
+enum AccessRequestStatus {
+  NEW
+  CONTACTED
+  CONVERTED
+  DISMISSED
+}
+
+model WaitlistEntry {
+  id             String   @id @default(cuid())
+  businessId     String
+  business       Business @relation(fields: [businessId], references: [id])
+  customerId     String
+  customer       Customer @relation(fields: [customerId], references: [id])
+  serviceId      String
+  service        Service  @relation(fields: [serviceId], references: [id])
+  practitionerId String? // opțional — dacă vrea strict o anumită persoană, nu oricine e liber
+  desiredDate    DateTime // ziua dorită (00:00) — dacă se eliberează un loc în acea zi, e anunțat primul din listă
+  status         WaitlistStatus @default(WAITING)
+  notifiedAt     DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([businessId, serviceId, desiredDate, status])
+}
+
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED // i-am oferit un loc liber, așteptăm răspunsul
+  CONVERTED // a confirmat, i-am făcut rezervarea
+  EXPIRED // n-a răspuns la timp sau ziua a trecut fără loc liber
+}
+
+model MissedMessageAlert {
+  id         String   @id @default(cuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  channel    String
+  sentAt     DateTime @default(now())
+
+  @@index([businessId])
+}
+
+// Meta livrează webhook-urile cel puțin o dată — poate trimite ACELAȘI mesaj de mai
+// multe ori. Fără această evidență, botul ar procesa un răspuns al clientului de 2+ ori,
+// avansând conversația greșit sau cerând din nou aceeași informație
+model ProcessedWebhookMessage {
+  id          String   @id // ID-ul mesajului dat de Meta — garantat unic per mesaj real
+  processedAt DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// Billing
+// ─────────────────────────────────────────────
+
+model Plan {
+  id                  String   @id @default(cuid())
+  name                String
+  displayName         String
+  priceMonthly        Decimal
+  stripePriceId       String
+  maxChannels         Int
+  maxBookingsPerMonth Int?
+  maxStaff            Int?
+  features            String[]
+  active              Boolean  @default(true)
+
+  subscriptions       Subscription[]
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  businessId           String             @unique
+  business             Business           @relation(fields: [businessId], references: [id])
+  planId               String
+  plan                 Plan               @relation(fields: [planId], references: [id])
+  stripeCustomerId     String
+  stripeSubscriptionId String             @unique
+  status               SubscriptionStatus
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  trialEndsAt          DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+}

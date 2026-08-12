@@ -1,0 +1,210 @@
+@import "tailwindcss";
+
+:root {
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, sans-serif;
+
+  /* accent violet, ca în referință (data selectată din calendar) */
+  --accent: #7eb735;
+  --accent-hover: #6a9c2b;
+  --accent-soft: #eef6e3;
+
+  --surface: #ffffff;
+  --surface-muted: #f7f7f9;
+  --border-soft: #eceef1;
+
+  --radius-card: 20px;
+  --radius-pill: 999px;
+
+  --shadow-card: 0 2px 8px rgba(20, 20, 43, 0.04), 0 12px 24px -8px rgba(20, 20, 43, 0.08);
+  --shadow-card-hover: 0 4px 12px rgba(20, 20, 43, 0.06), 0 16px 32px -8px rgba(20, 20, 43, 0.12);
+}
+
+body {
+  font-family: var(--font-sans);
+  color: #14142b;
+  background: var(--surface-muted);
+}
+
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-card);
+}
+
+.card-interactive {
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+.card-interactive:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+.pill {
+  border-radius: var(--radius-pill);
+}
+
+.btn-primary {
+  background: #14142b;
+  color: white;
+  border-radius: var(--radius-pill);
+  padding: 0.65rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: opacity 0.15s ease;
+}
+.btn-primary:hover {
+  opacity: 0.85;
+}
+.btn-primary:disabled {
+  background: #c7c7d1;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  padding: 0.65rem 1.5rem;
+  font-weight: 600;
+  font-size: 0.875rem;
+  transition: background 0.15s ease;
+}
+.btn-secondary:hover {
+  background: var(--surface-muted);
+}
+
+.accent-pill {
+  background: var(--accent);
+  color: white;
+  border-radius: var(--radius-pill);
+}
+
+.input-field {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease;
+}
+.input-field:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.calendar-commandbar { background: rgba(255,255,255,.84); border: 1px solid var(--border-soft); border-radius: 18px; padding: 10px 12px; box-shadow: var(--shadow-card); }
+.calendar-kpi { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border-radius:999px; background:var(--surface-muted); color:#59606f; font-size:12px; white-space:nowrap; }
+.calendar-search { margin-left:auto; display:flex; align-items:center; gap:7px; min-width:220px; border:1px solid var(--border-soft); border-radius:999px; background:white; padding:7px 12px; color:#8b91a0; }
+.calendar-search input { width:100%; outline:none; background:transparent; font-size:13px; color:#14142b; }
+.calendar-event-card { height:100%; overflow:hidden; padding:2px 3px; line-height:1.15; position:relative; }
+.calendar-event-top { display:flex; align-items:center; justify-content:space-between; font-size:11px; }
+.calendar-event-name { font-weight:700; font-size:12px; margin-top:3px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.calendar-event-service,.calendar-event-meta { font-size:10px; color:#676d7a; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:3px; }
+.calendar-break-card { height:100%; display:flex; align-items:center; justify-content:space-between; gap:6px; padding:2px 4px; font-size:11px; font-weight:700; overflow:hidden; }
+.calendar-break-card span { font-size:10px; font-weight:500; white-space:nowrap; }
+.rbc-background-event { left:0 !important; width:100% !important; margin:0 !important; box-sizing:border-box; }
+.status-dot { width:7px; height:7px; border-radius:50%; background:#ef4444; position:absolute; right:2px; top:2px; }.status-confirmed{background:#16a34a}.status-pending{background:#eab308}.status-completed{background:#6b7280}
+.calendar-drawer { animation:drawer-in .18s ease-out; border-left:1px solid var(--border-soft); box-shadow:-20px 0 50px rgba(20,20,43,.12); }
+@keyframes drawer-in { from { transform:translateX(30px); opacity:.5 } }
+.rbc-calendar { color:#36394a; }.rbc-toolbar { margin-bottom:12px; }.rbc-toolbar button { border-color:var(--border-soft); border-radius:10px; padding:6px 11px; }.rbc-toolbar button.rbc-active { background:var(--accent-soft); color:var(--accent-hover); box-shadow:none; }
+.rbc-time-view,.rbc-month-view { border-color:var(--border-soft); border-radius:14px; overflow:hidden; }.rbc-timeslot-group { border-color:#f0f1f3; }.rbc-time-content>*+*>* { border-color:#f0f1f3; }.rbc-header { border-color:var(--border-soft); padding:9px 4px; font-size:12px; }.rbc-today { background:#f8fbf4; }.rbc-current-time-indicator { height:2px; background:var(--accent); box-shadow:0 0 0 1px white; }.rbc-current-time-indicator:before { content:''; position:absolute; width:9px; height:9px; left:-4px; top:-3px; border-radius:50%; background:var(--accent); }.rbc-event-label { display:none; }.rbc-event { min-height:23px; box-shadow:0 2px 7px rgba(20,20,43,.05); }
+@media(max-width:1100px){.calendar-search{order:3;margin-left:0;min-width:180px}.calendar-kpi{display:none}}
+
+/* Printare — ascunde navigarea și acțiunile, păstrează doar conținutul */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.print-only {
+  display: none;
+}
+@media print {
+  .screen-only {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  /* calendarul e construit cu înălțime de ecran (100vh) — la print lăsăm conținutul
+     să curgă natural pe pagină, altfel s-ar tăia din ce nu încape în fereastra vizibilă */
+  [class*='h-[calc(100vh'] {
+    height: auto !important;
+  }
+  /* react-big-calendar calculează înălțimile vizualizărilor Lună/Agendă cu JavaScript,
+     la randare pe ecran — la print acele înălțimi rămân "înghețate" la 0, deci grila
+     apare goală. Forțăm layout natural, pe conținut, doar la print */
+  .rbc-month-view,
+  .rbc-time-view,
+  .rbc-agenda-view {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .rbc-month-row {
+    flex: none !important;
+    min-height: 90px !important;
+    overflow: visible !important;
+  }
+  .rbc-row-content {
+    position: static !important;
+  }
+  .rbc-agenda-view table {
+    height: auto !important;
+  }
+  .rbc-time-content {
+    overflow: visible !important;
+  }
+  .printable {
+    flex: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+}
+
+@media print {
+  aside,
+  .no-print,
+  button {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .printable,
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #e5e5e5 !important;
+  }
+}
+@media (max-width: 640px) {
+  .rbc-toolbar {
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+  .rbc-toolbar .rbc-btn-group {
+    display: flex;
+    justify-content: center;
+  }
+  .rbc-toolbar-label {
+    font-size: 0.9rem;
+    margin: 4px 0;
+  }
+  .rbc-btn-group button {
+    padding: 4px 8px;
+    font-size: 0.8rem;
+  }
+
+  /* Safari (iPhone) dă zoom automat la focus pe inputuri sub 16px — foarte deranjant */
+  .input-field,
+  input[type='date'],
+  input[type='datetime-local'],
+  input[type='time'],
+  select {
+    font-size: 16px !important;
+  }
+}
