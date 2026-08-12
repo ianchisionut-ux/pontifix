@@ -18,7 +18,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
 
   const [business, employees, entries] = await Promise.all([
     prisma.business.findUnique({ where: { id: businessId }, select: { name: true, break1Start: true, break1End: true, workingHours: { orderBy: { weekday: 'asc' } } } }),
-    prisma.attendanceEmployee.findMany({ where: { businessId, active: true }, orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }], select: { id: true, firstName: true, lastName: true, position: true } }),
+    prisma.attendanceEmployee.findMany({ where: { businessId, active: true }, orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }], select: { id: true, firstName: true, lastName: true, position: true, dailyHours: true } }),
     prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: start, lt: end } }, select: { id: true, employeeId: true, workDate: true, status: true, hours: true, note: true } }),
   ])
 
@@ -34,7 +34,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
   return <div className="p-3 lg:p-5 w-full max-w-none">
     <MonthlyAttendanceSheet
       employees={employees}
-      initialEntries={entries.map((entry) => ({ ...entry, workDate: entry.workDate.toISOString().slice(0, 10) }))}
+      initialEntries={entries.map((entry) => ({ ...entry, status: entry.status === 'REMOTE' ? 'PRESENT' as const : entry.status, workDate: entry.workDate.toISOString().slice(0, 10) }))}
       year={year}
       month={month}
       companyName={business?.name ?? 'Pontifix'}

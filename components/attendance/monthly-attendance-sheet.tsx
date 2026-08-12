@@ -4,14 +4,13 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Printer, X, Check, MousePointer2, Eraser } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
-type Status = 'PRESENT' | 'ABSENT' | 'VACATION' | 'MEDICAL' | 'DAY_OFF' | 'REMOTE'
+type Status = 'PRESENT' | 'ABSENT' | 'VACATION' | 'MEDICAL' | 'DAY_OFF'
 type Tool = 'EDIT' | 'ERASE' | Status
-type Employee = { id: string; firstName: string; lastName: string; position: string | null }
+type Employee = { id: string; firstName: string; lastName: string; position: string | null; dailyHours: number }
 type Entry = { id?: string; employeeId: string; workDate: string; status: Status; hours: number; note: string | null }
 
 const STATUS: Record<Status, { label: string; short: string; className: string }> = {
   PRESENT: { label: 'Prezent', short: 'P', className: 'attendance-present' },
-  REMOTE: { label: 'Lucru la distanță', short: 'D', className: 'attendance-remote' },
   VACATION: { label: 'Concediu', short: 'C', className: 'attendance-vacation' },
   MEDICAL: { label: 'Medical', short: 'M', className: 'attendance-medical' },
   DAY_OFF: { label: 'Liber', short: 'L', className: 'attendance-off' },
@@ -56,7 +55,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
     const employeeEntries = Object.values(entries).filter((entry) => entry.employeeId === employee.id)
     return [employee.id, {
       hours: employeeEntries.reduce((sum, entry) => sum + (entry.hours || 0), 0),
-      present: employeeEntries.filter((entry) => entry.status === 'PRESENT' || entry.status === 'REMOTE').length,
+      present: employeeEntries.filter((entry) => entry.status === 'PRESENT').length,
       leave: employeeEntries.filter((entry) => entry.status === 'VACATION' || entry.status === 'MEDICAL').length,
     }]
   })), [employees, entries])
@@ -70,14 +69,8 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
     const existing = entries[`${employee.id}:${dateKey(year, month, day)}`]
     setEditor({ employee, day })
     setStatus(existing?.status ?? 'PRESENT')
-    setHours(String(existing?.hours ?? standardHours))
+    setHours(String(existing?.hours ?? employee.dailyHours ?? standardHours))
     setNote(existing?.note ?? '')
-  }
-
-  function handleCellClick(employee: Employee, day: number) {
-    if (tool !== 'EDIT') return
-    if (clickTimer.current) clearTimeout(clickTimer.current)
-    clickTimer.current = setTimeout(() => openEditor(employee, day), 230)
   }
 
   async function persist(employeeId: string, date: string, nextStatus: Status | null, nextHours: number, nextNote = '') {
@@ -98,7 +91,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
 
     const previous = entries[key]
     const nextStatus = selectedTool === 'ERASE' ? null : selectedTool
-    const nextHours = nextStatus === 'PRESENT' || nextStatus === 'REMOTE' ? standardHours : 0
+    const nextHours = nextStatus === 'PRESENT' ? (employee.dailyHours || standardHours) : 0
     setEntries((current) => {
       const next = { ...current }
       if (!nextStatus) delete next[key]
@@ -130,26 +123,6 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
     if (painting.current && tool !== 'EDIT') paintCell(employee, day, tool)
   }
 
-  async function quickPresent(employee: Employee, day: number) {
-    if (tool !== 'EDIT') return
-    if (clickTimer.current) clearTimeout(clickTimer.current)
-    const date = dateKey(year, month, day)
-    const key = `${employee.id}:${date}`
-    const previous = entries[key]
-    const nextEntry: Entry = { employeeId: employee.id, workDate: date, status: 'PRESENT', hours: standardHours, note: null }
-    setEntries((current) => ({ ...current, [key]: nextEntry }))
-    try { await persist(employee.id, date, 'PRESENT', standardHours) }
-    catch {
-      setEntries((current) => {
-        const restored = { ...current }
-        if (previous) restored[key] = previous
-        else delete restored[key]
-        return restored
-      })
-      alert('Pontajul nu a putut fi salvat.')
-    }
-  }
-
   async function save(nextStatus: Status | null) {
     if (!editor) return
     setSaving(true)
@@ -160,7 +133,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
       setEntries((current) => {
         const next = { ...current }
         if (!nextStatus) delete next[key]
-        else next[key] = { employeeId: editor.employee.id, workDate: date, status: nextStatus, hours: nextStatus === 'PRESENT' || nextStatus === 'REMOTE' ? Number(hours) || 0 : 0, note: note || null }
+        else next[key] = { employeeId: editor.employee.id, workDate: date, status: nextStatus, hours: nextStatus === 'PRESENT' ? Number(hours) || 0 : 0, note: note || null }
         return next
       })
       setEditor(null)
@@ -170,7 +143,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
 
   return <div className="attendance-page">
     <div className="attendance-toolbar no-print">
-      <div><h1 className="text-2xl font-semibold">Foaie colectivă de prezență</h1><p className="text-sm text-slate-500 mt-1">Alege o pensulă și trage peste căsuțe · dublu-click în modul Selectare = Prezent.</p></div>
+      <div><h1 className="text-2xl font-semibold">Foaie colectivă de prezență</h1><p className="text-sm text-slate-500 mt-1">Alege o pensulă și trage peste căsuțe · dublu-click în modul Selectare pentru pontare manuală.</p></div>
       <div className="flex flex-wrap items-center gap-2">
         <div className="attendance-month-picker"><button onClick={() => changeMonth(-1)} aria-label="Luna anterioară"><ChevronLeft size={17}/></button><strong>{MONTHS[month - 1]} {year}</strong><button onClick={() => changeMonth(1)} aria-label="Luna următoare"><ChevronRight size={17}/></button></div>
         <button className="btn-primary inline-flex items-center gap-2" onClick={() => window.print()}><Printer size={17}/> Printează / PDF</button>
@@ -202,8 +175,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
               const weekday = new Date(year, month - 1, day).getDay()
               return <td key={day} className={weekday === 0 || weekday === 6 ? 'is-weekend' : ''}><button
                 className={entry ? STATUS[entry.status].className : ''}
-                onClick={() => handleCellClick(employee, day)}
-                onDoubleClick={() => quickPresent(employee, day)}
+                onDoubleClick={() => tool === 'EDIT' && openEditor(employee, day)}
                 onPointerDown={(event) => startPainting(event, employee, day)}
                 onPointerEnter={() => continuePainting(employee, day)}
                 title={entry ? `${STATUS[entry.status].label} · ${entry.hours || 0} ore` : 'Nepontat'}
@@ -221,7 +193,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
       <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex justify-between gap-4"><div><h2 className="text-xl font-semibold">{editor.employee.firstName} {editor.employee.lastName}</h2><p className="text-sm text-slate-500 mt-1">{editor.day} {MONTHS[month - 1]} {year}</p></div><button onClick={() => setEditor(null)} className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center"><X size={17}/></button></div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-5">{(Object.keys(STATUS) as Status[]).map((value) => <button key={value} onClick={() => setStatus(value)} className={`attendance-status-choice ${status === value ? 'selected' : ''}`}><b className={STATUS[value].className}>{STATUS[value].short}</b><span>{STATUS[value].label}</span>{status === value && <Check size={15}/>}</button>)}</div>
-        {(status === 'PRESENT' || status === 'REMOTE') && <label className="block mt-4 text-sm font-medium">Ore lucrate<input className="input-field w-full mt-1.5" type="number" min="0" max="24" step="0.5" value={hours} onChange={(event) => setHours(event.target.value)}/></label>}
+        {status === 'PRESENT' && <label className="block mt-4 text-sm font-medium">Ore lucrate<input className="input-field w-full mt-1.5" type="number" min="0" max="24" step="0.5" value={hours} onChange={(event) => setHours(event.target.value)}/></label>}
         <label className="block mt-3 text-sm font-medium">Notă opțională<input className="input-field w-full mt-1.5" value={note} onChange={(event) => setNote(event.target.value)} placeholder="Ex: tură de dimineață"/></label>
         <div className="flex items-center justify-between gap-2 mt-6"><button className="text-sm text-red-600 px-2 py-2" disabled={saving} onClick={() => save(null)}>Șterge pontajul</button><button className="btn-primary" disabled={saving} onClick={() => save(status)}>{saving ? 'Se salvează...' : 'Salvează'}</button></div>
       </div>

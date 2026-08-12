@@ -762,6 +762,7 @@ model AttendanceEmployee {
   department       String?
   employmentType   EmploymentType    @default(FULL_TIME)
   weeklyHours      Float             @default(40)
+  dailyHours       Float             @default(8)
   active           Boolean           @default(true)
   hiredAt          DateTime          @default(now())
   createdAt        DateTime          @default(now())

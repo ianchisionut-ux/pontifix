@@ -12,6 +12,7 @@ const fields = {
   department: z.string().trim().optional(),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACTOR']).default('FULL_TIME'),
   weeklyHours: z.coerce.number().min(1).max(80).default(40),
+  dailyHours: z.coerce.number().min(0.5).max(24).default(8),
 }
 const employeeSchema = z.object(fields)
 const updateSchema = z.object({ id: z.string().min(1), ...fields, active: z.boolean().default(true) })

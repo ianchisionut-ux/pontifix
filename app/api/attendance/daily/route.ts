@@ -6,7 +6,7 @@ import { z } from 'zod'
 const schema = z.object({
   employeeId: z.string().min(1),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  status: z.enum(['PRESENT', 'ABSENT', 'VACATION', 'MEDICAL', 'DAY_OFF', 'REMOTE']).nullable(),
+  status: z.enum(['PRESENT', 'ABSENT', 'VACATION', 'MEDICAL', 'DAY_OFF']).nullable(),
   hours: z.coerce.number().min(0).max(24).default(0),
   note: z.string().trim().max(200).optional(),
 })
@@ -30,8 +30,8 @@ export async function PUT(req: NextRequest) {
 
   const entry = await prisma.dailyAttendance.upsert({
     where: { employeeId_workDate: { employeeId, workDate } },
-    update: { status, hours: status === 'PRESENT' || status === 'REMOTE' ? hours : 0, note: note || null },
-    create: { businessId, employeeId, workDate, status, hours: status === 'PRESENT' || status === 'REMOTE' ? hours : 0, note: note || null },
+    update: { status, hours: status === 'PRESENT' ? hours : 0, note: note || null },
+    create: { businessId, employeeId, workDate, status, hours: status === 'PRESENT' ? hours : 0, note: note || null },
   })
   return NextResponse.json(entry)
 }
