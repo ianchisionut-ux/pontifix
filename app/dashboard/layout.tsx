@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/pontaje', label: 'Pontaje', icon: 'calendar' },
   { href: '/dashboard/angajati', label: 'Angajați', icon: 'clienti' },
   { href: '/dashboard/concedii', label: 'Concedii', icon: 'programari' },
+  { href: '/dashboard/proiecte', label: 'Proiecte', icon: 'proiecte' },
   { href: '/dashboard/rapoarte', label: 'Rapoarte', icon: 'statistici' },
   { href: '/dashboard/configurare', label: 'Configurare', icon: 'setari' },
 ]

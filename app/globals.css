@@ -353,3 +353,6 @@ body {
   .attendance-group-row th { position:static !important; height:5.5mm !important; padding:0 1.5mm !important; border:0.32mm solid #7b8797 !important; background:#dbeafe !important; color:#172554 !important; font-size:6.5pt !important; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
   .copy-source::after { display:none !important; }
 }
+
+.round-action { width:36px; height:36px; border-radius:999px; background:#f1f5f9; display:inline-flex; align-items:center; justify-content:center; transition:background .15s,color .15s; }
+.round-action:hover { background:#dbeafe; color:#1d4ed8; }

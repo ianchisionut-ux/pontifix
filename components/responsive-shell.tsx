@@ -18,6 +18,7 @@ import {
   Building2,
   Inbox,
   LifeBuoy,
+  FolderKanban,
 } from 'lucide-react'
 import { SidebarClock } from './sidebar-clock'
 import { PontifixLogo } from './pontifix-logo'
@@ -37,6 +38,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   afaceri: Building2,
   cereri: Inbox,
   tichete: LifeBuoy,
+  proiecte: FolderKanban,
 }
 
 // amestecă o culoare hex cu alb, la un procent dat — produce o culoare SOLIDĂ (nu transparentă).

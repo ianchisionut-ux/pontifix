@@ -1,0 +1,5 @@
+import { NextResponse } from 'next/server'
+import { get } from '@vercel/blob'
+import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+export async function GET(_request:Request,{params}:{params:Promise<{id:string;approvalId:string}>}){const session=await auth();const businessId=(session as any)?.businessId as string|undefined;if(!businessId)return NextResponse.json({error:'Neautorizat'},{status:401});const {id,approvalId}=await params;const approval=await prisma.projectApproval.findFirst({where:{id:approvalId,projectId:id,project:{businessId}},select:{documentUrl:true,documentName:true}});if(!approval?.documentUrl)return NextResponse.json({error:'Document inexistent.'},{status:404});const result=await get(approval.documentUrl,{access:'private'});if(!result?.stream)return NextResponse.json({error:'Fișier indisponibil.'},{status:404});const headers=new Headers();headers.set('Content-Type','application/pdf');headers.set('Content-Disposition',`inline; filename="${(approval.documentName||'aviz.pdf').replace(/"/g,'')}"`);return new Response(result.stream,{headers})}

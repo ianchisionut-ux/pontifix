@@ -85,6 +85,7 @@ model Business {
   timeEntries               TimeEntry[]
   leaveRequests             LeaveRequest[]
   dailyAttendances          DailyAttendance[]
+  projects                  Project[]
 }
 
 enum BillingStatus {
@@ -835,4 +836,60 @@ model LeaveRequest {
 
   @@index([businessId, status])
   @@index([employeeId, startDate])
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+enum ApprovalStatus {
+  REQUIRED
+  SUBMITTED
+  OBTAINED
+  NOT_REQUIRED
+}
+
+model Project {
+  id                String            @id @default(cuid())
+  businessId        String
+  business          Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name              String
+  certificateNumber String?
+  certificateDate   DateTime?         @db.Date
+  beneficiary       String?
+  address           String?
+  description       String?
+  status            ProjectStatus     @default(ACTIVE)
+  documentUrl       String?
+  documentName      String?
+  extractedText     String?
+  uploadedByEmail   String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  approvals         ProjectApproval[]
+
+  @@index([businessId, status])
+  @@index([businessId, updatedAt])
+}
+
+model ProjectApproval {
+  id           String         @id @default(cuid())
+  projectId    String
+  project      Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name         String
+  institution  String?
+  status       ApprovalStatus @default(REQUIRED)
+  submittedAt  DateTime?      @db.Date
+  obtainedAt   DateTime?      @db.Date
+  notes        String?
+  documentUrl  String?
+  documentName String?
+  sortOrder    Int            @default(0)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([projectId, sortOrder])
 }
