@@ -55,10 +55,5 @@ CROSS JOIN LATERAL generate_series(
   INTERVAL '1 day'
 ) day
 WHERE request."status" = 'APPROVED'
-ON CONFLICT ("employeeId", "workDate") DO UPDATE SET
-  "status" = EXCLUDED."status",
-  "hours" = 0,
-  "note" = NULL,
-  "leaveRequestId" = EXCLUDED."leaveRequestId",
-  "updatedAt" = NOW();
+ON CONFLICT ("employeeId", "workDate") DO NOTHING;
 
