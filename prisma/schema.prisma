@@ -7,9 +7,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Business & auth
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 model Business {
   id                     String            @id @default(cuid())
@@ -25,7 +25,7 @@ model Business {
   publicListed           Boolean           @default(true)
   accountActive          Boolean           @default(true)
   teamSize               Int               @default(1)
-  paymentProcessor       PaymentProcessor? // NULL = plata online dezactivată pentru acest business
+  paymentProcessor       PaymentProcessor? // NULL = plata online dezactivatÄƒ pentru acest business
   stripeSecretKey        String?
   stripeWebhookSecret    String?
   netopiaApiKey          String?
@@ -36,21 +36,21 @@ model Business {
   euplatescSecretKey     String?
   euplatescIsLive        Boolean           @default(false)
   timezone               String            @default("Europe/Bucharest")
-  slotIntervalMinutes    Int? // null = automat, după durata fiecărui serviciu; altfel interval fix (10/15/30...)
-  minLeadTimeMinutes     Int               @default(120) // rezervările/anulările din exterior (bot, site) nu se pot face mai aproape de această limită; admin-ul manual e scutit
-  reminderMinutesBefore  Int               @default(1440) // cu cât timp înainte de programare trimitem reminder-ul + cererea de confirmare pe WhatsApp (implicit 24h)
-  operatorSilenceMinutes Int               @default(30) // cât timp tace botul complet după ce clientul cere un operator, ca omul să poată prelua conversația fără suprapuneri
-  botBookingEnabled      Boolean           @default(true) // dacă e oprit, opțiunea "Fă o programare" dispare din meniul de start al botului — rămân doar Operator și link spre site
-  break1Start            String? // pauze zilnice (ex: masă) — aceleași ore în fiecare zi lucrătoare, nu se pot face programări
+  slotIntervalMinutes    Int? // null = automat, dupÄƒ durata fiecÄƒrui serviciu; altfel interval fix (10/15/30...)
+  minLeadTimeMinutes     Int               @default(120) // rezervÄƒrile/anulÄƒrile din exterior (bot, site) nu se pot face mai aproape de aceastÄƒ limitÄƒ; admin-ul manual e scutit
+  reminderMinutesBefore  Int               @default(1440) // cu cÃ¢t timp Ã®nainte de programare trimitem reminder-ul + cererea de confirmare pe WhatsApp (implicit 24h)
+  operatorSilenceMinutes Int               @default(30) // cÃ¢t timp tace botul complet dupÄƒ ce clientul cere un operator, ca omul sÄƒ poatÄƒ prelua conversaÈ›ia fÄƒrÄƒ suprapuneri
+  botBookingEnabled      Boolean           @default(true) // dacÄƒ e oprit, opÈ›iunea "FÄƒ o programare" dispare din meniul de start al botului â€” rÄƒmÃ¢n doar Operator È™i link spre site
+  break1Start            String? // pauze zilnice (ex: masÄƒ) â€” aceleaÈ™i ore Ã®n fiecare zi lucrÄƒtoare, nu se pot face programÄƒri
   break1End              String?
   break2Start            String?
   break2End              String?
   break3Start            String?
   break3End              String?
-  brandColor             String? // culoarea de accent aleasă de business pentru pagina publică (hex); null = culoarea implicită bookeasy
-  planName               String? // numele planului, gestionat manual de admin până se configurează plata online
+  brandColor             String? // culoarea de accent aleasÄƒ de business pentru pagina publicÄƒ (hex); null = culoarea implicitÄƒ bookeasy
+  planName               String? // numele planului, gestionat manual de admin pÃ¢nÄƒ se configureazÄƒ plata online
   billingStatus          BillingStatus     @default(NEPLATIT)
-  billingNote            String? // notă liberă pentru superadmin (ex: "plătit cash august")
+  billingNote            String? // notÄƒ liberÄƒ pentru superadmin (ex: "plÄƒtit cash august")
   onboardingStep         Int               @default(1)
   onboardingDone         Boolean           @default(false)
   stripeCustomerId       String?
@@ -89,8 +89,8 @@ model Business {
 }
 
 enum BillingStatus {
-  GRATUIT // cont demo/de test, nu se taxează
-  NEPLATIT // implicit — cont nou, încă nu s-a stabilit plata
+  GRATUIT // cont demo/de test, nu se taxeazÄƒ
+  NEPLATIT // implicit â€” cont nou, Ã®ncÄƒ nu s-a stabilit plata
   PLATIT
   RESTANT
 }
@@ -128,9 +128,9 @@ enum Role {
   SUPER_ADMIN
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Resources: staff (SALON) / resources (EVENT_VENUE)
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 model Staff {
   id         String    @id @default(cuid())
@@ -174,9 +174,9 @@ enum ServiceType {
   VENUE_RENTAL
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Customers & bookings
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 model Customer {
   id              String                @id @default(cuid())
@@ -188,9 +188,9 @@ model Customer {
   instagramUserId String?
   facebookUserId  String?
   notes           String?
-  dateOfBirth     DateTime? // relevant medical, folosit doar de clinici — niciodată expus public
-  allergies       String? // alergii cunoscute — câmp separat, vizibil clar pe fișă
-  medicalNotes    String? // istoric medical/notă liberă — vizibilă STRICT în dashboard-ul clinicii
+  dateOfBirth     DateTime? // relevant medical, folosit doar de clinici â€” niciodatÄƒ expus public
+  allergies       String? // alergii cunoscute â€” cÃ¢mp separat, vizibil clar pe fiÈ™Äƒ
+  medicalNotes    String? // istoric medical/notÄƒ liberÄƒ â€” vizibilÄƒ STRICT Ã®n dashboard-ul clinicii
   createdAt       DateTime              @default(now())
   bookings        Booking[]
   waitlistEntries WaitlistEntry[]
@@ -215,30 +215,30 @@ model Booking {
   staff                   Staff?        @relation(fields: [staffId], references: [id])
   resourceId              String?
   resource                Resource?     @relation(fields: [resourceId], references: [id])
-  practitionerId          String? // doar pentru afaceri de tip CLINICA — medicul ales (opțional, dacă lipsește = orice medic disponibil)
+  practitionerId          String? // doar pentru afaceri de tip CLINICA â€” medicul ales (opÈ›ional, dacÄƒ lipseÈ™te = orice medic disponibil)
   practitioner            Practitioner? @relation(fields: [practitionerId], references: [id])
   startAt                 DateTime
   endAt                   DateTime
   status                  BookingStatus @default(PENDING)
-  sequenceNumber          Int? // numărul rezervării în luna curentă (ex: #007) — resetat lunar per business
+  sequenceNumber          Int? // numÄƒrul rezervÄƒrii Ã®n luna curentÄƒ (ex: #007) â€” resetat lunar per business
   channel                 ChannelType
   notes                   String?
   depositPaid             Boolean       @default(false)
-  reminder24hSent         Boolean       @default(false) // reminder-ul principal, trimis cu o zi înainte la ora 16:00 — cere reconfirmare activă
-  reminder1hSent          Boolean       @default(false) // reminder-ul scurt, trimis cu 2 ore înainte, în ziua programării
-  confirmationRequestSent Boolean       @default(false) // am cerut deja confirmare activă clientului
-  customerConfirmed       Boolean? // null = fără răspuns încă, true = a confirmat (status devine CONFIRMED), false = a anulat (status devine CANCELLED)
-  confirmationSeenByAdmin Boolean       @default(true) // false = clientul tocmai a confirmat, admin-ul n-a văzut încă (notificare în meniu)
-  unconfirmedAlertSent    Boolean       @default(false) // am anunțat deja proprietarul că rezervarea asta n-a fost confirmată
+  reminder24hSent         Boolean       @default(false) // reminder-ul principal, trimis cu o zi Ã®nainte la ora 16:00 â€” cere reconfirmare activÄƒ
+  reminder1hSent          Boolean       @default(false) // reminder-ul scurt, trimis cu 2 ore Ã®nainte, Ã®n ziua programÄƒrii
+  confirmationRequestSent Boolean       @default(false) // am cerut deja confirmare activÄƒ clientului
+  customerConfirmed       Boolean? // null = fÄƒrÄƒ rÄƒspuns Ã®ncÄƒ, true = a confirmat (status devine CONFIRMED), false = a anulat (status devine CANCELLED)
+  confirmationSeenByAdmin Boolean       @default(true) // false = clientul tocmai a confirmat, admin-ul n-a vÄƒzut Ã®ncÄƒ (notificare Ã®n meniu)
+  unconfirmedAlertSent    Boolean       @default(false) // am anunÈ›at deja proprietarul cÄƒ rezervarea asta n-a fost confirmatÄƒ
   createdAt               DateTime      @default(now())
   googleCalendarEventId   String?
   googleCalendarSyncedAt  DateTime?
   googleCalendarSyncError String?
   review                  Review?
 
-  // interogările reale (calendar, disponibilitate, reminder-e, statistici) filtrează
-  // aproape mereu după businessId + un al doilea criteriu — fără aceste indexuri,
-  // Postgres scanează tabelul întreg de fiecare dată, la orice volum mai mare
+  // interogÄƒrile reale (calendar, disponibilitate, reminder-e, statistici) filtreazÄƒ
+  // aproape mereu dupÄƒ businessId + un al doilea criteriu â€” fÄƒrÄƒ aceste indexuri,
+  // Postgres scaneazÄƒ tabelul Ã®ntreg de fiecare datÄƒ, la orice volum mai mare
   @@index([businessId, startAt])
   @@index([businessId, status])
   @@index([businessId, confirmationSeenByAdmin])
@@ -265,9 +265,9 @@ model WorkingHours {
   @@index([businessId, weekday])
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Channels (WhatsApp / Instagram / Facebook / Google)
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 model Channel {
   id             String        @id @default(cuid())
@@ -275,7 +275,7 @@ model Channel {
   business       Business      @relation(fields: [businessId], references: [id])
   type           ChannelType
   externalId     String
-  wabaId         String? // doar pentru WHATSAPP — WhatsApp Business Account ID, diferit de phone_number_id
+  wabaId         String? // doar pentru WHATSAPP â€” WhatsApp Business Account ID, diferit de phone_number_id
   accessToken    String
   refreshToken   String?
   expiresAt      DateTime?
@@ -310,8 +310,8 @@ model Conversation {
   channel             ChannelType
   externalUserId      String
   state               Json
-  needsOperator       Boolean     @default(false) // clientul a cerut un operator, așteaptă răspuns uman
-  operatorRequestedAt DateTime? // momentul exact al ultimei cereri de operator — inbox-ul arată mesajele doar de-atunci încolo, nu tot istoricul cu botul
+  needsOperator       Boolean     @default(false) // clientul a cerut un operator, aÈ™teaptÄƒ rÄƒspuns uman
+  operatorRequestedAt DateTime? // momentul exact al ultimei cereri de operator â€” inbox-ul aratÄƒ mesajele doar de-atunci Ã®ncolo, nu tot istoricul cu botul
   updatedAt           DateTime    @updatedAt
 
   @@index([businessId, needsOperator])
@@ -322,7 +322,7 @@ model MessageTemplate {
   id         String   @id @default(cuid())
   businessId String
   business   Business @relation(fields: [businessId], references: [id])
-  title      String // eticheta scurtă, pentru identificare rapidă în listă
+  title      String // eticheta scurtÄƒ, pentru identificare rapidÄƒ Ã®n listÄƒ
   text       String
   createdAt  DateTime @default(now())
 
@@ -363,8 +363,8 @@ model Review {
   business         Business @relation(fields: [businessId], references: [id])
   bookingId        String?  @unique
   booking          Booking? @relation(fields: [bookingId], references: [id])
-  source           String   @default("bookeasy") // "bookeasy" = recenzie reală de la client, "google" = sincronizată din Google Business Profile
-  externalReviewId String? // ID-ul recenziei la sursă (Google etc.) — evită duplicate la resincronizare
+  source           String   @default("bookeasy") // "bookeasy" = recenzie realÄƒ de la client, "google" = sincronizatÄƒ din Google Business Profile
+  externalReviewId String? // ID-ul recenziei la sursÄƒ (Google etc.) â€” evitÄƒ duplicate la resincronizare
   authorName       String
   rating           Int
   comment          String?
@@ -397,7 +397,7 @@ model PasswordResetToken {
   createdAt DateTime  @default(now())
 }
 
-// ─── Clinici (medici cu program propriu, separat de programul general al afacerii) ───
+// â”€â”€â”€ Clinici (medici cu program propriu, separat de programul general al afacerii) â”€â”€â”€
 
 model Practitioner {
   id             String                     @id @default(cuid())
@@ -408,7 +408,7 @@ model Practitioner {
   photoUrl       String?
   bio            String?
   active         Boolean                    @default(true)
-  break1Start    String? // pauze zilnice (ex: masă) — aceleași ore în fiecare zi lucrătoare
+  break1Start    String? // pauze zilnice (ex: masÄƒ) â€” aceleaÈ™i ore Ã®n fiecare zi lucrÄƒtoare
   break1End      String?
   break2Start    String?
   break2End      String?
@@ -454,8 +454,8 @@ model PractitionerWorkingHours {
   endTime        String
 }
 
-// legătură many-to-many: un serviciu poate fi oferit de mai mulți medici, un medic poate
-// oferi mai multe servicii — dacă un serviciu nu are niciun medic asociat, e considerat
+// legÄƒturÄƒ many-to-many: un serviciu poate fi oferit de mai mulÈ›i medici, un medic poate
+// oferi mai multe servicii â€” dacÄƒ un serviciu nu are niciun medic asociat, e considerat
 // disponibil la orice medic (comportament implicit, mai simplu pentru clinici mici)
 model ServicePractitioner {
   id             String       @id @default(cuid())
@@ -467,10 +467,10 @@ model ServicePractitioner {
   @@unique([serviceId, practitionerId])
 }
 
-// ─── Fișă medicală completă (opțională, doar clinici) — inspirată din fișele
-// stomatologice/medicale reale. Câmpurile "des consultate" rămân dedicate, iar
-// listele lungi de tip da/nu (afecțiuni, temeri) sunt stocate ca JSON, ca fișa să
-// rămână ușor de extins fără migrări noi de fiecare dată ───
+// â”€â”€â”€ FiÈ™Äƒ medicalÄƒ completÄƒ (opÈ›ionalÄƒ, doar clinici) â€” inspiratÄƒ din fiÈ™ele
+// stomatologice/medicale reale. CÃ¢mpurile "des consultate" rÄƒmÃ¢n dedicate, iar
+// listele lungi de tip da/nu (afecÈ›iuni, temeri) sunt stocate ca JSON, ca fiÈ™a sÄƒ
+// rÄƒmÃ¢nÄƒ uÈ™or de extins fÄƒrÄƒ migrÄƒri noi de fiecare datÄƒ â”€â”€â”€
 
 model PatientMedicalRecord {
   id         String   @id @default(cuid())
@@ -513,9 +513,9 @@ model PatientMedicalRecord {
   menopause           Boolean?
 
   medicalConditions Json? // checklist tip {hipertensiune: true, diabet: false, ...}
-  dentalHistory     Json? // păstrat pentru compatibilitate — nu mai e folosit de fișa generală
-  clinicalHistory   Json? // fișă generală, orice specialitate: motivul vizitei, istoric familial, semne vitale
-  pediatricInfo     Json? // înălțime, greutate, obiceiuri copii — doar dacă e cazul
+  dentalHistory     Json? // pÄƒstrat pentru compatibilitate â€” nu mai e folosit de fiÈ™a generalÄƒ
+  clinicalHistory   Json? // fiÈ™Äƒ generalÄƒ, orice specialitate: motivul vizitei, istoric familial, semne vitale
+  pediatricInfo     Json? // Ã®nÄƒlÈ›ime, greutate, obiceiuri copii â€” doar dacÄƒ e cazul
 
   generalNotes String?
 
@@ -545,7 +545,7 @@ model MedicalLetter {
 
   providerName   String? // Denumire Furnizor
   doctorName     String? // Medic
-  contractNumber String? // Contract/convenție nr.
+  contractNumber String? // Contract/convenÈ›ie nr.
   casName        String? // CAS
 
   patientName           String?
@@ -553,7 +553,7 @@ model MedicalLetter {
   patientCnp            String?
   consultationDate      String?
   hospitalizationPeriod String?
-  fileNumber            String? // nr. F.O. / Registrul de consultații
+  fileNumber            String? // nr. F.O. / Registrul de consultaÈ›ii
 
   presentationReasons  String?
   oncologicalDiagnosis Boolean?
@@ -578,10 +578,10 @@ model MedicalLetter {
   recommendedTreatment String?
 
   returnForHospitalization String? // "da, in termen de X" / "nu"
-  prescriptionStatus       String? // una din cele 3 opțiuni
-  medicalLeaveStatus       String? // una din cele 3 opțiuni
-  homeCareStatus           String? // una din cele 2 opțiuni
-  deviceStatus             String? // una din cele 2 opțiuni
+  prescriptionStatus       String? // una din cele 3 opÈ›iuni
+  medicalLeaveStatus       String? // una din cele 3 opÈ›iuni
+  homeCareStatus           String? // una din cele 2 opÈ›iuni
+  deviceStatus             String? // una din cele 2 opÈ›iuni
 
   letterDate String?
 
@@ -610,7 +610,7 @@ model SupportTicket {
   subject    String
   message    String
   status     SupportTicketStatus @default(NEW)
-  reply      String? // răspunsul tău, vizibil apoi și adminului afacerii
+  reply      String? // rÄƒspunsul tÄƒu, vizibil apoi È™i adminului afacerii
   repliedAt  DateTime?
   createdAt  DateTime            @default(now())
 
@@ -638,8 +638,8 @@ model WaitlistEntry {
   customer       Customer       @relation(fields: [customerId], references: [id])
   serviceId      String
   service        Service        @relation(fields: [serviceId], references: [id])
-  practitionerId String? // opțional — dacă vrea strict o anumită persoană, nu oricine e liber
-  desiredDate    DateTime // ziua dorită (00:00) — dacă se eliberează un loc în acea zi, e anunțat primul din listă
+  practitionerId String? // opÈ›ional â€” dacÄƒ vrea strict o anumitÄƒ persoanÄƒ, nu oricine e liber
+  desiredDate    DateTime // ziua doritÄƒ (00:00) â€” dacÄƒ se elibereazÄƒ un loc Ã®n acea zi, e anunÈ›at primul din listÄƒ
   status         WaitlistStatus @default(WAITING)
   notifiedAt     DateTime?
   createdAt      DateTime       @default(now())
@@ -649,9 +649,9 @@ model WaitlistEntry {
 
 enum WaitlistStatus {
   WAITING
-  NOTIFIED // i-am oferit un loc liber, așteptăm răspunsul
-  CONVERTED // a confirmat, i-am făcut rezervarea
-  EXPIRED // n-a răspuns la timp sau ziua a trecut fără loc liber
+  NOTIFIED // i-am oferit un loc liber, aÈ™teptÄƒm rÄƒspunsul
+  CONVERTED // a confirmat, i-am fÄƒcut rezervarea
+  EXPIRED // n-a rÄƒspuns la timp sau ziua a trecut fÄƒrÄƒ loc liber
 }
 
 model MissedMessageAlert {
@@ -664,17 +664,17 @@ model MissedMessageAlert {
   @@index([businessId])
 }
 
-// Meta livrează webhook-urile cel puțin o dată — poate trimite ACELAȘI mesaj de mai
-// multe ori. Fără această evidență, botul ar procesa un răspuns al clientului de 2+ ori,
-// avansând conversația greșit sau cerând din nou aceeași informație
+// Meta livreazÄƒ webhook-urile cel puÈ›in o datÄƒ â€” poate trimite ACELAÈ˜I mesaj de mai
+// multe ori. FÄƒrÄƒ aceastÄƒ evidenÈ›Äƒ, botul ar procesa un rÄƒspuns al clientului de 2+ ori,
+// avansÃ¢nd conversaÈ›ia greÈ™it sau cerÃ¢nd din nou aceeaÈ™i informaÈ›ie
 model ProcessedWebhookMessage {
-  id          String   @id // ID-ul mesajului dat de Meta — garantat unic per mesaj real
+  id          String   @id // ID-ul mesajului dat de Meta â€” garantat unic per mesaj real
   processedAt DateTime @default(now())
 }
 
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Billing
-// ─────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 model Plan {
   id                  String   @id @default(cuid())
@@ -853,23 +853,23 @@ enum ApprovalStatus {
 }
 
 model Project {
-  id                String            @id @default(cuid())
-  businessId        String
-  business          Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  name              String
-  certificateNumber String?
-  certificateDate   DateTime?         @db.Date
-  beneficiary       String?
-  address           String?
-  description       String?
-  status            ProjectStatus     @default(ACTIVE)
-  documentUrl       String?
-  documentName      String?
-  extractedText     String?
-  uploadedByEmail   String?
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  approvals         ProjectApproval[]
+  id                              String            @id @default(cuid())
+  businessId                      String
+  business                        Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name                            String
+  certificateNumber               String?
+  certificateDate                 DateTime?         @db.Date
+  beneficiary                     String?
+  address                         String?
+  description                     String?
+  status                          ProjectStatus     @default(ACTIVE)
+  constructionAuthorizationStatus ApprovalStatus    @default(REQUIRED)
+  documentUrl                     String?
+  documentName                    String?
+  uploadedByEmail                 String?
+  createdAt                       DateTime          @default(now())
+  updatedAt                       DateTime          @updatedAt
+  approvals                       ProjectApproval[]
 
   @@index([businessId, status])
   @@index([businessId, updatedAt])

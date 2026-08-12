@@ -6,7 +6,7 @@ import { z } from 'zod'
 const schema = z.object({
   name: z.string().trim().min(2).max(200), certificateNumber: z.string().trim().optional(), certificateDate: z.string().optional(),
   beneficiary: z.string().trim().optional(), address: z.string().trim().optional(), description: z.string().trim().optional(),
-  documentUrl: z.string().trim().optional(), documentName: z.string().trim().optional(), extractedText: z.string().max(100000).optional(),
+  documentUrl: z.string().trim().optional(), documentName: z.string().trim().optional(),
   approvals: z.array(z.object({ name: z.string().trim().min(2), institution: z.string().trim().optional() })).default([]),
 })
 export async function POST(req: NextRequest) {
