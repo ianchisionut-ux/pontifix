@@ -84,6 +84,7 @@ model Business {
   employees                 AttendanceEmployee[]
   timeEntries               TimeEntry[]
   leaveRequests             LeaveRequest[]
+  dailyAttendances          DailyAttendance[]
 }
 
 enum BillingStatus {
@@ -738,29 +739,56 @@ enum LeaveStatus {
   REJECTED
 }
 
+enum AttendanceDayStatus {
+  PRESENT
+  ABSENT
+  VACATION
+  MEDICAL
+  DAY_OFF
+  REMOTE
+}
+
 model AttendanceEmployee {
-  id             String         @id @default(cuid())
-  businessId     String
-  business       Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  userId         String?        @unique
-  user           User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
-  firstName      String
-  lastName       String
-  email          String?
-  phone          String?
-  position       String?
-  department     String?
-  employmentType EmploymentType @default(FULL_TIME)
-  weeklyHours    Float          @default(40)
-  active         Boolean        @default(true)
-  hiredAt        DateTime       @default(now())
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-  timeEntries    TimeEntry[]
-  leaveRequests  LeaveRequest[]
+  id               String            @id @default(cuid())
+  businessId       String
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId           String?           @unique
+  user             User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  firstName        String
+  lastName         String
+  email            String?
+  phone            String?
+  position         String?
+  department       String?
+  employmentType   EmploymentType    @default(FULL_TIME)
+  weeklyHours      Float             @default(40)
+  active           Boolean           @default(true)
+  hiredAt          DateTime          @default(now())
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  timeEntries      TimeEntry[]
+  leaveRequests    LeaveRequest[]
+  dailyAttendances DailyAttendance[]
 
   @@unique([businessId, email])
   @@index([businessId, active])
+}
+
+model DailyAttendance {
+  id         String              @id @default(cuid())
+  businessId String
+  business   Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   AttendanceEmployee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  workDate   DateTime            @db.Date
+  status     AttendanceDayStatus
+  hours      Float               @default(0)
+  note       String?
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@unique([employeeId, workDate])
+  @@index([businessId, workDate])
 }
 
 model TimeEntry {

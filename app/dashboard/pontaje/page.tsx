@@ -1,6 +1,34 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
-import { formatHours, workedMinutes } from '@/lib/attendance'
+import { MonthlyAttendanceSheet } from '@/components/attendance/monthly-attendance-sheet'
+
 export const dynamic = 'force-dynamic'
-export default async function TimesheetsPage() { const session = await auth(); const businessId = (session as any)?.businessId; if (!businessId) redirect('/login'); const start = new Date(); start.setDate(1); start.setHours(0,0,0,0); const entries = await prisma.timeEntry.findMany({ where: { businessId, clockIn: { gte: start } }, include: { employee: true }, orderBy: { clockIn: 'desc' } }); return <div className="p-4 lg:p-8 max-w-[1400px] mx-auto"><div className="flex justify-between items-end gap-4 mb-6"><div><h1 className="text-2xl font-semibold">Foi de pontaj</h1><p className="text-sm text-slate-500 mt-1">Intrări, ieșiri, pauze și totaluri pentru luna curentă.</p></div><a className="btn-secondary" href="/api/attendance/export?days=31">Export CSV</a></div><div className="card overflow-hidden"><div className="overflow-x-auto"><table className="w-full text-sm"><thead className="bg-slate-50 text-slate-500"><tr><th className="text-left p-4 font-medium">Angajat</th><th className="text-left p-4 font-medium">Data</th><th className="text-left p-4 font-medium">Intrare</th><th className="text-left p-4 font-medium">Ieșire</th><th className="text-left p-4 font-medium">Pauză</th><th className="text-right p-4 font-medium">Total</th></tr></thead><tbody>{entries.map(e => <tr key={e.id} className="border-t border-slate-100"><td className="p-4 font-medium">{e.employee.firstName} {e.employee.lastName}</td><td className="p-4 text-slate-500">{e.clockIn.toLocaleDateString('ro-RO')}</td><td className="p-4 tabular-nums">{e.clockIn.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'})}</td><td className="p-4 tabular-nums">{e.clockOut?.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) ?? <span className="text-emerald-600">În lucru</span>}</td><td className="p-4">{e.breakMinutes} min</td><td className="p-4 text-right font-semibold">{formatHours(workedMinutes(e.clockIn,e.clockOut,e.breakMinutes))}</td></tr>)}</tbody></table>{entries.length===0 && <p className="p-10 text-center text-slate-400">Nu există pontaje în luna curentă.</p>}</div></div></div> }
+
+export default async function TimesheetsPage({ searchParams }: { searchParams: Promise<{ month?: string }> }) {
+  const session = await auth()
+  const businessId = (session as any)?.businessId as string | undefined
+  if (!businessId) redirect('/login')
+
+  const params = await searchParams
+  const requested = /^\d{4}-\d{2}$/.test(params.month || '') ? params.month! : new Date().toISOString().slice(0, 7)
+  const [year, month] = requested.split('-').map(Number)
+  const start = new Date(Date.UTC(year, month - 1, 1))
+  const end = new Date(Date.UTC(year, month, 1))
+
+  const [business, employees, entries] = await Promise.all([
+    prisma.business.findUnique({ where: { id: businessId }, select: { name: true } }),
+    prisma.attendanceEmployee.findMany({ where: { businessId, active: true }, orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }], select: { id: true, firstName: true, lastName: true, position: true } }),
+    prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: start, lt: end } }, select: { id: true, employeeId: true, workDate: true, status: true, hours: true, note: true } }),
+  ])
+
+  return <div className="p-3 lg:p-6 max-w-[1800px] mx-auto">
+    <MonthlyAttendanceSheet
+      employees={employees}
+      initialEntries={entries.map((entry) => ({ ...entry, workDate: entry.workDate.toISOString().slice(0, 10) }))}
+      year={year}
+      month={month}
+      companyName={business?.name ?? 'Pontifix'}
+    />
+  </div>
+}
