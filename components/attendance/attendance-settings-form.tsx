@@ -35,7 +35,10 @@ export function AttendanceSettingsForm({ companyName, weekdays, startTime, endTi
       body: JSON.stringify({ ...Object.fromEntries(formData), weekdays: days }),
     })
     setBusy(false)
-    if (!response.ok) return setError((await response.json()).error || 'Setările nu au putut fi salvate.')
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({ error: 'Setările nu au putut fi salvate.' }))
+      return setError(data.error || 'Setările nu au putut fi salvate.')
+    }
     setSaved(true)
     router.refresh()
     setTimeout(() => setSaved(false), 2500)

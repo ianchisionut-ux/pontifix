@@ -23,13 +23,19 @@ export async function PUT(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Date invalide.' }, { status: 400 })
   const { companyName, weekdays, startTime, endTime, breakStart, breakEnd } = parsed.data
 
-  await prisma.$transaction([
+  try {
+    await prisma.$transaction([
     prisma.business.update({
       where: { id: businessId },
       data: { name: companyName, break1Start: breakStart || null, break1End: breakEnd || null },
+      select: { id: true },
     }),
     prisma.workingHours.deleteMany({ where: { businessId } }),
     prisma.workingHours.createMany({ data: weekdays.map((weekday) => ({ businessId, weekday, startTime, endTime })) }),
-  ])
-  return NextResponse.json({ success: true })
+    ])
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('attendance settings update failed', error)
+    return NextResponse.json({ error: 'Setările nu au putut fi salvate.' }, { status: 500 })
+  }
 }
