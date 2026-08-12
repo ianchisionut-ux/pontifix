@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Printer, X, Check } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -37,6 +37,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
   const [hours, setHours] = useState('8')
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const days = new Date(year, month, 0).getDate()
 
   const totals = useMemo(() => Object.fromEntries(employees.map((employee) => {
@@ -60,6 +61,37 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
     setStatus(existing?.status ?? 'PRESENT')
     setHours(String(existing?.hours ?? 8))
     setNote(existing?.note ?? '')
+  }
+
+  function handleCellClick(employee: Employee, day: number) {
+    if (clickTimer.current) clearTimeout(clickTimer.current)
+    clickTimer.current = setTimeout(() => openEditor(employee, day), 230)
+  }
+
+  async function quickPresent(employee: Employee, day: number) {
+    if (clickTimer.current) clearTimeout(clickTimer.current)
+    setEditor(null)
+    const date = dateKey(year, month, day)
+    const key = `${employee.id}:${date}`
+    const previous = entries[key]
+    const nextEntry: Entry = { employeeId: employee.id, workDate: date, status: 'PRESENT', hours: 8, note: null }
+    setEntries((current) => ({ ...current, [key]: nextEntry }))
+    try {
+      const response = await fetch('/api/attendance/daily', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employeeId: employee.id, date, status: 'PRESENT', hours: 8, note: '' }),
+      })
+      if (!response.ok) throw new Error('save failed')
+    } catch {
+      setEntries((current) => {
+        const restored = { ...current }
+        if (previous) restored[key] = previous
+        else delete restored[key]
+        return restored
+      })
+      alert('Pontajul nu a putut fi salvat.')
+    }
   }
 
   async function save(nextStatus: Status | null) {
@@ -88,7 +120,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
       <div className="attendance-toolbar no-print">
         <div>
           <h1 className="text-2xl font-semibold">Foaie colectivă de prezență</h1>
-          <p className="text-sm text-slate-500 mt-1">Apasă pe orice căsuță pentru a ponta manual angajatul.</p>
+          <p className="text-sm text-slate-500 mt-1">Click simplu pentru alegerea stării · dublu-click pentru Prezent, 8 ore.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="attendance-month-picker">
@@ -100,7 +132,8 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
         </div>
       </div>
 
-      <div className="print-only attendance-print-heading">
+      <section className="attendance-paper">
+      <div className="attendance-print-heading">
         <h1>FOAIE COLECTIVĂ DE PREZENȚĂ</h1>
         <p>{companyName} · {MONTHS[month - 1]} {year}</p>
       </div>
@@ -136,7 +169,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
                   const entry = entries[`${employee.id}:${date}`]
                   const weekday = new Date(year, month - 1, day).getDay()
                   const display = entry ? (entry.status === 'PRESENT' || entry.status === 'REMOTE' ? String(entry.hours).replace('.5', '½') : STATUS[entry.status].short) : ''
-                  return <td key={day} className={weekday === 0 || weekday === 6 ? 'is-weekend' : ''}><button className={entry ? STATUS[entry.status].className : ''} onClick={() => openEditor(employee, day)} title={entry ? STATUS[entry.status].label : 'Adaugă pontaj'}>{display}</button></td>
+                  return <td key={day} className={weekday === 0 || weekday === 6 ? 'is-weekend' : ''}><button className={entry ? STATUS[entry.status].className : ''} onClick={() => handleCellClick(employee, day)} onDoubleClick={() => quickPresent(employee, day)} title={entry ? `${STATUS[entry.status].label} · click pentru editare · dublu-click = Prezent 8h` : 'Click pentru alegere · dublu-click = Prezent 8h'}>{display}</button></td>
                 })}
                 <td className="attendance-total">{totals[employee.id].hours || ''}</td>
                 <td className="attendance-total">{totals[employee.id].present || ''}</td>
@@ -148,11 +181,12 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
         {employees.length === 0 && <p className="p-10 text-center text-slate-400">Adaugă angajați pentru a începe pontajul.</p>}
       </div>
 
-      <div className="print-only attendance-signatures">
+      <div className="attendance-signatures">
         <span>Întocmit de: ____________________</span>
         <span>Verificat: ____________________</span>
         <span>Semnătură: ____________________</span>
       </div>
+      </section>
 
       {editor && <div className="fixed inset-0 z-50 bg-slate-950/35 flex items-center justify-center p-4 no-print" onMouseDown={() => setEditor(null)}>
         <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg p-6" onMouseDown={(event) => event.stopPropagation()}>

@@ -20,6 +20,7 @@ import {
   LifeBuoy,
 } from 'lucide-react'
 import { SidebarClock } from './sidebar-clock'
+import { PontifixLogo } from './pontifix-logo'
 
 const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   calendar: Calendar,
@@ -118,13 +119,12 @@ export function ResponsiveShell({
     .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
   return (
-    <div className={`min-h-screen bg-[var(--surface-muted)] lg:grid transition-[grid-template-columns] ${sidebarCollapsed ? 'lg:grid-cols-[76px_1fr]' : 'lg:grid-cols-[188px_1fr]'}`}>
+    <div className={`min-h-screen bg-[var(--surface-muted)] lg:grid transition-[grid-template-columns] ${sidebarCollapsed ? 'lg:grid-cols-[76px_1fr]' : 'lg:grid-cols-[216px_1fr]'}`}>
       {/* header mobil, doar sub lg */}
       <div className="lg:hidden sticky top-0 z-40 border-b border-[var(--border-soft)] screen-only" style={{ background: accentColor ? softTint : 'white' }}>
         <div className="flex items-center justify-between px-4 py-3">
           <Link href={logoHref} className="flex items-center gap-2">
-            <span className="w-6 h-6 rounded-md bg-gray-900 text-white inline-flex items-center justify-center text-xs font-bold" aria-hidden="true">P</span>
-            <span className="font-semibold">{logoLabel}</span>
+            <PontifixLogo />
           </Link>
           <button
             onClick={() => setAccountOpen(true)}
@@ -182,8 +182,12 @@ export function ResponsiveShell({
       )}
 
       {/* sidebar fix, doar de la lg in sus */}
-      <aside className="hidden lg:flex flex-col gap-1 p-3" style={{ background: softTint }}>
-        <button onClick={() => setSidebarCollapsed(v => !v)} className="self-start ml-1 w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/70" aria-label={sidebarCollapsed ? 'Extinde meniul' : 'Restrânge meniul'}>{sidebarCollapsed ? <PanelLeftOpen size={17}/> : <PanelLeftClose size={17}/>}</button>
+      <aside className="pontifix-sidebar hidden lg:flex flex-col gap-1 p-3" style={{ background: softTint }}>
+        <div className={`flex items-center mb-2 ${sidebarCollapsed ? 'justify-center' : 'justify-between px-1'}`}>
+          <Link href={logoHref}><PontifixLogo compact={sidebarCollapsed}/></Link>
+          {!sidebarCollapsed && <button onClick={() => setSidebarCollapsed(true)} className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/80" aria-label="Restrânge meniul"><PanelLeftClose size={17}/></button>}
+        </div>
+        {sidebarCollapsed && <button onClick={() => setSidebarCollapsed(false)} className="self-center w-9 h-9 mb-1 rounded-xl flex items-center justify-center hover:bg-white/80" aria-label="Extinde meniul"><PanelLeftOpen size={17}/></button>}
         {!sidebarCollapsed && profileName && <p className="font-semibold text-base px-3 mb-1 truncate">{profileName}</p>}
         {!sidebarCollapsed && <SidebarClock />}
         {displayNavItems.map((item) => {
@@ -212,9 +216,7 @@ export function ResponsiveShell({
             </Link>
           )
         })}
-        {!sidebarCollapsed && <div className="mt-auto px-3 pb-2">
-          <span className="text-sm font-semibold text-gray-400">Pontifix</span>
-        </div>}
+        {!sidebarCollapsed && <div className="mt-auto px-3 pb-2 text-[11px] font-medium text-blue-500/70">Pontaj clar, zi de zi.</div>}
         {!sidebarCollapsed && accountContent}
       </aside>
 
