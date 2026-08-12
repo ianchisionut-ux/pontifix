@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
+import crypto from 'crypto'
 
 const schema = z.object({
   companyName: z.string().trim().min(2).max(100),
@@ -21,9 +22,13 @@ export async function POST(req: NextRequest) {
   const { companyName, email, password } = parsed.data
   const slug = companyName.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'companie'
   await prisma.$transaction(async (tx) => {
-    const business = await tx.business.create({ data: { name: companyName, slug: `${slug}-${Date.now().toString().slice(-5)}`, category: 'SALON', onboardingDone: true, accountActive: true, publicListed: false } })
-    const user = await tx.user.create({ data: { email, password: await bcrypt.hash(password, 12), role: 'OWNER', businessId: business.id } })
-    await tx.attendanceEmployee.create({ data: { businessId: business.id, userId: user.id, email, firstName: 'Administrator', lastName: companyName, position: 'Administrator' } })
+    const businessId = crypto.randomUUID()
+    const userId = crypto.randomUUID()
+    const passwordHash = await bcrypt.hash(password, 12)
+    const businessSlug = `${slug}-${Date.now().toString().slice(-5)}`
+    await tx.$executeRaw`INSERT INTO "Business" ("id", "name", "slug", "accountActive", "timezone", "createdAt") VALUES (${businessId}, ${companyName}, ${businessSlug}, true, 'Europe/Bucharest', NOW())`
+    await tx.$executeRaw`INSERT INTO "User" ("id", "email", "password", "role", "businessId") VALUES (${userId}, ${email}, ${passwordHash}, CAST('OWNER' AS "Role"), ${businessId})`
+    await tx.attendanceEmployee.create({ data: { businessId, userId, email, firstName: 'Administrator', lastName: companyName, position: 'Administrator' } })
   })
   return NextResponse.json({ success: true }, { status: 201 })
 }
