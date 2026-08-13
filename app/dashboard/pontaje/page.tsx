@@ -37,7 +37,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
       initialEntries={entries.map((entry) => ({ ...entry, status: entry.status === 'REMOTE' ? 'PRESENT' as const : entry.status, workDate: entry.workDate.toISOString().slice(0, 10) }))}
       year={year}
       month={month}
-      companyName={business?.name ?? 'Pontifix'}
+      companyName={business?.name ?? 'Elmont'}
       standardHours={standardHours}
     />
   </div>

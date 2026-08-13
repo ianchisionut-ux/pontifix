@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Eveniment incompatibil.' }, { status: 400 })
     }
 
-    // Pontifix trimite momentan actualizările manual. Evenimentele sunt confirmate
+    // Elmont trimite momentan actualizările manual. Evenimentele sunt confirmate
     // imediat, iar procesarea mesajelor și statusurilor poate fi adăugată ulterior.
     return NextResponse.json({ received: true })
   } catch {

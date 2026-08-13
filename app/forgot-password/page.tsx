@@ -33,7 +33,7 @@ export default function ForgotPasswordPage() {
     <main className="min-h-screen flex items-center justify-center bg-[var(--surface-muted)] px-6">
       <div className="w-full max-w-sm flex flex-col items-center gap-6">
         <Link href="/">
-          <span className="text-2xl font-semibold">Pontifix</span>
+          <span className="text-2xl font-semibold">Elmont</span>
         </Link>
 
         <Card className="w-full">

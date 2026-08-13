@@ -44,12 +44,12 @@ export async function sendPasswordSetupEmail(email: string, businessName: string
     return
   }
   await getResend().emails.send({
-    from: 'Pontifix <onboarding@resend.dev>',
+    from: 'Elmont <onboarding@resend.dev>',
     to: email,
-    subject: `Bun venit pe Pontifix — configurează-ți contul pentru ${businessName}`,
+    subject: `Bun venit pe Elmont — configurează-ți contul pentru ${businessName}`,
     html: `
       <p>Salut,</p>
-      <p>Contul tău pentru <strong>${businessName}</strong> a fost creat pe Pontifix.</p>
+      <p>Contul tău pentru <strong>${businessName}</strong> a fost creat pe Elmont.</p>
       <p>Apasă pe linkul de mai jos ca să-ți setezi parola și să confirmi adresa de email:</p>
       <p><a href="${link}">Setează-ți parola</a></p>
       <p style="color:#888; font-size:13px;">Linkul expiră în 24 de ore.</p>
@@ -64,12 +64,12 @@ export async function sendPasswordResetEmail(email: string, token: string) {
     return
   }
   await getResend().emails.send({
-    from: 'Pontifix <onboarding@resend.dev>',
+    from: 'Elmont <onboarding@resend.dev>',
     to: email,
-    subject: 'Resetare parolă — Pontifix',
+    subject: 'Resetare parolă — Elmont',
     html: `
       <p>Salut,</p>
-      <p>Ai cerut resetarea parolei pentru contul tău Pontifix.</p>
+      <p>Ai cerut resetarea parolei pentru contul tău Elmont.</p>
       <p><a href="${link}">Setează o parolă nouă</a></p>
       <p style="color:#888; font-size:13px;">Dacă nu ai cerut tu asta, ignoră acest email. Linkul expiră în 24 de ore.</p>
     `,

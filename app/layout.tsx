@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'Pontifix — Pontaj și prezență',
+  title: 'Elmont — Pontaj și prezență',
   description: 'Pontaj, prezență și statistici pentru echipe.',
 }
 

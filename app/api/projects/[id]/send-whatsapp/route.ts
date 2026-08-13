@@ -38,7 +38,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const fallbackUrl = whatsappFallbackUrl(project.beneficiaryPhone, message)
   await ensureWhatsAppStorage()
   const channel = await prisma.channel.findFirst({ where: { businessId, type: 'WHATSAPP', status: 'ACTIVE', enabledByOwner: true }, select: { id: true } })
-  if (!channel) return NextResponse.json({ sent: false, fallbackUrl, message: 'Canalul WhatsApp Business nu este configurat în Pontifix.' })
+  if (!channel) return NextResponse.json({ sent: false, fallbackUrl, message: 'Canalul WhatsApp Business nu este configurat în Elmont.' })
   try {
     await sendProjectWhatsApp(channel.id, project.beneficiaryPhone, message)
     return NextResponse.json({ sent: true })

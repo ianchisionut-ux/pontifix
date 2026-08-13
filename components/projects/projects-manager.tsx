@@ -26,7 +26,7 @@ function progressColor(progress:number){
 }
 function projectProgressColor(project:Project){
   if(project.constructionAuthorizationStatus==='OBTAINED')return '#16a34a'
-  if(project.constructionAuthorizationStatus==='SUBMITTED')return '#2563eb'
+  if(project.constructionAuthorizationStatus==='SUBMITTED')return '#197fb5'
   return progressColor(projectProgress(project))
 }
 function projectProgress(project:Project){

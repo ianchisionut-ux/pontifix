@@ -7,7 +7,7 @@ export async function getOrCreateEmployeeForUser(userId: string, businessId: str
   const localPart = email.split('@')[0] || 'angajat'
   const words = localPart.split(/[._-]+/).filter(Boolean)
   const firstName = words[0] ? words[0][0].toUpperCase() + words[0].slice(1) : 'Angajat'
-  const lastName = words.slice(1).join(' ') || 'Pontifix'
+  const lastName = words.slice(1).join(' ') || 'Elmont'
 
   return prisma.attendanceEmployee.create({
     data: { businessId, userId, email, firstName, lastName, position: 'Administrator' },

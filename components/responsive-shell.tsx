@@ -21,7 +21,7 @@ import {
   FolderKanban,
 } from 'lucide-react'
 import { SidebarClock } from './sidebar-clock'
-import { PontifixLogo } from './pontifix-logo'
+import { ElmontLogo } from './elmont-logo'
 
 const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   calendar: Calendar,
@@ -68,7 +68,7 @@ export function ResponsiveShell({
   logoLabel: string
   profileName?: string // numele afacerii/profilului, afișat sus, deasupra ceasului
   navItems: { href: string; label: string; badge?: number; icon?: string }[]
-  accentColor?: string // culoarea aleasă de business în Setări — dacă lipsește, folosim culoarea implicită Pontifix
+  accentColor?: string // culoarea aleasă de business în Setări — dacă lipsește, folosim culoarea implicită Elmont
   accountContent: React.ReactNode // blocul de cont/ieșire — separat, ca să nu intre în carusel
   children: React.ReactNode
   enableLiveBadges?: boolean // interoghează periodic numărul de notificări, ca badge-urile să se actualizeze fără reîncărcare de pagină
@@ -126,7 +126,7 @@ export function ResponsiveShell({
       <div className="lg:hidden sticky top-0 z-40 border-b border-[var(--border-soft)] screen-only" style={{ background: accentColor ? softTint : 'white' }}>
         <div className="flex items-center justify-between px-4 py-3">
           <Link href={logoHref} className="flex items-center gap-2">
-            <PontifixLogo />
+            <ElmontLogo />
           </Link>
           <button
             onClick={() => setAccountOpen(true)}
@@ -184,9 +184,9 @@ export function ResponsiveShell({
       )}
 
       {/* sidebar fix, doar de la lg in sus */}
-      <aside className="pontifix-sidebar hidden lg:flex flex-col gap-1 p-3" style={{ background: softTint }}>
+      <aside className="elmont-sidebar hidden lg:flex flex-col gap-1 p-3" style={{ background: softTint }}>
         <div className={`flex items-center mb-2 ${sidebarCollapsed ? 'justify-center' : 'justify-between px-1'}`}>
-          <Link href={logoHref}><PontifixLogo compact={sidebarCollapsed}/></Link>
+          <Link href={logoHref}><ElmontLogo compact={sidebarCollapsed}/></Link>
           {!sidebarCollapsed && <button onClick={() => setSidebarCollapsed(true)} className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/80" aria-label="Restrânge meniul"><PanelLeftClose size={17}/></button>}
         </div>
         {sidebarCollapsed && <button onClick={() => setSidebarCollapsed(false)} className="self-center w-9 h-9 mb-1 rounded-xl flex items-center justify-center hover:bg-white/80" aria-label="Extinde meniul"><PanelLeftOpen size={17}/></button>}

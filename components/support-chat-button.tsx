@@ -81,7 +81,7 @@ export function SupportChatPanel({ open, onClose }: { open: boolean; onClose: ()
         className="bg-white rounded-t-2xl sm:rounded-2xl shadow-xl w-full sm:w-96 sm:mr-5 sm:mb-5 p-5 max-h-[80vh] flex flex-col"
       >
         <div className="flex items-center justify-between mb-3 shrink-0">
-          <h2 className="font-semibold">Suport Pontifix</h2>
+          <h2 className="font-semibold">Suport Elmont</h2>
           <button onClick={close} aria-label="Închide">
             <X size={18} />
           </button>
@@ -94,7 +94,7 @@ export function SupportChatPanel({ open, onClose }: { open: boolean; onClose: ()
                 <p className="text-sm text-gray-400 py-4">Se încarcă...</p>
               ) : tickets.length === 0 ? (
                 <p className="text-sm text-gray-500 py-4">
-                  Nicio conversație încă. Ai o problemă sau o întrebare? Scrie-ne — ajunge direct la echipa Pontifix.
+                  Nicio conversație încă. Ai o problemă sau o întrebare? Scrie-ne — ajunge direct la echipa Elmont.
                 </p>
               ) : (
                 <div className="flex flex-col gap-3">
@@ -111,7 +111,7 @@ export function SupportChatPanel({ open, onClose }: { open: boolean; onClose: ()
                       {t.reply && (
                         <div className="rounded-lg p-2 mt-1" style={{ background: 'var(--accent-soft)' }}>
                           <p className="text-xs font-medium mb-0.5" style={{ color: 'var(--accent)' }}>
-                            Răspuns Pontifix
+                            Răspuns Elmont
                           </p>
                           <p className="text-xs text-gray-700 whitespace-pre-wrap">{t.reply}</p>
                         </div>
@@ -128,7 +128,7 @@ export function SupportChatPanel({ open, onClose }: { open: boolean; onClose: ()
         ) : (
           <div className="flex flex-col gap-2.5">
             <p className="text-sm text-gray-500 mb-1">
-              Ai o problemă sau o întrebare? Scrie-ne aici, ajunge direct la echipa Pontifix.
+              Ai o problemă sau o întrebare? Scrie-ne aici, ajunge direct la echipa Elmont.
             </p>
             <input
               value={subject}

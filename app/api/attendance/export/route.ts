@@ -31,5 +31,5 @@ export async function GET(req: NextRequest) {
     ]),
   ]
   const body = '\uFEFF' + rows.map((row) => row.map(csv).join(',')).join('\r\n')
-  return new NextResponse(body, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="pontifix-pontaje-${days}-zile.csv"` } })
+  return new NextResponse(body, { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="elmont-pontaje-${days}-zile.csv"` } })
 }

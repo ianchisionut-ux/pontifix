@@ -7,7 +7,7 @@ export type ProgressProject = { id: string; name: string; progress: number; auth
 
 function color(project: ProgressProject) {
   if (project.authorizationStatus === 'OBTAINED') return '#16a34a'
-  if (project.authorizationStatus === 'SUBMITTED') return '#2563eb'
+  if (project.authorizationStatus === 'SUBMITTED') return '#197fb5'
   const hue = Math.round(Math.max(0, Math.min(70, project.progress)) * 0.65)
   return `hsl(${hue} 82% 50%)`
 }
