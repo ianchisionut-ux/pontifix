@@ -1,44 +1,77 @@
 'use client'
 
+import Image from 'next/image'
+import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signIn } from 'next-auth/react'
-import Link from 'next/link'
+import { ArrowLeft, ArrowRight, Eye, EyeOff, LockKeyhole, ShieldCheck } from 'lucide-react'
 import { ElmontLogo } from '@/components/elmont-logo'
-import { CalendarCheck2, FileDown, UsersRound } from 'lucide-react'
 
 export default function LoginPage() {
-  const router=useRouter(); const [email,setEmail]=useState(''); const [password,setPassword]=useState(''); const [error,setError]=useState(''); const [loading,setLoading]=useState(false)
-  async function submit(e:React.FormEvent){e.preventDefault();setError('');setLoading(true);const result=await signIn('credentials',{email,password,redirect:false});if(result?.error){setError('Email sau parolă greșită.');setLoading(false);return}router.push('/dashboard');router.refresh()}
-  return <main className="login-shell min-h-screen grid lg:grid-cols-[1.08fr_.92fr]">
-    <section className="login-hero hidden lg:flex p-12 xl:p-16 flex-col justify-between text-white">
-      <ElmontLogo inverted/>
-      <div className="max-w-2xl">
-        <span className="login-eyebrow">Pontaj simplu. Echipă organizată.</span>
-        <h1 className="text-5xl xl:text-6xl font-semibold leading-[1.08] tracking-[-0.045em] mt-6">Fiecare zi de lucru,<br/>clară și la locul ei.</h1>
-        <p className="text-blue-100/75 text-lg mt-6 max-w-xl">Prezență, foi lunare, concedii și statistici într-un spațiu construit pentru echipe reale.</p>
-        <div className="grid grid-cols-3 gap-3 mt-10 max-w-xl">
-          <div className="login-feature"><CalendarCheck2 size={20}/><span>Pontaj rapid</span></div>
-          <div className="login-feature"><UsersRound size={20}/><span>Echipă clară</span></div>
-          <div className="login-feature"><FileDown size={20}/><span>PDF A4</span></div>
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    setError('')
+    setLoading(true)
+    const result = await signIn('credentials', { email, password, redirect: false })
+    if (result?.error) {
+      setError('Email sau parolă greșită.')
+      setLoading(false)
+      return
+    }
+    router.push('/dashboard')
+    router.refresh()
+  }
+
+  return (
+    <main className="min-h-screen bg-[#f4fafd] lg:grid lg:grid-cols-[1.08fr_.92fr]">
+      <section className="relative hidden min-h-screen overflow-hidden lg:block">
+        <Image src="/elmont-hero-light.png" alt="Infrastructură electrică Elmont" fill priority sizes="55vw" className="object-cover object-[61%_center]"/>
+        <div className="absolute inset-0 bg-gradient-to-r from-white/96 via-white/65 to-[#dff1f9]/10"/>
+        <div className="absolute inset-x-0 bottom-0 h-80 bg-gradient-to-t from-[#082b4d]/85 via-[#0d5d8b]/35 to-transparent"/>
+        <div className="relative flex h-full min-h-screen flex-col justify-between p-12 xl:p-16">
+          <Link href="/" className="w-fit"><ElmontLogo /></Link>
+          <div className="max-w-xl text-white">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[.18em] backdrop-blur"><ShieldCheck size={14}/> Acces securizat</span>
+            <h1 className="mt-6 text-5xl font-black leading-[.98] tracking-[-.055em] xl:text-6xl">Portalul intern<br/>Elmont S.A.</h1>
+            <p className="mt-5 max-w-lg text-lg leading-8 text-blue-50/80">Un singur punct de acces pentru informațiile, documentele și operațiunile companiei.</p>
+            <p className="mt-9 flex items-center gap-3 text-sm font-semibold text-blue-100/70"><LockKeyhole size={17}/> Conexiune protejată · acces doar pentru utilizatori autorizați</p>
+          </div>
         </div>
-      </div>
-      <p className="text-sm text-blue-200/55">Elmont · Administrarea timpului de lucru</p>
-    </section>
-    <section className="flex items-center justify-center p-6 sm:p-10">
-      <div className="login-card w-full max-w-md">
-        <ElmontLogo className="lg:hidden mb-10"/>
-        <span className="text-sm text-blue-600 font-semibold">Bine ai revenit</span>
-        <h2 className="text-3xl font-semibold tracking-[-0.035em] mt-2">Intră în cont</h2>
-        <p className="text-slate-500 mt-2 mb-8">Accesează pontajele și datele echipei tale.</p>
-        <form onSubmit={submit} className="space-y-4">
-          <label className="block text-sm font-medium">Email<input className="input-field w-full mt-2 h-12" type="email" value={email} onChange={e=>setEmail(e.target.value)} required/></label>
-          <label className="block text-sm font-medium">Parolă<input className="input-field w-full mt-2 h-12" type="password" value={password} onChange={e=>setPassword(e.target.value)} required/></label>
-          {error&&<p className="text-sm text-rose-600">{error}</p>}
-          <button className="btn-primary w-full h-12 mt-2" disabled={loading}>{loading?'Se conectează...':'Intră în Elmont'}</button>
-        </form>
-        <Link href="/forgot-password" className="text-sm text-slate-500 hover:text-blue-600 block text-center mt-5">Am uitat parola</Link>
-      </div>
-    </section>
-  </main>
+      </section>
+
+      <section className="relative flex min-h-screen items-center justify-center px-5 py-20 sm:px-10">
+        <div className="absolute right-8 top-7 hidden sm:block"><Link href="/" className="flex items-center gap-2 text-sm font-bold text-slate-500 transition hover:text-[#197fb5]"><ArrowLeft size={16}/> Înapoi la site</Link></div>
+        <div className="w-full max-w-[460px]">
+          <Link href="/" className="mb-12 inline-flex lg:hidden"><ElmontLogo /></Link>
+          <span className="text-xs font-black uppercase tracking-[.18em] text-[#197fb5]">Portal companie</span>
+          <h2 className="mt-3 text-4xl font-black tracking-[-.05em] text-[#082b4d]">Autentificare</h2>
+          <p className="mt-3 text-slate-500">Introdu datele contului tău Elmont.</p>
+
+          <form onSubmit={submit} className="mt-9 space-y-5">
+            <label className="block text-sm font-bold text-slate-700">Email
+              <input className="mt-2 h-14 w-full rounded-2xl border border-[#dbe5f0] bg-white px-4 text-[#082b4d] outline-none transition focus:border-[#49a6d4] focus:ring-4 focus:ring-[#49a6d4]/10" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required/>
+            </label>
+            <label className="block text-sm font-bold text-slate-700">Parolă
+              <span className="relative mt-2 block">
+                <input className="h-14 w-full rounded-2xl border border-[#dbe5f0] bg-white px-4 pr-12 text-[#082b4d] outline-none transition focus:border-[#49a6d4] focus:ring-4 focus:ring-[#49a6d4]/10" type={showPassword ? 'text' : 'password'} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required/>
+                <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-2 text-slate-400 hover:bg-[#edf7fc] hover:text-[#197fb5]" aria-label={showPassword ? 'Ascunde parola' : 'Arată parola'}>{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button>
+              </span>
+            </label>
+            {error && <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600">{error}</p>}
+            <button className="group flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0d5d8b] to-[#2f91c8] font-extrabold text-white shadow-xl shadow-[#197fb5]/20 transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-70" disabled={loading}>{loading ? 'Se conectează...' : <>Intră în portal <ArrowRight size={18} className="transition group-hover:translate-x-1"/></>}</button>
+          </form>
+          <Link href="/forgot-password" className="mt-6 block text-center text-sm font-bold text-slate-500 transition hover:text-[#197fb5]">Am uitat parola</Link>
+          <div className="mt-10 flex items-center justify-center gap-2 border-t border-slate-200 pt-6 text-xs text-slate-400"><LockKeyhole size={14}/> Sesiune securizată Elmont</div><div className="mt-4 flex justify-center gap-4 text-xs text-slate-400"><Link href="/termeni-si-conditii" className="hover:text-[#197fb5]">Termeni și condiții</Link><Link href="/politica-de-confidentialitate" className="hover:text-[#197fb5]">Confidențialitate</Link></div>
+        </div>
+      </section>
+    </main>
+  )
 }

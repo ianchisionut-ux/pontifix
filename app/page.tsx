@@ -38,42 +38,24 @@ export default function HomePage() {
         </div>
       </header>
 
-      <section id="acasa" className="relative flex min-h-[880px] items-center overflow-hidden bg-[#061f38] pt-20 text-white">
-        <div className="absolute inset-0">
-          <div className="absolute -right-[10%] -top-[15%] h-[850px] w-[850px] rounded-full border-[150px] border-[#2f91c8]/10"/>
-          <div className="absolute right-[8%] top-[18%] h-[470px] w-[470px] rounded-full bg-[#197fb5]/15 blur-3xl"/>
-          <div className="power-grid absolute inset-0 opacity-30"/>
-          <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-[#f7fbfd] to-transparent"/>
-        </div>
-        <div className="relative mx-auto grid w-full max-w-[1440px] items-center gap-16 px-5 py-24 lg:grid-cols-[1.05fr_.95fr] lg:px-10">
-          <div className="max-w-3xl">
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#8bc8e5]/20 bg-[#197fb5]/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[.18em] text-[#b8dded]"><Sparkles size={14}/> Energie construită responsabil din 1997</span>
-            <h1 className="mt-8 text-[clamp(3.4rem,7vw,7rem)] font-black leading-[.9] tracking-[-.07em]">Putere pentru<br/><span className="text-gradient-elmont">proiecte reale.</span></h1>
-            <p className="mt-8 max-w-2xl text-lg leading-8 text-blue-100/70 sm:text-xl">Proiectăm și executăm infrastructură electrică de la 0,4 la 20 kV — branșamente, rețele, posturi de transformare și instalații de protecție.</p>
+      <section id="acasa" className="relative flex min-h-[820px] items-center overflow-hidden bg-[#eef8fc] pt-20">
+        <Image src="/elmont-hero-light.png" alt="Infrastructură electrică Elmont" fill priority sizes="100vw" className="object-cover object-[64%_center]"/>
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(247,252,254,.99)_0%,rgba(247,252,254,.96)_37%,rgba(247,252,254,.68)_55%,rgba(247,252,254,.08)_78%)]"/>
+        <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#f7fbfd] to-transparent"/>
+        <div className="relative mx-auto w-full max-w-[1440px] px-5 py-24 lg:px-10">
+          <div className="max-w-[760px]">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#8bc8e5] bg-white/80 px-4 py-2 text-xs font-extrabold uppercase tracking-[.18em] text-[#0f679b] shadow-sm backdrop-blur"><Sparkles size={14}/> Energie construită responsabil din 1997</span>
+            <h1 className="mt-8 text-[clamp(3.5rem,7vw,7rem)] font-black leading-[.9] tracking-[-.07em] text-[#082b4d]">Putere pentru<br/><span className="bg-gradient-to-r from-[#0d5d8b] to-[#49a6d4] bg-clip-text text-transparent">proiecte reale.</span></h1>
+            <p className="mt-8 max-w-2xl text-lg leading-8 text-slate-600 sm:text-xl">Proiectăm și executăm infrastructură electrică de la 0,4 la 20 kV — branșamente, rețele, posturi de transformare și instalații de protecție.</p>
             <div className="mt-10 flex flex-wrap gap-3">
-              <a href="#oferta" className="group flex items-center gap-3 rounded-full bg-white px-7 py-4 font-extrabold text-[#082b4d] shadow-2xl shadow-black/20 transition hover:-translate-y-1">Solicită o ofertă <ArrowRight size={19} className="transition group-hover:translate-x-1"/></a>
-              <a href="#servicii" className="flex items-center gap-3 rounded-full border border-white/20 bg-white/5 px-7 py-4 font-bold text-white backdrop-blur transition hover:bg-white/10">Vezi capabilitățile <ArrowDown size={18}/></a>
+              <a href="#oferta" className="group flex items-center gap-3 rounded-full bg-[#082b4d] px-7 py-4 font-extrabold text-white shadow-xl shadow-[#082b4d]/20 transition hover:-translate-y-1 hover:bg-[#197fb5]">Solicită o ofertă <ArrowRight size={19} className="transition group-hover:translate-x-1"/></a>
+              <a href="#servicii" className="flex items-center gap-3 rounded-full border border-[#8bc8e5] bg-white/80 px-7 py-4 font-bold text-[#0d5d8b] shadow-sm backdrop-blur transition hover:bg-white">Vezi capabilitățile <ArrowDown size={18}/></a>
             </div>
-            <div className="mt-14 grid max-w-2xl grid-cols-3 gap-3 border-t border-white/10 pt-7">
-              <div><strong className="block text-3xl font-black">1997</strong><span className="mt-1 block text-xs text-blue-100/50">Anul înființării</span></div>
-              <div><strong className="block text-3xl font-black">0,4–20</strong><span className="mt-1 block text-xs text-blue-100/50">kV, domeniu autorizat</span></div>
-              <div><strong className="block text-3xl font-black">3× ISO</strong><span className="mt-1 block text-xs text-blue-100/50">Sisteme certificate</span></div>
+            <div className="mt-14 grid max-w-2xl grid-cols-3 gap-3 border-t border-[#8bc8e5]/50 pt-7">
+              <div><strong className="block text-3xl font-black text-[#082b4d]">1997</strong><span className="mt-1 block text-xs text-slate-500">Anul înființării</span></div>
+              <div><strong className="block text-3xl font-black text-[#082b4d]">0,4–20</strong><span className="mt-1 block text-xs text-slate-500">kV, domeniu autorizat</span></div>
+              <div><strong className="block text-3xl font-black text-[#082b4d]">3× ISO</strong><span className="mt-1 block text-xs text-slate-500">Sisteme certificate</span></div>
             </div>
-          </div>
-
-          <div className="relative hidden min-h-[630px] lg:block">
-            <div className="absolute right-0 top-4 w-[86%] rotate-2 rounded-[44px] border border-white/10 bg-gradient-to-br from-[#197fb5]/50 to-[#082b4d]/40 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl">
-              <div className="relative min-h-[520px] overflow-hidden rounded-[34px] bg-gradient-to-br from-[#eaf5fb] to-white p-8 text-[#082b4d]">
-                <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-[#49a6d4]/25 blur-2xl"/>
-                <div className="relative flex items-start justify-between"><Image src="/elmont-logo.png" alt="" width={436} height={291} className="h-20 w-auto object-contain"/><span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700">COMPANIE ACTIVĂ</span></div>
-                <div className="relative mt-14"><span className="text-xs font-extrabold uppercase tracking-[.2em] text-[#197fb5]">Infrastructură energetică</span><h2 className="mt-3 text-4xl font-black leading-tight tracking-[-.05em]">De la documentație<br/>la punere în funcțiune.</h2></div>
-                <div className="relative mt-10 grid grid-cols-2 gap-3">
-                  {[['C1A','Proiectare'],['C2A','Execuție'],['CAEN','4222'],['Sediu','Zalău']].map(([value,label])=><div key={value} className="rounded-2xl border border-[#d9eef8] bg-white/80 p-4 shadow-sm"><strong className="text-2xl font-black text-[#0d5d8b]">{value}</strong><span className="mt-1 block text-xs text-slate-500">{label}</span></div>)}
-                </div>
-                <div className="relative mt-9 flex items-center gap-3 rounded-2xl bg-[#082b4d] p-4 text-white"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#197fb5]"><Zap size={22}/></span><div><strong className="block">Partener tehnic complet</strong><span className="text-xs text-blue-100/60">Proiectare · execuție · protecție</span></div></div>
-              </div>
-            </div>
-            <div className="absolute bottom-8 left-0 z-10 rounded-3xl border border-white/20 bg-white/90 p-5 text-[#082b4d] shadow-2xl backdrop-blur-xl"><span className="text-xs font-bold uppercase tracking-widest text-[#197fb5]">Experiență</span><strong className="mt-1 block text-4xl font-black">29 ani</strong><span className="text-sm text-slate-500">pe piața din România</span></div>
           </div>
         </div>
       </section>
