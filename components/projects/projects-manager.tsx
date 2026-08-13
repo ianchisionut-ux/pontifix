@@ -47,7 +47,7 @@ export function ProjectsManager({ initialProjects, canManage }: { initialProject
   const [sendingProjectId,setSendingProjectId] = useState<string|null>(null)
 
   const visible = useMemo(() => initialProjects.filter(project => (filter === 'ALL' || project.status === filter) && (!query || [project.name,project.beneficiary,project.beneficiaryPhone,project.address].some(value => value?.toLowerCase().includes(query.toLowerCase())))), [initialProjects,filter,query])
-  const chart = initialProjects.filter(project => project.status !== 'ARCHIVED').map(project => ({ id:project.id, name:project.name, progress:projectProgress(project), authorizationStatus:project.constructionAuthorizationStatus }))
+  const chart = initialProjects.filter(project => project.status !== 'ARCHIVED').map(project => ({ id:project.id, name:project.name, updatedAt:project.updatedAt, progress:projectProgress(project), authorizationStatus:project.constructionAuthorizationStatus }))
   const allApprovals = initialProjects.flatMap(project => project.approvals)
 
   async function api(url:string,method:string,data?:unknown){

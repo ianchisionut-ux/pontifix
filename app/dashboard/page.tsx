@@ -30,7 +30,7 @@ export default async function DashboardPage() {
     prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: startMonth, lt: endMonth } } }),
     prisma.leaveRequest.count({ where: { businessId, status: 'PENDING' } }),
     prisma.business.findUnique({ where: { id: businessId }, select: { break1Start: true, break1End: true, workingHours: true } }),
-    prisma.project.findMany({ where: { businessId, status: { not: 'ARCHIVED' } }, select: { id: true, name: true, constructionAuthorizationStatus: true, approvals: { select: { status: true } } }, orderBy: { updatedAt: 'desc' } }),
+    prisma.project.findMany({ where: { businessId, status: { not: 'ARCHIVED' } }, select: { id: true, name: true, updatedAt: true, constructionAuthorizationStatus: true, approvals: { select: { status: true } } }, orderBy: { updatedAt: 'desc' } }),
   ])
   const presentEntries = todayEntries.filter((entry) => entry.status === 'PRESENT' || entry.status === 'REMOTE')
   const present = presentEntries.length
@@ -41,7 +41,7 @@ export default async function DashboardPage() {
   const projectProgress = projects.map((project) => {
     const approvalScore = project.approvals.length ? project.approvals.reduce((sum, approval) => sum + (approval.status === 'OBTAINED' ? 1 : approval.status === 'SUBMITTED' ? 0.5 : 0), 0) / project.approvals.length : 0
     const authorizationScore = project.constructionAuthorizationStatus === 'OBTAINED' ? 1 : project.constructionAuthorizationStatus === 'SUBMITTED' ? 0.5 : 0
-    return { id: project.id, name: project.name, progress: Math.round(approvalScore * 70 + authorizationScore * 30), authorizationStatus: project.constructionAuthorizationStatus }
+    return { id: project.id, name: project.name, updatedAt: project.updatedAt.toISOString(), progress: Math.round(approvalScore * 70 + authorizationScore * 30), authorizationStatus: project.constructionAuthorizationStatus }
   })
   const stats = [
     { label: 'Angajați activi', value: employees, hint: 'în organizație', icon: Users, color: 'text-blue-600' },

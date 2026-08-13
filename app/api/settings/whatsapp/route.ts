@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { encrypt } from '@/lib/crypto'
+import { ensureWhatsAppStorage } from '@/lib/ensure-whatsapp-storage'
 import { z } from 'zod'
 
 const schema = z.object({
@@ -18,6 +19,8 @@ export async function PUT(request: NextRequest) {
   if (!businessId || role !== 'SUPER_ADMIN') {
     return NextResponse.json({ error: 'Doar Super Adminul poate configura WhatsApp.' }, { status: 403 })
   }
+
+  await ensureWhatsAppStorage()
 
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0]?.message || 'Date invalide.' }, { status: 400 })

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendProjectWhatsApp, whatsappFallbackUrl } from '@/lib/project-whatsapp'
+import { ensureWhatsAppStorage } from '@/lib/ensure-whatsapp-storage'
 
 function stageScore(status: string) { return status === 'OBTAINED' ? 1 : status === 'SUBMITTED' ? 0.5 : 0 }
 function statusLabel(status: string) { return status === 'OBTAINED' ? 'Obținută' : status === 'SUBMITTED' ? 'Depusă' : 'În pregătire' }
@@ -35,6 +36,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   ]
   const message = lines.join('\n').slice(0, 4000)
   const fallbackUrl = whatsappFallbackUrl(project.beneficiaryPhone, message)
+  await ensureWhatsAppStorage()
   const channel = await prisma.channel.findFirst({ where: { businessId, type: 'WHATSAPP', status: 'ACTIVE', enabledByOwner: true }, select: { id: true } })
   if (!channel) return NextResponse.json({ sent: false, fallbackUrl, message: 'Canalul WhatsApp Business nu este configurat în Pontifix.' })
   try {

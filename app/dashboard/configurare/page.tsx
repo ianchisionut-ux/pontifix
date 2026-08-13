@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { AttendanceSettingsForm } from '@/components/attendance/attendance-settings-form'
 import { WhatsAppSettingsForm } from '@/components/whatsapp-settings-form'
+import { ensureWhatsAppStorage } from '@/lib/ensure-whatsapp-storage'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,6 +12,8 @@ export default async function SettingsPage() {
   const businessId = (session as any)?.businessId as string | undefined
   const isSuperAdmin = (session as any)?.role === 'SUPER_ADMIN'
   if (!businessId) redirect('/login')
+
+  if (isSuperAdmin) await ensureWhatsAppStorage()
 
   const [business, whatsapp] = await Promise.all([
     prisma.business.findUnique({
