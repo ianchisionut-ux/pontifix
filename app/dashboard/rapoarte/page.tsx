@@ -1,8 +1,71 @@
+import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { ReportCharts } from '@/components/attendance/report-charts'
-import { workedMinutes, formatHours } from '@/lib/attendance'
-import { Clock, Users, TrendingUp, TriangleAlert } from 'lucide-react'
+import { ProjectReportCharts } from '@/components/projects/project-report-charts'
+import { formatHours } from '@/lib/attendance'
+import { BarChart3, Building2, CheckCircle2, Clock, FileCheck2, TrendingUp, TriangleAlert, Users } from 'lucide-react'
+
 export const dynamic = 'force-dynamic'
-export default async function ReportsPage() { const session=await auth(); const businessId=(session as any)?.businessId; if(!businessId) redirect('/login'); const end=new Date(); const start=new Date(end); start.setDate(end.getDate()-29); start.setHours(0,0,0,0); const [entries, employees, leaves]=await Promise.all([prisma.timeEntry.findMany({where:{businessId,clockIn:{gte:start}},include:{employee:true}}),prisma.attendanceEmployee.findMany({where:{businessId,active:true}}),prisma.leaveRequest.count({where:{businessId,startDate:{lte:end},endDate:{gte:start},status:'APPROVED'}})]); const total=entries.reduce((s,e)=>s+workedMinutes(e.clockIn,e.clockOut,e.breakMinutes),0); const overtime=Math.max(0,total-employees.length*160*60); const dailyMap=new Map<string,number>(); for(let i=0;i<30;i++){const d=new Date(start);d.setDate(start.getDate()+i);dailyMap.set(d.toISOString().slice(0,10),0)} for(const e of entries){const k=e.clockIn.toISOString().slice(0,10);dailyMap.set(k,(dailyMap.get(k)||0)+workedMinutes(e.clockIn,e.clockOut,e.breakMinutes)/60)} const daily=[...dailyMap].map(([d,h])=>({day:new Date(d).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'}),hours:Number(h.toFixed(1))})); const deps=new Map<string,number>(); for(const e of entries){const k=e.employee.department||'Fără departament';deps.set(k,(deps.get(k)||0)+workedMinutes(e.clockIn,e.clockOut,e.breakMinutes)/60)} const departments=[...deps].map(([name,hours])=>({name,hours:Number(hours.toFixed(1))})); const present=new Set(entries.filter(e=>e.clockIn.toDateString()===end.toDateString()).map(e=>e.employeeId)).size; const cards=[['Ore lucrate',formatHours(total),Clock],['Medie / angajat',employees.length?formatHours(Math.round(total/employees.length)):'0h',TrendingUp],['Angajați activi',String(employees.length),Users],['Ore suplimentare',formatHours(overtime),TriangleAlert]] as const; return <div className="p-4 lg:p-8 max-w-[1500px] mx-auto"><div className="flex flex-wrap items-end justify-between gap-4 mb-6"><div><h1 className="text-2xl font-semibold">Statistici angajați</h1><p className="text-sm text-slate-500 mt-1">Prezență, ore lucrate și utilizarea echipei într-o singură vedere.</p></div><div className="flex items-center gap-2"><div className="bg-white border rounded-xl p-1 text-sm"><button className="px-3 py-1.5">7 zile</button><button className="px-3 py-1.5 bg-violet-600 text-white rounded-lg">30 zile</button><button className="px-3 py-1.5">90 zile</button></div><a className="btn-secondary" href="/api/attendance/export?days=30">Export CSV</a></div></div><div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">{cards.map(([label,value,Icon])=><div className="card p-5" key={label}><div className="flex justify-between"><p className="text-sm text-slate-500">{label}</p><Icon size={18} className="text-violet-500"/></div><p className="text-3xl font-semibold mt-3">{value}</p><p className="text-xs text-slate-400 mt-2">ultimele 30 de zile</p></div>)}</div><ReportCharts daily={daily} presence={[{name:'Prezenți azi',value:present,color:'#22c55e'},{name:'Absenți azi',value:Math.max(0,employees.length-present),color:'#f59e0b'},{name:'În concediu',value:leaves,color:'#8b5cf6'}]} departments={departments}/></div> }
+
+function stageScore(status: string) { return status === 'OBTAINED' ? 1 : status === 'SUBMITTED' ? 0.5 : 0 }
+
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
+  const session = await auth()
+  const businessId = (session as any)?.businessId as string | undefined
+  if (!businessId) redirect('/login')
+
+  const requestedDays = Number((await searchParams).days || 30)
+  const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30
+  const today = new Date()
+  const endDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
+  const startDate = new Date(endDate)
+  startDate.setUTCDate(startDate.getUTCDate() - days + 1)
+
+  const [entries, employees, projects] = await Promise.all([
+    prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: startDate, lte: endDate } }, include: { employee: true }, orderBy: { workDate: 'asc' } }),
+    prisma.attendanceEmployee.findMany({ where: { businessId, active: true }, orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }] }),
+    prisma.project.findMany({ where: { businessId }, include: { approvals: true }, orderBy: { updatedAt: 'desc' } }),
+  ])
+
+  const totalMinutes = Math.round(entries.reduce((sum, entry) => sum + entry.hours * 60, 0))
+  const overtimeMinutes = Math.round(entries.reduce((sum, entry) => sum + Math.max(0, entry.hours - entry.employee.dailyHours) * 60, 0))
+  const employeesWithHours = new Set(entries.filter((entry) => entry.hours > 0).map((entry) => entry.employeeId)).size
+  const dailyMap = new Map<string, number>()
+  for (let index = 0; index < days; index++) { const date = new Date(startDate); date.setUTCDate(startDate.getUTCDate() + index); dailyMap.set(date.toISOString().slice(0, 10), 0) }
+  for (const entry of entries) { const key = entry.workDate.toISOString().slice(0, 10); dailyMap.set(key, (dailyMap.get(key) || 0) + entry.hours) }
+  const daily = [...dailyMap].map(([date, hours]) => ({ day: new Date(`${date}T12:00:00Z`).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit' }), hours: Number(hours.toFixed(1)) }))
+
+  const departmentMap = new Map<string, number>()
+  for (const employee of employees) departmentMap.set(employee.department || (employee.category === 'TESA' ? 'TESA' : 'Producție'), 0)
+  for (const entry of entries) { const department = entry.employee.department || (entry.employee.category === 'TESA' ? 'TESA' : 'Producție'); departmentMap.set(department, (departmentMap.get(department) || 0) + entry.hours) }
+  const departments = [...departmentMap].map(([name, hours]) => ({ name, hours: Number(hours.toFixed(1)) }))
+
+  const todayEntries = entries.filter((entry) => entry.workDate.getTime() === endDate.getTime())
+  const presentToday = new Set(todayEntries.filter((entry) => entry.status === 'PRESENT' || entry.status === 'REMOTE').map((entry) => entry.employeeId)).size
+  const vacationToday = new Set(todayEntries.filter((entry) => entry.status === 'VACATION').map((entry) => entry.employeeId)).size
+  const medicalToday = new Set(todayEntries.filter((entry) => entry.status === 'MEDICAL').map((entry) => entry.employeeId)).size
+  const unavailableToday = new Set(todayEntries.filter((entry) => entry.status === 'ABSENT' || entry.status === 'DAY_OFF').map((entry) => entry.employeeId)).size
+  const unmarkedToday = Math.max(0, employees.length - presentToday - vacationToday - medicalToday - unavailableToday)
+  const employeeCards = [['Ore lucrate',formatHours(totalMinutes),Clock],['Medie / angajat pontat',employeesWithHours?formatHours(Math.round(totalMinutes/employeesWithHours)):'0h',TrendingUp],['Angajați activi',String(employees.length),Users],['Ore suplimentare',formatHours(overtimeMinutes),TriangleAlert]] as const
+
+  const projectData = projects.filter((project) => project.status !== 'ARCHIVED').map((project) => {
+    const approvals = project.approvals.length ? project.approvals.reduce((sum, approval) => sum + stageScore(approval.status), 0) / project.approvals.length : 0
+    return { id: project.id, name: project.name, progress: Math.round(approvals * 70 + stageScore(project.constructionAuthorizationStatus) * 30) }
+  })
+  const allApprovals = projects.flatMap((project) => project.approvals)
+  const averageProgress = projectData.length ? Math.round(projectData.reduce((sum, project) => sum + project.progress, 0) / projectData.length) : 0
+  const projectCards = [['Proiecte în lucru',String(projects.filter(project=>project.status==='ACTIVE').length),Building2],['Progres mediu',`${averageProgress}%`,BarChart3],['Avize depuse',String(allApprovals.filter(approval=>approval.status==='SUBMITTED').length),FileCheck2],['Avize obținute',String(allApprovals.filter(approval=>approval.status==='OBTAINED').length),CheckCircle2]] as const
+  const projectStatuses = [{name:'În lucru',value:projects.filter(project=>project.status==='ACTIVE').length,color:'#2563eb'},{name:'În așteptare',value:projects.filter(project=>project.status==='ON_HOLD').length,color:'#f59e0b'},{name:'Finalizate',value:projects.filter(project=>project.status==='COMPLETED').length,color:'#22c55e'},{name:'Arhivate',value:projects.filter(project=>project.status==='ARCHIVED').length,color:'#94a3b8'}]
+
+  return <div className="p-4 lg:p-8 max-w-[1500px] mx-auto">
+    <div className="flex flex-wrap items-end justify-between gap-4 mb-6"><div><h1 className="text-2xl font-semibold">Statistici</h1><p className="text-sm text-slate-500 mt-1">Angajați, pontaje și proiecte într-o singură vedere.</p></div><div className="flex items-center gap-2"><div className="bg-white border rounded-xl p-1 text-sm">{[7,30,90].map(value=><Link key={value} href={`/dashboard/rapoarte?days=${value}`} className={`inline-block px-3 py-1.5 rounded-lg ${days===value?'bg-blue-600 text-white':'text-slate-600 hover:bg-slate-50'}`}>{value} zile</Link>)}</div><a className="btn-secondary" href={`/api/attendance/export?days=${days}`}>Export CSV</a></div></div>
+    <h2 className="text-lg font-semibold mb-3">Statistici angajați</h2>
+    <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">{employeeCards.map(([label,value,Icon])=><div className="card p-5" key={label}><div className="flex justify-between"><p className="text-sm text-slate-500">{label}</p><Icon size={18} className="text-blue-600"/></div><p className="text-3xl font-semibold mt-3">{value}</p><p className="text-xs text-slate-400 mt-2">ultimele {days} zile</p></div>)}</div>
+    <ReportCharts days={days} daily={daily} presence={[{name:'Prezenți azi',value:presentToday,color:'#22c55e'},{name:'Nemarcați azi',value:unmarkedToday,color:'#f59e0b'},{name:'Concediu',value:vacationToday,color:'#3b82f6'},{name:'Medical / liber',value:medicalToday+unavailableToday,color:'#ef4444'}]} departments={departments}/>
+    <div className="mt-8 mb-3 flex items-end justify-between"><div><h2 className="text-lg font-semibold">Statistici proiecte</h2><p className="text-sm text-slate-500">Situația actuală a proiectelor și avizelor.</p></div><Link href="/dashboard/proiecte" className="text-sm font-semibold text-blue-600">Deschide proiectele →</Link></div>
+    <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">{projectCards.map(([label,value,Icon])=><div className="card p-5" key={label}><div className="flex justify-between"><p className="text-sm text-slate-500">{label}</p><Icon size={18} className="text-blue-600"/></div><p className="text-3xl font-semibold mt-3">{value}</p><p className="text-xs text-slate-400 mt-2">situația curentă</p></div>)}</div>
+    <ProjectReportCharts projects={projectData} statuses={projectStatuses}/>
+  </div>
+}
