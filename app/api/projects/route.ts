@@ -12,6 +12,7 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const session = await auth(); const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
+  if ((session as any)?.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Doar Super Adminul poate modifica proiectele.' }, { status: 403 })
   const parsed = schema.safeParse(await req.json()); if (!parsed.success) return NextResponse.json({ error: 'Datele proiectului sunt invalide.' }, { status: 400 })
   const { approvals, certificateDate, ...data } = parsed.data
   const uniqueApprovals = approvals.filter((approval, index, list) => list.findIndex((item) => item.name.trim().toUpperCase() === approval.name.trim().toUpperCase()) === index)
