@@ -1,0 +1,91 @@
+'use client'
+
+import { useMemo, useState } from 'react'
+import { CheckCircle2, CircleDollarSign, Clock3, FileText, Inbox, Mail, MapPin, Phone, Search, Trash2 } from 'lucide-react'
+
+type OfferStatus = 'NEW' | 'REVIEWING' | 'QUOTED' | 'ACCEPTED' | 'REJECTED' | 'ARCHIVED'
+type Offer = {
+  id: string
+  name: string
+  email: string
+  phone: string
+  serviceType: string
+  location: string | null
+  message: string | null
+  atrPathname: string | null
+  atrName: string | null
+  status: OfferStatus
+  internalNotes: string | null
+  estimatedValue: number | null
+  createdAt: string
+  updatedAt: string
+}
+
+const STATUS_LABELS: Record<OfferStatus, string> = { NEW: 'Nouă', REVIEWING: 'În analiză', QUOTED: 'Ofertă trimisă', ACCEPTED: 'Acceptată', REJECTED: 'Respinsă', ARCHIVED: 'Arhivată' }
+const STATUS_CLASSES: Record<OfferStatus, string> = { NEW: 'bg-blue-50 text-blue-700', REVIEWING: 'bg-amber-50 text-amber-700', QUOTED: 'bg-violet-50 text-violet-700', ACCEPTED: 'bg-emerald-50 text-emerald-700', REJECTED: 'bg-rose-50 text-rose-700', ARCHIVED: 'bg-slate-100 text-slate-600' }
+const STATUS_FILTERS: Array<'ALL' | OfferStatus> = ['ALL', 'NEW', 'REVIEWING', 'QUOTED', 'ACCEPTED', 'REJECTED', 'ARCHIVED']
+const money = new Intl.NumberFormat('ro-RO', { style: 'currency', currency: 'RON', maximumFractionDigits: 0 })
+
+export function OffersManager({ initialOffers }: { initialOffers: Offer[] }) {
+  const [offers, setOffers] = useState(initialOffers)
+  const [filter, setFilter] = useState<'ALL' | OfferStatus>('ALL')
+  const [query, setQuery] = useState('')
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const visible = useMemo(() => offers.filter((offer) => (filter === 'ALL' || offer.status === filter) && (!query || [offer.name, offer.email, offer.phone, offer.serviceType, offer.location].some((value) => value?.toLocaleLowerCase('ro-RO').includes(query.toLocaleLowerCase('ro-RO'))))), [offers, filter, query])
+  const totalEstimated = offers.filter((offer) => !['REJECTED', 'ARCHIVED'].includes(offer.status)).reduce((sum, offer) => sum + (offer.estimatedValue || 0), 0)
+
+  async function patchOffer(id: string, patch: Partial<Pick<Offer, 'status' | 'internalNotes' | 'estimatedValue'>>) {
+    setBusyId(id)
+    const response = await fetch(`/api/offers/${id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) })
+    const body = await response.json().catch(() => ({}))
+    setBusyId(null)
+    if (!response.ok) return alert(body.error || 'Modificarea nu a putut fi salvată.')
+    setOffers((current) => current.map((offer) => offer.id === id ? { ...offer, ...patch, updatedAt: new Date().toISOString() } : offer))
+  }
+
+  async function removeOffer(offer: Offer) {
+    if (!confirm(`Ștergi definitiv cererea de la ${offer.name}?`)) return
+    setBusyId(offer.id)
+    const response = await fetch(`/api/offers/${offer.id}`, { method: 'DELETE' })
+    setBusyId(null)
+    if (!response.ok) return alert('Cererea nu a putut fi ștearsă.')
+    setOffers((current) => current.filter((item) => item.id !== offer.id))
+  }
+
+  return <div>
+    <header className="mb-6 flex flex-wrap items-end justify-between gap-4"><div><span className="text-xs font-black uppercase tracking-[.16em] text-[#197fb5]">Solicitări publice</span><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#082b4d]">Oferte</h1><p className="mt-1 text-sm text-slate-500">Cererile trimise prin formularul de pe site și stadiul ofertării.</p></div><span className="rounded-full bg-[#edf7fc] px-4 py-2 text-sm font-bold text-[#0f679b]">{offers.filter((offer) => offer.status === 'NEW').length} cereri noi</span></header>
+
+    <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <Stat icon={<Inbox/>} label="Cereri totale" value={offers.length}/>
+      <Stat icon={<Clock3/>} label="În analiză" value={offers.filter((offer) => offer.status === 'REVIEWING').length}/>
+      <Stat icon={<CheckCircle2/>} label="Acceptate" value={offers.filter((offer) => offer.status === 'ACCEPTED').length}/>
+      <Stat icon={<CircleDollarSign/>} label="Valoare estimată" value={money.format(totalEstimated)}/>
+    </div>
+
+    <div className="mb-5 flex flex-wrap items-center gap-2">
+      <div className="calendar-search !ml-0"><Search size={15}/><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Caută client, telefon, lucrare…"/></div>
+      {STATUS_FILTERS.map((status) => <button key={status} onClick={() => setFilter(status)} className={filter === status ? 'btn-primary' : 'btn-secondary'}>{status === 'ALL' ? 'Toate' : STATUS_LABELS[status]}</button>)}
+    </div>
+
+    <div className="grid gap-4 xl:grid-cols-2">
+      {visible.map((offer) => <article key={offer.id} className="card overflow-hidden">
+        <div className="border-b border-slate-100 p-5">
+          <div className="flex items-start justify-between gap-4"><div><div className="flex flex-wrap items-center gap-2"><h2 className="text-lg font-bold text-[#082b4d]">{offer.name}</h2><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${STATUS_CLASSES[offer.status]}`}>{STATUS_LABELS[offer.status]}</span></div><p className="mt-1 text-sm font-semibold text-[#197fb5]">{offer.serviceType}</p><p className="mt-1 text-xs text-slate-400">Primită {new Date(offer.createdAt).toLocaleString('ro-RO', { dateStyle: 'medium', timeStyle: 'short' })}</p></div><button disabled={busyId === offer.id} onClick={() => removeOffer(offer)} className="round-action text-rose-500" title="Șterge cererea"><Trash2 size={16}/></button></div>
+          <div className="mt-4 flex flex-wrap gap-2 text-sm"><a href={`tel:${offer.phone}`} className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 font-semibold text-slate-700 hover:bg-[#edf7fc] hover:text-[#0f679b]"><Phone size={15}/>{offer.phone}</a><a href={`mailto:${offer.email}`} className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 font-semibold text-slate-700 hover:bg-[#edf7fc] hover:text-[#0f679b]"><Mail size={15}/>{offer.email}</a>{offer.location && <span className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-slate-600"><MapPin size={15}/>{offer.location}</span>}</div>
+          {offer.message && <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">{offer.message}</p>}
+          {offer.atrPathname && <a href={`/api/offers/${offer.id}/atr`} target="_blank" className="mt-4 inline-flex items-center gap-2 rounded-xl border border-[#8bc8e5] bg-[#f4fbfe] px-4 py-2.5 text-sm font-bold text-[#0f679b] hover:bg-[#e5f5fb]"><FileText size={17}/> Deschide ATR {offer.atrName ? `· ${offer.atrName}` : ''}</a>}
+        </div>
+        <div className="grid gap-4 bg-slate-50/60 p-5 sm:grid-cols-2">
+          <label className="text-xs font-bold text-slate-500">Stadiul ofertării<select value={offer.status} disabled={busyId === offer.id} onChange={(event) => patchOffer(offer.id, { status: event.target.value as OfferStatus })} className="input-field mt-1.5 w-full bg-white">{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label className="text-xs font-bold text-slate-500">Valoare estimată (lei)<input type="number" min="0" step="100" defaultValue={offer.estimatedValue ?? ''} onBlur={(event) => patchOffer(offer.id, { estimatedValue: event.target.value ? Number(event.target.value) : null })} className="input-field mt-1.5 w-full bg-white" placeholder="0"/></label>
+          <label className="text-xs font-bold text-slate-500 sm:col-span-2">Notițe interne<textarea defaultValue={offer.internalNotes || ''} onBlur={(event) => patchOffer(offer.id, { internalNotes: event.target.value || null })} className="input-field mt-1.5 min-h-20 w-full resize-y bg-white" placeholder="Observații pentru ofertare, termen, responsabil…"/></label>
+        </div>
+      </article>)}
+      {!visible.length && <div className="card p-12 text-center text-slate-500 xl:col-span-2">Nu există cereri pentru filtrul selectat.</div>}
+    </div>
+  </div>
+}
+
+function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string | number }) {
+  return <div className="card flex items-center gap-3 p-4"><span className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#edf7fc] text-[#197fb5]">{icon}</span><div><p className="text-xs text-slate-500">{label}</p><p className="text-xl font-bold text-[#082b4d]">{value}</p></div></div>
+}

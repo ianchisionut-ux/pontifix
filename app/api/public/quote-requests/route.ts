@@ -37,9 +37,10 @@ export async function POST(request: NextRequest) {
 
   await ensureQuoteStorage()
   const id = crypto.randomUUID()
+  const elmontBusiness = await prisma.business.findFirst({ where: { name: { contains: 'Elmont', mode: 'insensitive' } }, select: { id: true } })
   await prisma.$executeRaw`
-    INSERT INTO "QuoteRequest" ("id", "name", "email", "phone", "serviceType", "location", "message", "atrPathname", "atrName")
-    VALUES (${id}, ${data.name}, ${data.email.toLowerCase()}, ${data.phone}, ${data.serviceType}, ${data.location || null}, ${data.message || null}, ${data.atrPathname || null}, ${data.atrName || null})
+    INSERT INTO "QuoteRequest" ("id", "name", "email", "phone", "serviceType", "location", "message", "atrPathname", "atrName", "businessId")
+    VALUES (${id}, ${data.name}, ${data.email.toLowerCase()}, ${data.phone}, ${data.serviceType}, ${data.location || null}, ${data.message || null}, ${data.atrPathname || null}, ${data.atrName || null}, ${elmontBusiness?.id || null})
   `
 
   if (process.env.RESEND_API_KEY && process.env.ADMIN_NOTIFICATION_EMAIL) {
