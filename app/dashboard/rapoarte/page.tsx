@@ -52,7 +52,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
   const projectData = projects.filter((project) => project.status !== 'ARCHIVED').map((project) => {
     const approvals = project.approvals.length ? project.approvals.reduce((sum, approval) => sum + stageScore(approval.status), 0) / project.approvals.length : 0
-    return { id: project.id, name: project.name, progress: Math.round(approvals * 70 + stageScore(project.constructionAuthorizationStatus) * 30) }
+    return { id: project.id, name: project.name, progress: Math.round(approvals * 70 + stageScore(project.constructionAuthorizationStatus) * 30), authorizationStatus: project.constructionAuthorizationStatus }
   })
   const allApprovals = projects.flatMap((project) => project.approvals)
   const averageProgress = projectData.length ? Math.round(projectData.reduce((sum, project) => sum + project.progress, 0) / projectData.length) : 0

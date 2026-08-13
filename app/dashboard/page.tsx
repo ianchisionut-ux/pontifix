@@ -41,7 +41,7 @@ export default async function DashboardPage() {
   const projectProgress = projects.map((project) => {
     const approvalScore = project.approvals.length ? project.approvals.reduce((sum, approval) => sum + (approval.status === 'OBTAINED' ? 1 : approval.status === 'SUBMITTED' ? 0.5 : 0), 0) / project.approvals.length : 0
     const authorizationScore = project.constructionAuthorizationStatus === 'OBTAINED' ? 1 : project.constructionAuthorizationStatus === 'SUBMITTED' ? 0.5 : 0
-    return { id: project.id, name: project.name, progress: Math.round(approvalScore * 70 + authorizationScore * 30) }
+    return { id: project.id, name: project.name, progress: Math.round(approvalScore * 70 + authorizationScore * 30), authorizationStatus: project.constructionAuthorizationStatus }
   })
   const stats = [
     { label: 'Angajați activi', value: employees, hint: 'în organizație', icon: Users, color: 'text-blue-600' },
