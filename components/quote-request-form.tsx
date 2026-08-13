@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { upload } from '@vercel/blob/client'
+import { uploadPresigned } from '@vercel/blob/client'
 import { ArrowRight, CheckCircle2, FileSearch, FileText, Loader2, UploadCloud, X } from 'lucide-react'
 import type { BrowserAtrResult } from '@/lib/browser-atr-ocr'
 
@@ -42,7 +42,7 @@ export function QuoteRequestForm() {
     try {
       let atrPathname = ''
       if (atrFile) {
-        const blob = await upload(`cereri-oferta/${crypto.randomUUID()}/${atrFile.name}`, atrFile, { access: 'private', handleUploadUrl: '/api/public/quote-upload' })
+        const blob = await uploadPresigned(`cereri-oferta/${crypto.randomUUID()}/${atrFile.name}`, atrFile, { access: 'private', handleUploadUrl: '/api/public/quote-upload' })
         atrPathname = blob.pathname
       }
       const response = await fetch('/api/public/quote-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...form, atrPathname, atrName: atrFile?.name || '', atrOcr }) })

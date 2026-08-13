@@ -39,6 +39,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   cereri: Inbox,
   tichete: LifeBuoy,
   proiecte: FolderKanban,
+  inbox: Inbox,
 }
 
 // amestecă o culoare hex cu alb, la un procent dat — produce o culoare SOLIDĂ (nu transparentă).
@@ -96,6 +97,7 @@ export function ResponsiveShell({
         setLiveBadges({
           '/dashboard/mesaje': data.needsOperatorCount > 0 ? data.needsOperatorCount : undefined,
           '/dashboard/programari': data.unseenConfirmationsCount > 0 ? data.unseenConfirmationsCount : undefined,
+          '/dashboard/oferte': data.newOffersCount > 0 ? data.newOffersCount : undefined,
         })
       } catch {
         // eșec silențios — reîncercăm la următorul interval
@@ -210,7 +212,7 @@ export function ResponsiveShell({
               {!sidebarCollapsed && <span className="flex-1">{item.label}</span>}
               {!!item.badge && (
                 <span
-                  className={`text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center ${item.href === '/dashboard/mesaje' || item.href === '/dashboard/programari' ? 'animate-pulse' : ''}`}
+                  className={`text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center ${item.href === '/dashboard/mesaje' || item.href === '/dashboard/programari' || item.href === '/dashboard/oferte' ? 'animate-pulse' : ''}`}
                 >
                   {item.badge}
                 </span>
