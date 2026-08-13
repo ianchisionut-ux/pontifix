@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { upload } from '@vercel/blob/client'
-import { BarChart3, Building2, CheckCircle2, ChevronDown, ChevronUp, Eye, FileText, Link2, Pencil, Plus, Printer, Save, Search, Trash2, UploadCloud } from 'lucide-react'
+import { BarChart3, Building2, CheckCircle2, ChevronDown, ChevronUp, Eye, FileText, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Printer, Save, Search, Trash2, UploadCloud } from 'lucide-react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useRouter } from 'next/navigation'
 
@@ -19,8 +19,9 @@ const STANDARD_APPROVALS = ['MEDIU', 'APĂ', 'GAZ', 'TELEFON', 'ENERGIE ELECTRIC
 function stageScore(status:ApprovalStatus){ return status === 'OBTAINED' ? 1 : status === 'SUBMITTED' ? .5 : 0 }
 function nextStage(status:ApprovalStatus):ApprovalStatus { return status === 'REQUIRED' || status === 'NOT_REQUIRED' ? 'SUBMITTED' : status === 'SUBMITTED' ? 'OBTAINED' : 'REQUIRED' }
 function progressColor(progress:number){
-  const hue=Math.round(Math.max(0,Math.min(100,progress))*1.2)
-  return 'hsl('+hue+' 72% 48%)'
+  if(progress>=100)return '#16a34a'
+  const hue=Math.round(Math.max(0,Math.min(99,progress))*.55)
+  return 'hsl('+hue+' 82% 50%)'
 }
 function projectProgress(project:Project){
   const approvalScore=project.approvals.length?project.approvals.reduce((sum,item)=>sum+stageScore(item.status),0)/project.approvals.length:0
@@ -37,9 +38,10 @@ export function ProjectsManager({ initialProjects }: { initialProjects:Project[]
   const [certificateFile,setCertificateFile] = useState<File|null>(null)
   const [busy,setBusy] = useState(false)
   const [editing,setEditing] = useState(false)
+  const [sendingProjectId,setSendingProjectId] = useState<string|null>(null)
 
   const visible = useMemo(() => initialProjects.filter(project => (filter === 'ALL' || project.status === filter) && (!query || [project.name,project.beneficiary,project.beneficiaryPhone,project.address].some(value => value?.toLowerCase().includes(query.toLowerCase())))), [initialProjects,filter,query])
-  const chart = initialProjects.filter(project => project.status !== 'ARCHIVED').map(project => ({ name:project.name.length>18?project.name.slice(0,18)+'…':project.name, fullName:project.name, progres:projectProgress(project) }))
+  const chart = initialProjects.filter(project => project.status !== 'ARCHIVED').map(project => ({ id:project.id, name:project.name.length>18?project.name.slice(0,18)+'…':project.name, fullName:project.name, progres:projectProgress(project) }))
   const allApprovals = initialProjects.flatMap(project => project.approvals)
 
   async function api(url:string,method:string,data?:unknown){
@@ -62,6 +64,20 @@ export function ProjectsManager({ initialProjects }: { initialProjects:Project[]
       closeModal(); router.refresh(); if(warning) alert(warning)
     } catch(error){ alert(error instanceof Error?error.message:'Proiectul nu a putut fi salvat.') } finally { setBusy(false) }
   }
+  async function sendWhatsAppSummary(project:Project){
+    if(!project.beneficiaryPhone)return
+    if(!confirm(`Trimiți beneficiarului actualizarea proiectului pe WhatsApp la ${project.beneficiaryPhone}?`))return
+    setSendingProjectId(project.id)
+    try{
+      const response=await api(`/api/projects/${project.id}/send-whatsapp`,'POST')
+      const result=await response.json()
+      if(result.sent){ alert('Actualizarea proiectului a fost trimisă pe WhatsApp.') }
+      else if(result.fallbackUrl){
+        if(confirm(`${result.message||'Canalul WhatsApp Business nu este configurat.'}\n\nDeschizi WhatsApp cu mesajul completat pentru trimitere manuală?`)) window.open(result.fallbackUrl,'_blank','noopener,noreferrer')
+      }
+    }catch(error){alert(error instanceof Error?error.message:'Mesajul nu a putut fi pregătit.')}
+    finally{setSendingProjectId(null)}
+  }
   async function patchProject(id:string,data:unknown){ try{await api('/api/projects/'+id,'PATCH',data);router.refresh()}catch(error){alert((error as Error).message)} }
   async function deleteProject(project:Project){ if(!confirm(`Ștergi proiectul „${project.name}” și toate avizele?`))return;await api('/api/projects/'+project.id,'DELETE');router.refresh() }
   async function addApproval(projectId:string,form:FormData){ try{await api(`/api/projects/${projectId}/approvals`,'POST',Object.fromEntries(form));router.refresh()}catch(error){alert((error as Error).message)} }
@@ -78,7 +94,7 @@ export function ProjectsManager({ initialProjects }: { initialProjects:Project[]
     </section>
     <div className="screen-only">
     <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5"><Stat icon={<Building2/>} label="Proiecte în lucru" value={initialProjects.filter(p=>p.status==='ACTIVE').length}/><Stat icon={<CheckCircle2/>} label="Avize obținute" value={allApprovals.filter(a=>a.status==='OBTAINED').length}/><Stat icon={<FileText/>} label="Avize depuse" value={allApprovals.filter(a=>a.status==='SUBMITTED').length}/><Stat icon={<BarChart3/>} label="Progres mediu" value={(chart.length?Math.round(chart.reduce((sum,p)=>sum+p.progres,0)/chart.length):0)+'%'}/></div>
-    {chart.length>0 && <section className="card p-5 mb-5"><h2 className="font-semibold">Stadiul fizic al proiectelor</h2><p className="text-xs text-slate-500 mb-3">Avize 70% · Autorizația de construire 30%</p><div className="h-52"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" fontSize={10}/><YAxis domain={[0,100]} unit="%" fontSize={10}/><Tooltip formatter={value=>[`${value}%`,'Stadiu fizic']} labelFormatter={(_,payload)=>payload?.[0]?.payload?.fullName||''}/><Bar dataKey="progres" radius={[7,7,0,0]}>{chart.map(item=><Cell key={item.fullName} fill={progressColor(item.progres)}/>)}</Bar></BarChart></ResponsiveContainer></div></section>}
+    {chart.length>0 && <section className="card p-5 mb-5"><h2 className="font-semibold">Stadiul fizic al proiectelor</h2><p className="text-xs text-slate-500 mb-3">Avize 70% · Autorizația de construire 30%</p><div className="h-52"><ResponsiveContainer width="100%" height="100%"><BarChart data={chart}><CartesianGrid strokeDasharray="3 3" vertical={false}/><XAxis dataKey="name" fontSize={10}/><YAxis domain={[0,100]} unit="%" fontSize={10}/><Tooltip content={({active,payload})=>active&&payload?.length?<div className="rounded-xl border bg-white px-3 py-2 shadow-lg max-w-sm"><p className="text-xs font-semibold text-slate-800 whitespace-normal">{payload[0].payload.fullName}</p><p className="text-xs text-slate-500 mt-1">Stadiu fizic: <b>{payload[0].value}%</b></p></div>:null}/><Bar dataKey="progres" radius={[7,7,0,0]}>{chart.map(item=><Cell key={item.id} fill={progressColor(item.progres)}/>)}</Bar></BarChart></ResponsiveContainer></div></section>}
     <div className="flex flex-wrap gap-2 mb-4"><div className="calendar-search !ml-0"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Caută proiect, beneficiar…"/></div>{(['ALL','ACTIVE','ON_HOLD','COMPLETED','ARCHIVED'] as const).map(value=><button key={value} onClick={()=>setFilter(value)} className={filter===value?'btn-primary':'btn-secondary'}>{value==='ALL'?'Toate':PROJECT_LABELS[value]}</button>)}</div>
     <div className="grid xl:grid-cols-2 gap-3">
       {visible.map(project => (
@@ -95,6 +111,8 @@ export function ProjectsManager({ initialProjects }: { initialProjects:Project[]
           patchApproval={patchApproval}
           deleteApproval={deleteApproval}
           attachApproval={attachApproval}
+          sendUpdate={sendWhatsAppSummary}
+          sending={sendingProjectId===project.id}
           attachCertificate={async (file: File) => {
             try {
               await attachCertificate(project.id, file)
@@ -114,7 +132,7 @@ export function ProjectsManager({ initialProjects }: { initialProjects:Project[]
 
 function Stat({icon,label,value}:{icon:React.ReactNode;label:string;value:string|number}){return <div className="card p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">{icon}</div><div><p className="text-xs text-slate-500">{label}</p><p className="text-xl font-semibold">{value}</p></div></div>}
 
-function ProjectCard({project,editing,open,toggle,patchProject,deleteProject,edit,addApproval,patchApproval,deleteApproval,attachApproval,attachCertificate}:any){
+function ProjectCard({project,editing,open,toggle,patchProject,deleteProject,edit,addApproval,patchApproval,deleteApproval,attachApproval,attachCertificate,sendUpdate,sending}:any){
   const progress=projectProgress(project)
   const allObtained=project.approvals.length>0&&project.approvals.every((item:Approval)=>item.status==='OBTAINED')
   const authorizationClass=allObtained?STAGE_CLASSES[project.constructionAuthorizationStatus as ApprovalStatus]:'bg-slate-100 border-slate-200 text-slate-400'
@@ -122,7 +140,7 @@ function ProjectCard({project,editing,open,toggle,patchProject,deleteProject,edi
     <div className="px-4 py-3.5">
       <div className="flex flex-wrap gap-3 justify-between">
         <div><div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-semibold leading-snug">{project.name}</h2><span className="text-xs rounded-full bg-blue-50 text-blue-700 px-2.5 py-1">{PROJECT_LABELS[project.status as ProjectStatus]}</span></div><p className="text-xs text-slate-500 mt-1">{project.beneficiary||'Beneficiar nespecificat'}{project.beneficiaryPhone?' · '+project.beneficiaryPhone:''}{project.address?' · '+project.address:''}</p><p className="text-xs text-slate-400 mt-1">{project.certificateNumber?'CU '+project.certificateNumber:''}{project.certificateDate?' din '+new Date(project.certificateDate).toLocaleDateString('ro-RO'):''}</p></div>
-        <div className="flex flex-wrap items-center gap-2">{editing&&<><select className="input-field !py-2" value={project.status} onChange={event=>patchProject(project.id,{status:event.target.value})}>{Object.entries(PROJECT_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select><button className="round-action !w-8 !h-8" onClick={edit} title="Editează proiectul"><Pencil size={15}/></button><button className="round-action !w-8 !h-8 text-rose-600" onClick={()=>deleteProject(project)} title="Șterge proiectul"><Trash2 size={15}/></button></>}<button className="round-action !w-8 !h-8 text-blue-700" onClick={toggle} title={open?'Restrânge':'Vezi detaliile'}>{open?<ChevronUp size={17}/>:<ChevronDown size={17}/>}</button></div>
+        <div className="flex flex-wrap items-center gap-1.5">{project.beneficiaryPhone&&<button className="round-action !w-8 !h-8 text-emerald-600" onClick={()=>sendUpdate(project)} disabled={sending} title="Trimite actualizarea pe WhatsApp">{sending?<LoaderCircle className="animate-spin" size={15}/>:<MessageCircle size={15}/>}</button>}{editing&&<><select className="input-field !py-2" value={project.status} onChange={event=>patchProject(project.id,{status:event.target.value})}>{Object.entries(PROJECT_LABELS).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select><button className="round-action !w-8 !h-8" onClick={edit} title="Editează proiectul"><Pencil size={15}/></button><button className="round-action !w-8 !h-8 text-rose-600" onClick={()=>deleteProject(project)} title="Șterge proiectul"><Trash2 size={15}/></button></>}<button className="round-action !w-8 !h-8 text-blue-700" onClick={toggle} title={open?'Restrânge':'Vezi detaliile'}>{open?<ChevronUp size={17}/>:<ChevronDown size={17}/>}</button></div>
       </div>
       <div className="mt-2.5 flex items-center gap-2"><div className="h-2.5 flex-1 bg-slate-100 rounded-full overflow-hidden"><div className="h-full transition-all" style={{width:progress+'%',background:progressColor(progress)}}/></div><strong className="text-sm text-blue-700">{progress}%</strong></div>
       <div className="mt-1.5 flex flex-wrap gap-3 text-[11px] text-slate-500"><span>{project.approvals.length} avize</span><span>{project.approvals.filter((approval:Approval)=>approval.status==='OBTAINED').length} obținute</span>{project.documentUrl?<a href={`/api/projects/${project.id}/document`} target="_blank" className="text-blue-700 font-semibold">Deschide certificatul</a>:editing?<label className="text-blue-700 font-semibold cursor-pointer inline-flex gap-1 items-center"><UploadCloud size={13}/> Încarcă certificatul<input type="file" accept="application/pdf" className="hidden" onChange={event=>event.target.files?.[0]&&attachCertificate(event.target.files[0])}/></label>:null}</div>
