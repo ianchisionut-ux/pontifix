@@ -35,14 +35,14 @@ export default function LoginPage() {
       <section className="relative hidden min-h-screen overflow-hidden lg:block">
         <Image src="/elmont-hero-light.png" alt="Infrastructură electrică Elmont" fill priority sizes="55vw" className="object-cover object-[61%_center]"/>
         <div className="absolute inset-0 bg-gradient-to-r from-white/96 via-white/65 to-[#dff1f9]/10"/>
-        <div className="absolute inset-x-0 bottom-0 h-80 bg-gradient-to-t from-[#082b4d]/85 via-[#0d5d8b]/35 to-transparent"/>
+        <div className="absolute inset-x-0 bottom-0 h-80 bg-gradient-to-t from-white/98 via-[#eaf5fb]/88 to-white/10"/>
         <div className="relative flex h-full min-h-screen flex-col justify-between p-12 xl:p-16">
           <Link href="/" className="w-fit"><ElmontLogo /></Link>
-          <div className="max-w-xl text-white">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[.18em] backdrop-blur"><ShieldCheck size={14}/> Acces securizat</span>
+          <div className="max-w-xl text-[#082b4d]">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#8bc8e5] bg-white/80 px-4 py-2 text-xs font-extrabold uppercase tracking-[.18em] text-[#0f679b] shadow-sm backdrop-blur"><ShieldCheck size={14}/> Acces securizat</span>
             <h1 className="mt-6 text-5xl font-black leading-[.98] tracking-[-.055em] xl:text-6xl">Portalul intern<br/>Elmont S.A.</h1>
-            <p className="mt-5 max-w-lg text-lg leading-8 text-blue-50/80">Un singur punct de acces pentru informațiile, documentele și operațiunile companiei.</p>
-            <p className="mt-9 flex items-center gap-3 text-sm font-semibold text-blue-100/70"><LockKeyhole size={17}/> Conexiune protejată · acces doar pentru utilizatori autorizați</p>
+            <p className="mt-5 max-w-lg text-lg leading-8 text-slate-600">Un singur punct de acces pentru informațiile, documentele și operațiunile companiei.</p>
+            <p className="mt-9 flex items-center gap-3 text-sm font-semibold text-[#0f679b]"><LockKeyhole size={17}/> Conexiune protejată · acces doar pentru utilizatori autorizați</p>
           </div>
         </div>
       </section>

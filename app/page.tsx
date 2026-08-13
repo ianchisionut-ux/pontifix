@@ -51,11 +51,25 @@ export default function HomePage() {
               <a href="#oferta" className="group flex items-center gap-3 rounded-full bg-[#082b4d] px-7 py-4 font-extrabold text-white shadow-xl shadow-[#082b4d]/20 transition hover:-translate-y-1 hover:bg-[#197fb5]">Solicită o ofertă <ArrowRight size={19} className="transition group-hover:translate-x-1"/></a>
               <a href="#servicii" className="flex items-center gap-3 rounded-full border border-[#8bc8e5] bg-white/80 px-7 py-4 font-bold text-[#0d5d8b] shadow-sm backdrop-blur transition hover:bg-white">Vezi capabilitățile <ArrowDown size={18}/></a>
             </div>
-            <div className="mt-14 grid max-w-2xl grid-cols-3 gap-3 border-t border-[#8bc8e5]/50 pt-7">
-              <div><strong className="block text-3xl font-black text-[#082b4d]">1997</strong><span className="mt-1 block text-xs text-slate-500">Anul înființării</span></div>
+            <div className="mt-14 grid max-w-2xl grid-cols-3 gap-3 border-t border-[#8bc8e5]/50 pt-7 xl:hidden">
+              <div><strong className="block text-3xl font-black text-[#082b4d]">29 ani</strong><span className="mt-1 block text-xs text-slate-500">Experiență în domeniu</span></div>
               <div><strong className="block text-3xl font-black text-[#082b4d]">0,4–20</strong><span className="mt-1 block text-xs text-slate-500">kV, domeniu autorizat</span></div>
               <div><strong className="block text-3xl font-black text-[#082b4d]">3× ISO</strong><span className="mt-1 block text-xs text-slate-500">Sisteme certificate</span></div>
             </div>
+          </div>
+        </div>
+        <div className="pointer-events-none absolute right-[4%] top-[53%] z-20 hidden w-[39%] -translate-y-1/2 flex-col gap-5 xl:flex">
+          <div className="hero-float hero-float-one flex min-w-[240px] self-end items-center gap-4 rounded-3xl border border-white/80 bg-white/88 p-5 shadow-2xl shadow-[#082b4d]/15 backdrop-blur-xl">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0d5d8b] to-[#2f91c8] text-white shadow-lg"><Zap size={25}/></span>
+            <div><strong className="block text-3xl font-black tracking-[-.04em] text-[#082b4d]">29 ani</strong><span className="text-sm font-semibold text-slate-500">experiență în infrastructură</span></div>
+          </div>
+          <div className="hero-float hero-float-two mr-20 flex min-w-[260px] self-start items-center gap-4 rounded-3xl border border-white/80 bg-white/90 p-5 shadow-2xl shadow-[#082b4d]/15 backdrop-blur-xl">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#e5f5fb] text-[#197fb5]"><DraftingCompass size={26}/></span>
+            <div><strong className="block text-xl font-black text-[#082b4d]">Atestate C1A + C2A</strong><span className="text-sm font-semibold text-slate-500">proiectare și execuție</span></div>
+          </div>
+          <div className="hero-float hero-float-three mr-4 flex min-w-[250px] self-end items-center gap-4 rounded-3xl border border-white/80 bg-white/90 p-5 shadow-2xl shadow-[#082b4d]/15 backdrop-blur-xl">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-700"><ShieldCheck size={26}/></span>
+            <div><strong className="block text-2xl font-black text-[#082b4d]">0,4–20 kV</strong><span className="text-sm font-semibold text-slate-500">rețele și posturi de transformare</span></div>
           </div>
         </div>
       </section>
