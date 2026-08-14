@@ -2,14 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import { upload } from '@vercel/blob/client'
-import { BarChart3, Building2, CheckCircle2, ChevronDown, ChevronUp, Eye, FileText, LayoutGrid, Link2, List, LoaderCircle, MessageCircle, Pencil, Plus, Printer, Save, Search, Trash2, UploadCloud } from 'lucide-react'
+import { BarChart3, Building2, CheckCircle2, ChevronDown, ChevronUp, Download, Eye, FileText, LayoutGrid, Link2, List, LoaderCircle, MessageCircle, Pencil, Plus, Printer, Save, Search, Trash2, UploadCloud } from 'lucide-react'
 import { ProjectProgressList } from '@/components/projects/project-progress-list'
 import { useRouter } from 'next/navigation'
 
 type ApprovalStatus = 'REQUIRED' | 'SUBMITTED' | 'OBTAINED' | 'NOT_REQUIRED'
 type ProjectStatus = 'ACTIVE' | 'ON_HOLD' | 'COMPLETED' | 'ARCHIVED'
 type Approval = { id:string; name:string; institution:string|null; status:ApprovalStatus; documentUrl:string|null; documentName:string|null }
-type Project = { id:string; name:string; certificateNumber:string|null; certificateDate:string|null; beneficiary:string|null; beneficiaryPhone:string|null; address:string|null; description:string|null; status:ProjectStatus; constructionAuthorizationStatus:ApprovalStatus; documentUrl:string|null; documentName:string|null; updatedAt:string; approvals:Approval[] }
+type Project = { id:string; name:string; certificateNumber:string|null; certificateDate:string|null; beneficiary:string|null; beneficiaryPhone:string|null; address:string|null; description:string|null; status:ProjectStatus; constructionAuthorizationStatus:ApprovalStatus; documentUrl:string|null; documentName:string|null; authorizationDocumentUrl:string|null; authorizationDocumentName:string|null; updatedAt:string; approvals:Approval[] }
 
 const PROJECT_LABELS:Record<ProjectStatus,string> = { ACTIVE:'În lucru', ON_HOLD:'În așteptare', COMPLETED:'Finalizat', ARCHIVED:'Arhivat' }
 const STAGE_LABELS:Record<ApprovalStatus,string> = { REQUIRED:'Stadiu incipient', SUBMITTED:'Depus', OBTAINED:'Obținut', NOT_REQUIRED:'Nu este necesar' }
@@ -44,7 +44,7 @@ export function ProjectsManager({ initialProjects, canManage }: { initialProject
   const [certificateFile,setCertificateFile] = useState<File|null>(null)
   const [busy,setBusy] = useState(false)
   const [editing,setEditing] = useState(false)
-  const [viewMode,setViewMode] = useState<'grid'|'list'>('grid')
+  const [viewMode,setViewMode] = useState<'grid'|'list'>('list')
   const [sendingProjectId,setSendingProjectId] = useState<string|null>(null)
 
   const visible = useMemo(() => initialProjects.filter(project => (filter === 'ALL' || project.status === filter) && (!query || [project.name,project.beneficiary,project.beneficiaryPhone,project.address].some(value => value?.toLowerCase().includes(query.toLowerCase())))), [initialProjects,filter,query])
@@ -91,6 +91,13 @@ export function ProjectsManager({ initialProjects, canManage }: { initialProject
   async function patchApproval(projectId:string,approvalId:string,data:unknown){ try{await api(`/api/projects/${projectId}/approvals/${approvalId}`,'PATCH',data);router.refresh()}catch(error){alert((error as Error).message)} }
   async function deleteApproval(projectId:string,approvalId:string){ if(!confirm('Ștergi acest aviz?'))return;await api(`/api/projects/${projectId}/approvals/${approvalId}`,'DELETE');router.refresh() }
   async function attachApproval(projectId:string,approvalId:string,file:File){ try{const blob=await upload(`projects/${projectId}/approvals/${file.name}`,file,{access:'private',handleUploadUrl:'/api/projects/upload'});await patchApproval(projectId,approvalId,{documentUrl:blob.pathname,documentName:file.name})}catch{alert('Avizul scanat nu a putut fi încărcat.')} }
+  async function attachAuthorization(projectId:string,file:File){
+    try{
+      const blob=await upload(`projects/${projectId}/authorization/${file.name}`,file,{access:'private',handleUploadUrl:'/api/projects/upload'})
+      await api(`/api/projects/${projectId}`,'PATCH',{authorizationDocumentUrl:blob.pathname,authorizationDocumentName:file.name})
+      router.refresh()
+    }catch(error){alert(error instanceof Error?error.message:'Autorizația de Construire nu a putut fi încărcată.')}
+  }
   function closeModal(){ setModal(null); setCertificateFile(null) }
 
   return <div>
@@ -119,6 +126,7 @@ export function ProjectsManager({ initialProjects, canManage }: { initialProject
           patchApproval={patchApproval}
           deleteApproval={deleteApproval}
           attachApproval={attachApproval}
+          attachAuthorization={attachAuthorization}
           sendUpdate={sendWhatsAppSummary}
           sending={sendingProjectId===project.id}
           attachCertificate={async (file: File) => {
@@ -140,11 +148,11 @@ export function ProjectsManager({ initialProjects, canManage }: { initialProject
 
 function Stat({icon,label,value}:{icon:React.ReactNode;label:string;value:string|number}){return <div className="card p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">{icon}</div><div><p className="text-xs text-slate-500">{label}</p><p className="text-xl font-semibold">{value}</p></div></div>}
 
-function ProjectCard({project,compact,editing,open,toggle,patchProject,deleteProject,edit,addApproval,patchApproval,deleteApproval,attachApproval,attachCertificate,sendUpdate,sending}:any){
+function ProjectCard({project,compact,editing,open,toggle,patchProject,deleteProject,edit,addApproval,patchApproval,deleteApproval,attachApproval,attachAuthorization,attachCertificate,sendUpdate,sending}:any){
   const progress=projectProgress(project)
   const finished=project.constructionAuthorizationStatus==='OBTAINED'||project.status==='COMPLETED'
   const allObtained=project.approvals.length>0&&project.approvals.every((item:Approval)=>item.status==='OBTAINED')
-  const authorizationClass=allObtained?AUTHORIZATION_CLASSES[project.constructionAuthorizationStatus as ApprovalStatus]:'bg-slate-100 border-slate-200 text-slate-400'
+  const authorizationClass=project.constructionAuthorizationStatus==='OBTAINED'?AUTHORIZATION_CLASSES.OBTAINED:allObtained?AUTHORIZATION_CLASSES[project.constructionAuthorizationStatus as ApprovalStatus]:'bg-slate-100 border-slate-200 text-slate-400'
   return <article className={`card overflow-hidden ${open ? 'xl:col-span-2' : ''}`}>
     <div className="px-4 py-3.5">
       <div className="flex flex-wrap gap-3 justify-between">
@@ -158,7 +166,19 @@ function ProjectCard({project,compact,editing,open,toggle,patchProject,deletePro
       <p className="text-xs font-bold tracking-wider text-slate-500 mb-3">{editing?'AVIZELE PROIECTULUI · CLICK PE CULOARE PENTRU SCHIMBAREA STĂRII':'STADIUL AVIZELOR PROIECTULUI'}</p>
       <div className="flex flex-wrap gap-3">{project.approvals.map((approval:Approval)=><div key={approval.id} className="border border-slate-200 rounded-xl bg-white p-1.5 flex items-center gap-2"><button disabled={!editing} onClick={()=>editing&&patchApproval(project.id,approval.id,{status:nextStage(approval.status)})} className={`min-h-10 rounded-lg border px-3 text-left ${editing?'cursor-pointer':'cursor-default'} ${STAGE_CLASSES[approval.status]}`}><span className="block text-sm font-extrabold">{approval.name}</span><span className="block text-[10px] uppercase tracking-wide opacity-80">{STAGE_LABELS[approval.status]}</span></button>{approval.documentUrl?<a href={`/api/projects/${project.id}/approvals/${approval.id}/document`} target="_blank" className="round-action text-blue-700" title="Deschide avizul"><Link2 size={14}/></a>:editing?<label className="round-action text-blue-700 cursor-pointer" title="Încarcă avizul scanat"><UploadCloud size={14}/><input type="file" accept="application/pdf" className="hidden" onChange={event=>event.target.files?.[0]&&attachApproval(project.id,approval.id,event.target.files[0])}/></label>:null}{editing&&approval.name.trim().toUpperCase()!=='MEDIU'&&<button className="text-rose-500 p-1" onClick={()=>deleteApproval(project.id,approval.id)} title="Șterge avizul"><Trash2 size={14}/></button>}</div>)}</div>
       {editing&&<form action={(form)=>addApproval(project.id,form)} className="flex flex-wrap gap-2 mt-4"><input name="name" className="input-field flex-1 min-w-56" placeholder="Alt aviz necesar" required/><input name="institution" className="input-field flex-1 min-w-48" placeholder="Instituție (opțional)"/><button className="btn-secondary inline-flex gap-2 items-center"><Plus size={15}/> Adaugă aviz</button></form>}
-      <div className="mt-6 pt-5 border-t border-slate-200"><button disabled={!editing||!allObtained} onClick={()=>{if(!editing||!allObtained)return;const next=nextStage(project.constructionAuthorizationStatus as ApprovalStatus);patchProject(project.id,{constructionAuthorizationStatus:next,...(next==='OBTAINED'?{status:'COMPLETED'}:project.status==='COMPLETED'?{status:'ACTIVE'}:{})})}} className={`w-full min-h-20 rounded-2xl border-2 px-5 text-center transition ${editing&&allObtained?'cursor-pointer':'cursor-default'} ${authorizationClass}`}><span className="flex items-center justify-center gap-2 text-base font-black tracking-wide">{project.constructionAuthorizationStatus==='OBTAINED'&&<CheckCircle2 size={19}/>} AUTORIZAȚIA DE CONSTRUIRE</span><span className="block text-xs uppercase mt-1">{allObtained?STAGE_LABELS[project.constructionAuthorizationStatus as ApprovalStatus]:'Disponibilă după obținerea tuturor avizelor'}</span></button></div>
+      <div className="mt-6 border-t border-slate-200 pt-5">
+        <button disabled={!editing||!allObtained} onClick={()=>{if(!editing||!allObtained)return;const next=nextStage(project.constructionAuthorizationStatus as ApprovalStatus);patchProject(project.id,{constructionAuthorizationStatus:next,...(next==='OBTAINED'?{status:'COMPLETED'}:project.status==='COMPLETED'?{status:'ACTIVE'}:{})})}} className={`w-full min-h-20 rounded-2xl border-2 px-5 text-center transition ${editing&&allObtained?'cursor-pointer':'cursor-default'} ${authorizationClass}`}>
+          <span className="flex items-center justify-center gap-2 text-base font-black tracking-wide">{project.constructionAuthorizationStatus==='OBTAINED'&&<CheckCircle2 size={19}/>} AUTORIZAȚIA DE CONSTRUIRE</span>
+          <span className="mt-1 block text-xs uppercase">{project.constructionAuthorizationStatus==='OBTAINED'?STAGE_LABELS.OBTAINED:allObtained?STAGE_LABELS[project.constructionAuthorizationStatus as ApprovalStatus]:'Disponibilă după obținerea tuturor avizelor'}</span>
+        </button>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          {project.authorizationDocumentUrl?<>
+            <a href={`/api/projects/${project.id}/authorization-document`} target="_blank" className="btn-secondary inline-flex items-center gap-2 text-xs"><Eye size={15}/> Vizualizează autorizația</a>
+            <a href={`/api/projects/${project.id}/authorization-document?download=1`} className="btn-secondary inline-flex items-center gap-2 text-xs"><Download size={15}/> Descarcă PDF</a>
+          </>:<span className="text-xs font-semibold text-slate-400">Autorizația nu este încărcată.</span>}
+          {editing&&(allObtained||project.authorizationDocumentUrl)&&<label className="btn-secondary inline-flex cursor-pointer items-center gap-2 text-xs"><UploadCloud size={15}/>{project.authorizationDocumentUrl?'Înlocuiește autorizația':'Încarcă autorizația PDF'}<input type="file" accept="application/pdf,.pdf" className="hidden" onChange={event=>event.target.files?.[0]&&attachAuthorization(project.id,event.target.files[0])}/></label>}
+        </div>
+      </div>
     </div>}
   </article>
 }

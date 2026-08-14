@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { ensureProjectAuthorizationStorage } from '@/lib/ensure-project-authorization-storage'
 
 const schema = z.object({
   name: z.string().trim().min(2).max(200).optional(),
@@ -16,6 +17,8 @@ const schema = z.object({
   constructionAuthorizationStatus: z.enum(['REQUIRED', 'SUBMITTED', 'OBTAINED']).optional(),
   documentUrl: z.string().trim().nullable().optional(),
   documentName: z.string().trim().nullable().optional(),
+  authorizationDocumentUrl: z.string().trim().nullable().optional(),
+  authorizationDocumentName: z.string().trim().nullable().optional(),
 })
 
 function refreshProjectPages() {
@@ -30,17 +33,23 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
   if ((session as any)?.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Doar Super Adminul poate modifica proiectele.' }, { status: 403 })
 
+  await ensureProjectAuthorizationStorage()
   const { id } = await params
-  const found = await prisma.project.findFirst({ where: { id, businessId }, select: { id: true } })
+  const found = await prisma.project.findFirst({ where: { id, businessId }, select: { id: true, authorizationDocumentUrl: true } })
   if (!found) return NextResponse.json({ error: 'Proiect inexistent.' }, { status: 404 })
 
   const parsed = schema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Date invalide.' }, { status: 400 })
 
   const { certificateDate, ...data } = parsed.data
+  const hasAuthorizationDocument = Boolean(data.authorizationDocumentUrl || found.authorizationDocumentUrl)
   const normalizedData = {
     ...data,
-    ...(data.constructionAuthorizationStatus === 'OBTAINED' ? { status: 'COMPLETED' as const } : {}),
+    ...(hasAuthorizationDocument
+      ? { constructionAuthorizationStatus: 'OBTAINED' as const, status: 'COMPLETED' as const }
+      : data.constructionAuthorizationStatus === 'OBTAINED'
+        ? { status: 'COMPLETED' as const }
+        : {}),
   }
   const project = await prisma.project.update({
     where: { id },

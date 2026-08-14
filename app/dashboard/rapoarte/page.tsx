@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ensureProjectAuthorizationStorage } from '@/lib/ensure-project-authorization-storage'
 import { redirect } from 'next/navigation'
 import { ReportCharts } from '@/components/attendance/report-charts'
 import { ProjectReportCharts } from '@/components/projects/project-report-charts'
@@ -26,6 +27,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const startDate = new Date(endDate)
   startDate.setUTCDate(startDate.getUTCDate() - days + 1)
 
+  await ensureProjectAuthorizationStorage()
   const [entries, employees, projects] = await Promise.all([
     prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: startDate, lte: endDate } }, include: { employee: true }, orderBy: { workDate: 'asc' } }),
     prisma.attendanceEmployee.findMany({ where: { businessId, active: true }, orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }] }),

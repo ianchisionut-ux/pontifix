@@ -867,6 +867,8 @@ model Project {
   constructionAuthorizationStatus ApprovalStatus    @default(REQUIRED)
   documentUrl                     String?
   documentName                    String?
+  authorizationDocumentUrl        String?
+  authorizationDocumentName       String?
   uploadedByEmail                 String?
   createdAt                       DateTime          @default(now())
   updatedAt                       DateTime          @updatedAt

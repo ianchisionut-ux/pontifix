@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { sendProjectWhatsApp, whatsappFallbackUrl } from '@/lib/project-whatsapp'
 import { ensureWhatsAppStorage } from '@/lib/ensure-whatsapp-storage'
+import { ensureProjectAuthorizationStorage } from '@/lib/ensure-project-authorization-storage'
 
 function stageScore(status: string) { return status === 'OBTAINED' ? 1 : status === 'SUBMITTED' ? 0.5 : 0 }
 function statusLabel(status: string) { return status === 'OBTAINED' ? 'Obținută' : status === 'SUBMITTED' ? 'Depusă' : 'În pregătire' }
@@ -12,6 +13,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
   if ((session as any)?.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Doar Super Adminul poate trimite actualizări de proiect.' }, { status: 403 })
+  await ensureProjectAuthorizationStorage()
   const { id } = await params
   const project = await prisma.project.findFirst({ where: { id, businessId }, include: { approvals: { orderBy: { sortOrder: 'asc' } }, business: { select: { name: true } } } })
   if (!project) return NextResponse.json({ error: 'Proiectul nu există.' }, { status: 404 })
