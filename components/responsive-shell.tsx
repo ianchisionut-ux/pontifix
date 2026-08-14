@@ -223,7 +223,7 @@ export function ResponsiveShell({
             </Link>
           )
         })}
-        {!sidebarCollapsed && <div className="mt-auto px-3 pb-2"><LanguageSwitcher/><p className="mt-3 text-[11px] font-medium text-blue-500/70">{tr('Pontaj clar, zi de zi.')}</p></div>}
+        {!sidebarCollapsed && <div className="mt-auto px-3 pb-2"><LanguageSwitcher/></div>}
         {!sidebarCollapsed && accountContent}
       </aside>
 

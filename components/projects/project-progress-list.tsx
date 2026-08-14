@@ -31,13 +31,13 @@ export function ProjectProgressList({ projects, limit }: { projects: ProgressPro
 
   if (!rows.length) return <div className="flex h-52 items-center justify-center text-sm text-slate-400">Nu există proiecte.</div>
 
-  const chartWidth = Math.max(760, rows.length * 112)
+  const minimumChartWidth = Math.max(760, rows.length * 112)
   const chartSignature = rows
     .map((project) => `${project.id}:${project.name}:${project.updatedAt ?? ''}:${project.progress}`)
     .join('|')
 
   return <div className="w-full overflow-x-auto pb-2">
-    <div key={chartSignature} style={{ width: chartWidth, height: 350 }}>
+    <div key={chartSignature} className="w-full" style={{ minWidth: minimumChartWidth, height: 350 }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} margin={{ top: 8, right: 24, bottom: 62, left: 6 }} barCategoryGap="25%">
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />

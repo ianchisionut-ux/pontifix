@@ -13,7 +13,7 @@ const atrOcrSchema = z.object({
 }).nullable().optional()
 
 const quoteSchema = z.object({
-  name: z.string().trim().min(2).max(120), email: z.string().trim().email().max(180), phone: z.string().trim().min(7).max(30),
+  name: z.string().trim().min(2).max(120), email: z.string().trim().email().max(180).or(z.literal('')), phone: z.string().trim().min(7).max(30),
   serviceType: z.string().trim().min(2).max(100), location: z.string().trim().max(180).optional().or(z.literal('')),
   message: z.string().trim().max(2000).optional().or(z.literal('')), atrPathname: z.string().trim().max(1000).optional().or(z.literal('')),
   atrName: z.string().trim().max(255).optional().or(z.literal('')), atrOcr: atrOcrSchema, consent: z.literal(true),
