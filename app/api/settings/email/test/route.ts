@@ -15,14 +15,24 @@ export async function POST() {
   if (!email.notificationEmail) return NextResponse.json({ error: 'Completează adresa pentru notificări.' }, { status: 400 })
 
   try {
-    await email.transporter.verify()
-    await email.transporter.sendMail({
+    const result = await email.transporter.sendMail({
       from: email.from,
       to: email.notificationEmail,
-      subject: 'Test e-mail Elmont',
-      html: '<h2>Configurarea Yahoo funcționează</h2><p>Acest mesaj confirmă faptul că aplicația Elmont poate trimite e-mailuri prin Yahoo Mail.</p>',
+      subject: `Test e-mail Elmont — ${new Date().toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' })}`,
+      html: '<h2>Configurarea Yahoo funcționează</h2><p>Yahoo a acceptat acest mesaj trimis de aplicația Elmont.</p><p>Dacă îl vezi, configurarea pentru notificări și oferte este corectă.</p>',
     })
-    return NextResponse.json({ success: true })
+    const accepted = result.accepted.map(String)
+    const rejected = result.rejected.map(String)
+    if (!accepted.length || rejected.length) {
+      console.error('Yahoo SMTP rejected recipients:', { accepted, rejected, response: result.response })
+      return NextResponse.json({ error: `Yahoo nu a acceptat destinatarul ${email.notificationEmail}. Verifică adresa introdusă.` }, { status: 502 })
+    }
+    return NextResponse.json({
+      success: true,
+      sentTo: email.notificationEmail,
+      messageId: result.messageId,
+      accepted,
+    })
   } catch (error) {
     console.error('Yahoo SMTP test failed:', error)
     return NextResponse.json({ error: 'Conectarea la Yahoo a eșuat. Verifică adresa și parola generată pentru aplicație.' }, { status: 502 })
