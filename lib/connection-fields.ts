@@ -41,6 +41,10 @@ export const connectionFieldsSchema = z.record(z.string(), z.string().trim().max
 
 export type ConnectionCaseDto = {
   id: string
+  sequenceNumber: number
+  nib: string
+  status: import('@/lib/connection-status').ConnectionStatus
+  quoteRequestId: string | null
   fields: ConnectionFields
   atrPathname: string | null
   atrName: string | null

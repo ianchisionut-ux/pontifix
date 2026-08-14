@@ -5,6 +5,8 @@ import { redirect } from 'next/navigation'
 import { ReportCharts } from '@/components/attendance/report-charts'
 import { ProjectReportCharts } from '@/components/projects/project-report-charts'
 import { formatHours } from '@/lib/attendance'
+import { ConnectionStats } from '@/components/connections/connection-stats'
+import { getConnectionStatistics } from '@/lib/connection-statistics'
 import { BarChart3, Building2, CheckCircle2, Clock, FileCheck2, TrendingUp, TriangleAlert, Users } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
@@ -16,6 +18,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) redirect('/login')
 
+  const connectionStats = await getConnectionStatistics(businessId)
   const requestedDays = Number((await searchParams).days || 30)
   const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30
   const today = new Date()
@@ -67,5 +70,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
     <div className="mt-8 mb-3 flex items-end justify-between"><div><h2 className="text-lg font-semibold">Statistici proiecte</h2><p className="text-sm text-slate-500">Situația actuală a proiectelor și avizelor.</p></div><Link href="/dashboard/proiecte" className="text-sm font-semibold text-blue-600">Deschide proiectele →</Link></div>
     <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-4">{projectCards.map(([label,value,Icon])=><div className="card p-5" key={label}><div className="flex justify-between"><p className="text-sm text-slate-500">{label}</p><Icon size={18} className="text-blue-600"/></div><p className="text-3xl font-semibold mt-3">{value}</p><p className="text-xs text-slate-400 mt-2">situația curentă</p></div>)}</div>
     <ProjectReportCharts projects={projectData} statuses={projectStatuses}/>
+    <ConnectionStats data={connectionStats}/>
   </div>
 }

@@ -11,8 +11,8 @@ export default async function ConnectionsPage() {
   const access = await getConnectionAccess()
   if (!access) redirect('/login')
   await ensureConnectionStorage()
-  const rows = await prisma.$queryRaw<Array<{ id: string; fields: unknown; atrPathname: string | null; atrName: string | null; createdByEmail: string | null; createdAt: Date; updatedAt: Date }>>`
-    SELECT "id", "fields", "atrPathname", "atrName", "createdByEmail", "createdAt", "updatedAt"
+  const rows = await prisma.$queryRaw<Array<{ id: string; sequenceNumber: number; nib: string; status: ConnectionCaseDto['status']; quoteRequestId: string | null; fields: unknown; atrPathname: string | null; atrName: string | null; createdByEmail: string | null; createdAt: Date; updatedAt: Date }>>`
+    SELECT "id", "sequenceNumber", "nib", "status", "quoteRequestId", "fields", "atrPathname", "atrName", "createdByEmail", "createdAt", "updatedAt"
     FROM "ConnectionCase" WHERE "businessId"=${access.businessId} ORDER BY "updatedAt" DESC
   `
   const cases: ConnectionCaseDto[] = rows.map((row) => ({

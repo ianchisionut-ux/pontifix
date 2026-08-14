@@ -5,6 +5,8 @@ import { WorkScheduleCard } from '@/components/attendance/work-schedule-card'
 import { formatHours } from '@/lib/attendance'
 import { Users, UserCheck, Timer, CalendarOff, ArrowUpRight } from 'lucide-react'
 import { ProjectProgressOverview } from '@/components/projects/project-progress-overview'
+import { ConnectionStats } from '@/components/connections/connection-stats'
+import { getConnectionStatistics } from '@/lib/connection-statistics'
 
 export const dynamic = 'force-dynamic'
 
@@ -20,6 +22,7 @@ export default async function DashboardPage() {
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) redirect('/login')
 
+  const connectionStats = await getConnectionStatistics(businessId)
   const now = new Date()
   const local = bucharestDate(now)
   const startMonth = new Date(Date.UTC(local.date.getUTCFullYear(), local.date.getUTCMonth(), 1))
@@ -57,5 +60,6 @@ export default async function DashboardPage() {
       <section className="card p-5 lg:p-6"><div className="flex items-center justify-between mb-4"><div><h2 className="font-semibold">Prezența zilei</h2><p className="text-sm text-slate-500">Conform foii completate de administrator</p></div><span className="text-xs bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full">{present} prezenți</span></div><div className="space-y-3">{todayEntries.slice(0, 8).map((entry) => <div key={entry.id} className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center text-sm font-semibold">{entry.employee.firstName[0]}{entry.employee.lastName[0]}</div><div><p className="text-sm font-medium">{entry.employee.firstName} {entry.employee.lastName}</p><p className="text-xs text-slate-400">{entry.employee.position || 'Angajat'}</p></div></div><div className="text-right"><p className="text-sm font-semibold tabular-nums">{entry.hours ? `${entry.hours}h` : entry.status === 'VACATION' ? 'Concediu' : entry.status === 'MEDICAL' ? 'Medical' : entry.status === 'DAY_OFF' ? 'Liber' : entry.status === 'ABSENT' ? 'Absent' : 'Distanță'}</p></div></div>)}{todayEntries.length === 0 && <div className="py-10 text-center"><p className="text-sm text-slate-400">Prezența nu a fost completată astăzi.</p><a href="/dashboard/pontaje" className="text-sm text-blue-600 font-semibold inline-block mt-2">Completează foaia →</a></div>}</div></section>
     </div>
     <ProjectProgressOverview projects={projectProgress}/>
+    <ConnectionStats data={connectionStats} compact/>
   </div>
 }

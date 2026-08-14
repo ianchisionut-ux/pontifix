@@ -7,6 +7,7 @@ import { QuoteRequestForm } from '@/components/quote-request-form'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { useLanguage } from '@/components/language-provider'
 import { CustomerChatWidget } from '@/components/customer-chat-widget'
+import { PublicConnectionStatus } from '@/components/public-connection-status'
 import './public-site.css'
 
 const services = [
@@ -80,6 +81,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <PublicConnectionStatus/>
 
       <section id="despre" className="relative py-24 sm:py-32">
         <div className="mx-auto max-w-[1280px] px-5 lg:px-10">
