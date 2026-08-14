@@ -87,6 +87,10 @@ body {
   font-size: 0.875rem;
   transition: border-color 0.15s ease;
 }
+.input-field-with-icon {
+  padding-left: 2.65rem;
+}
+
 .input-field:focus {
   outline: none;
   border-color: var(--accent);

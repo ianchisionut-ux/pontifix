@@ -83,7 +83,7 @@ export function WhatsAppSettingsForm({ phoneNumberId, wabaId, configured, enable
         <label className="text-sm font-medium lg:col-span-2">Access Token permanent
           <div className="relative mt-2">
             <KeyRound size={16} className="absolute left-3 top-3.5 text-slate-400" />
-            <input name="accessToken" type="password" className="input-field w-full pl-10" placeholder={configured ? 'Lasă gol pentru a păstra tokenul existent' : 'Introdu tokenul permanent Meta'} />
+            <input name="accessToken" type="password" className="input-field input-field-with-icon w-full" placeholder={configured ? 'Lasă gol pentru a păstra tokenul existent' : 'Introdu tokenul permanent Meta'} />
           </div>
           <span className="mt-1 block text-xs font-normal text-slate-400">Tokenul este criptat înainte de salvarea în baza de date și nu va fi afișat ulterior.</span>
         </label>
