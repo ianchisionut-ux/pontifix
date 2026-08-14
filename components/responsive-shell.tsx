@@ -19,6 +19,7 @@ import {
   Inbox,
   LifeBuoy,
   FolderKanban,
+  Zap,
 } from 'lucide-react'
 import { SidebarClock } from './sidebar-clock'
 import { ElmontLogo } from './elmont-logo'
@@ -42,6 +43,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   tichete: LifeBuoy,
   proiecte: FolderKanban,
   inbox: Inbox,
+  bransamente: Zap,
 }
 
 // amestecă o culoare hex cu alb, la un procent dat — produce o culoare SOLIDĂ (nu transparentă).

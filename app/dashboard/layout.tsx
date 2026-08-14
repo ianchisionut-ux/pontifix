@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/concedii', label: 'Concedii', icon: 'programari' },
   { href: '/dashboard/oferte', label: 'Oferte', icon: 'inbox' },
   { href: '/dashboard/mesaje', label: 'Mesaje', icon: 'mesaje' },
+  { href: '/dashboard/bransamente', label: 'Branșamente', icon: 'bransamente' },
   { href: '/dashboard/proiecte', label: 'Proiecte', icon: 'proiecte' },
   { href: '/dashboard/rapoarte', label: 'Rapoarte', icon: 'statistici' },
   { href: '/dashboard/configurare', label: 'Configurare', icon: 'setari' },
