@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Download, Grip, Link2, Loader2, Plus, Printer, RefreshCw, Save, Settings2, Trash2, X } from 'lucide-react'
-import { upload } from '@vercel/blob/client'
+import { uploadPresigned } from '@vercel/blob/client'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/components/language-provider'
 import type { FormField, FormSubmissionDto, FormTemplateDto } from '@/lib/ensure-form-storage'
@@ -161,7 +161,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
     setBusy('replace'); setError('')
     try {
       const safeId = template.id.replace(/[^a-zA-Z0-9_-]/g, '-')
-      const blob = await upload(`formulare/${safeId}/${Date.now()}-${file.name}`, file, { access: 'private', handleUploadUrl: '/api/formulare/upload' })
+      const blob = await uploadPresigned(`formulare/${safeId}/${Date.now()}-${file.name}`, file, { access: 'private', handleUploadUrl: '/api/formulare/upload' })
       const response = await fetch(`/api/formulare/${encodeURIComponent(template.id)}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ documentPathname: blob.pathname, documentName: file.name }),

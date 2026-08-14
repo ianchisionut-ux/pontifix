@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { upload } from '@vercel/blob/client'
+import { uploadPresigned } from '@vercel/blob/client'
 import { useRouter } from 'next/navigation'
 import { Edit3, FilePlus2, FileText, History, Loader2, Plus, Printer, RefreshCw, Trash2, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
@@ -31,7 +31,7 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
   async function uploadPdf(pdf: File, pathname: string) {
     if (pdf.type !== 'application/pdf') throw new Error(tr('Fișierul trebuie să fie PDF.'))
     if (pdf.size > 20 * 1024 * 1024) throw new Error(tr('PDF-ul poate avea maximum 20 MB.'))
-    return upload(pathname, pdf, { access: 'private', handleUploadUrl: '/api/formulare/upload' })
+    return uploadPresigned(pathname, pdf, { access: 'private', handleUploadUrl: '/api/formulare/upload' })
   }
 
   async function addForm() {

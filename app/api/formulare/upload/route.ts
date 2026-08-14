@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
+import { issueSignedToken } from '@vercel/blob'
+import { handleUploadPresigned, type HandleUploadPresignedBody } from '@vercel/blob/client'
 import { auth } from '@/lib/auth'
 
 export async function POST(request: Request) {
@@ -7,21 +8,35 @@ export async function POST(request: Request) {
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
   if ((session as any)?.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Doar Super Adminul poate încărca formulare.' }, { status: 403 })
-  const body = await request.json() as HandleUploadBody
+
   try {
-    const response = await handleUpload({
+    const body = await request.json() as HandleUploadPresignedBody
+    const response = await handleUploadPresigned({
       body,
       request,
-      onBeforeGenerateToken: async () => ({
-        allowedContentTypes: ['application/pdf'],
-        maximumSizeInBytes: 20 * 1024 * 1024,
-        addRandomSuffix: true,
-        tokenPayload: JSON.stringify({ businessId }),
-      }),
-      onUploadCompleted: async () => {},
+      getSignedToken: async (pathname) => {
+        if (!pathname.startsWith('formulare/')) throw new Error('Cale de încărcare invalidă.')
+        const validUntil = Date.now() + 20 * 60 * 1000
+        const token = await issueSignedToken({
+          pathname,
+          operations: ['put'],
+          allowedContentTypes: ['application/pdf'],
+          maximumSizeInBytes: 20 * 1024 * 1024,
+          validUntil,
+        })
+        return {
+          token,
+          urlOptions: {
+            allowedContentTypes: ['application/pdf'],
+            maximumSizeInBytes: 20 * 1024 * 1024,
+            validUntil,
+          },
+        }
+      },
     })
     return NextResponse.json(response)
   } catch (error) {
+    console.error('Form PDF upload failed:', error)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Încărcarea a eșuat.' }, { status: 400 })
   }
 }
