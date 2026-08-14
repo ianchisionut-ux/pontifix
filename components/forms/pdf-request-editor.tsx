@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Download, Grip, Link2, Loader2, Plus, Printer, Save, Settings2, Trash2, X } from 'lucide-react'
+import { Download, Grip, Link2, Loader2, Plus, Printer, RefreshCw, Save, Settings2, Trash2, X } from 'lucide-react'
+import { upload } from '@vercel/blob/client'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/components/language-provider'
 import type { FormField, FormSubmissionDto, FormTemplateDto } from '@/lib/ensure-form-storage'
@@ -77,9 +78,10 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
   const [selectedId, setSelectedId] = useState('')
   const [activePage, setActivePage] = useState(1)
   const [busy, setBusy] = useState('')
+  const [documentVersion, setDocumentVersion] = useState(0)
   const [error, setError] = useState('')
   const drag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; field: FormField; box: DOMRect } | null>(null)
-  const documentUrl = `/api/formulare/${encodeURIComponent(template.id)}/document`
+  const documentUrl = `/api/formulare/${encodeURIComponent(template.id)}/document?v=${documentVersion}`
   const selected = fields.find((field) => field.id === selectedId)
 
   useEffect(() => {
@@ -150,6 +152,25 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
 
   function updateField(patch: Partial<FormField>) {
     setFields((all) => all.map((field) => field.id === selectedId ? { ...field, ...patch } : field))
+  }
+
+  async function replacePdf(file?: File) {
+    if (!file) return
+    if (file.type !== 'application/pdf') return setError('Fișierul trebuie să fie PDF.')
+    if (file.size > 20 * 1024 * 1024) return setError('PDF-ul poate avea maximum 20 MB.')
+    setBusy('replace'); setError('')
+    try {
+      const safeId = template.id.replace(/[^a-zA-Z0-9_-]/g, '-')
+      const blob = await upload(`formulare/${safeId}/${Date.now()}-${file.name}`, file, { access: 'private', handleUploadUrl: '/api/formulare/upload' })
+      const response = await fetch(`/api/formulare/${encodeURIComponent(template.id)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ documentPathname: blob.pathname, documentName: file.name }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'PDF-ul nu a putut fi înlocuit.')
+      setPdf(null); setPageCount(0); setDocumentVersion(Date.now()); router.refresh()
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'PDF-ul nu a putut fi înlocuit.') }
+    finally { setBusy('') }
   }
 
   async function saveModel() {
@@ -243,6 +264,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
         <optgroup label={tr('Branșamente')}>{connections.map((item) => <option key={item.id} value={`connection:${item.id}`}>{item.nib} - {item.fields.Beneficiar || tr('Fără beneficiar')}</option>)}</optgroup>
         <optgroup label={tr('Proiecte')}>{projects.map((item) => <option key={item.id} value={`project:${item.id}`}>{item.name} - {item.beneficiary || tr('Fără beneficiar')}</option>)}</optgroup>
       </select>
+      {canManage && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
       {canManage && <button className={`btn-secondary inline-flex items-center gap-2 !py-2 ${layoutMode ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`} onClick={() => setLayoutMode((value) => !value)}><Settings2 size={16}/> {tr('Poziționare')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addField}><Plus size={16}/> {tr('Câmp')}</button>}
       <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy} onClick={saveSubmission}>{busy === 'save' ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} {tr('Salvează')}</button>
