@@ -1,4 +1,5 @@
 import './globals.css'
+import { LanguageProvider } from '@/components/language-provider'
 
 export const metadata = {
   metadataBase: new URL('https://elmontz.vercel.app'),
@@ -8,5 +9,5 @@ export const metadata = {
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  return <html lang="ro"><body>{children}</body></html>
+  return <html lang="ro"><body><LanguageProvider>{children}</LanguageProvider></body></html>
 }

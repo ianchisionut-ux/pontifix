@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import { AttendanceSettingsForm } from '@/components/attendance/attendance-settings-form'
 import { WhatsAppSettingsForm } from '@/components/whatsapp-settings-form'
 import { ensureWhatsAppStorage } from '@/lib/ensure-whatsapp-storage'
+import { EmailSettingsForm } from '@/components/email-settings-form'
+import { getStoredEmailSettings } from '@/lib/email-settings'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +17,7 @@ export default async function SettingsPage() {
 
   if (isSuperAdmin) await ensureWhatsAppStorage()
 
-  const [business, whatsapp] = await Promise.all([
+  const [business, whatsapp, email] = await Promise.all([
     prisma.business.findUnique({
       where: { id: businessId },
       select: { name: true, break1Start: true, break1End: true, workingHours: { orderBy: { weekday: 'asc' } } },
@@ -26,6 +28,7 @@ export default async function SettingsPage() {
           select: { externalId: true, wabaId: true, accessToken: true, enabledByOwner: true, status: true },
         })
       : null,
+    isSuperAdmin ? getStoredEmailSettings(businessId) : null,
   ])
 
   const first = business?.workingHours[0]
@@ -42,6 +45,13 @@ export default async function SettingsPage() {
       breakStart={business?.break1Start ?? '12:00'}
       breakEnd={business?.break1End ?? '12:30'}
     />
+    {isSuperAdmin && <EmailSettingsForm
+      configured={!!email?.apiKeyEncrypted || !!process.env.RESEND_API_KEY}
+      fromName={email?.fromName || 'Elmont S.A.'}
+      fromEmail={email?.fromEmail || process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'}
+      notificationEmail={email?.notificationEmail || process.env.ADMIN_NOTIFICATION_EMAIL || ''}
+      enabled={email?.enabled ?? true}
+    />}
     {isSuperAdmin && <WhatsAppSettingsForm
       phoneNumberId={whatsapp?.externalId ?? ''}
       wabaId={whatsapp?.wabaId ?? ''}

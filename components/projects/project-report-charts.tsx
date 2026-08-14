@@ -6,8 +6,8 @@ import { ProjectProgressList, type ProgressProject } from '@/components/projects
 type StatusPoint = { name: string; value: number; color: string }
 
 export function ProjectReportCharts({ projects, statuses }: { projects: ProgressProject[]; statuses: StatusPoint[] }) {
-  return <div className="grid xl:grid-cols-[1.35fr_.65fr] gap-4">
-    <section className="card p-5 lg:p-6 min-h-[360px]">
+  return <div className="grid gap-4">
+    <section className="card p-5 lg:p-6 min-h-[360px] w-full">
       <div className="mb-5">
         <h3 className="font-semibold">Progres pe proiect</h3>
         <p className="text-sm text-slate-500">Denumirile și stadiile actuale din secțiunea Proiecte.</p>
@@ -15,7 +15,7 @@ export function ProjectReportCharts({ projects, statuses }: { projects: Progress
       <ProjectProgressList projects={projects} />
     </section>
 
-    <section className="card p-5 lg:p-6 min-h-[360px]">
+    <section className="card p-5 lg:p-6 min-h-[360px] w-full">
       <div>
         <h3 className="font-semibold">Distribuția proiectelor</h3>
         <p className="text-sm text-slate-500">După starea curentă.</p>

@@ -22,6 +22,8 @@ import {
 } from 'lucide-react'
 import { SidebarClock } from './sidebar-clock'
 import { ElmontLogo } from './elmont-logo'
+import { LanguageSwitcher } from './language-switcher'
+import { useLanguage } from './language-provider'
 
 const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   calendar: Calendar,
@@ -74,6 +76,7 @@ export function ResponsiveShell({
   children: React.ReactNode
   enableLiveBadges?: boolean // interoghează periodic numărul de notificări, ca badge-urile să se actualizeze fără reîncărcare de pagină
 }) {
+  const { tr } = useLanguage()
   const [accountOpen, setAccountOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const pathname = usePathname()
@@ -157,7 +160,7 @@ export function ResponsiveShell({
                 }
               >
                 {Icon && <Icon size={14} />}
-                {item.label}
+                {tr(item.label)}
                 {!!item.badge && (
                   <span className="text-xs bg-red-600 text-white rounded-full px-1.5 min-w-[16px] text-center leading-4">
                     {item.badge}
@@ -175,12 +178,12 @@ export function ResponsiveShell({
           <div className="absolute inset-0 bg-black/30" onClick={() => setAccountOpen(false)} />
           <aside className="relative w-64 max-w-[80vw] bg-white h-full p-4 flex flex-col gap-1 overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
-              <span className="font-semibold">Cont</span>
+              <span className="font-semibold">{tr('Cont')}</span>
               <button onClick={() => setAccountOpen(false)} aria-label="Închide" className="w-8 h-8 flex items-center justify-center">
                 ✕
               </button>
             </div>
-            <div onClick={() => setAccountOpen(false)}>{accountContent}</div>
+            <div className="mb-4"><LanguageSwitcher/></div><div onClick={() => setAccountOpen(false)}>{accountContent}</div>
           </aside>
         </div>
       )}
@@ -201,7 +204,7 @@ export function ResponsiveShell({
             <Link
               key={item.href}
               href={item.href}
-              className="px-3 py-2.5 rounded-xl text-sm font-medium transition flex items-center gap-2.5 border-l-[3px]"
+              className={`relative rounded-xl py-2.5 text-sm font-medium transition flex items-center border-l-[3px] ${sidebarCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3'}`}
               style={
                 active
                   ? { background: 'white', boxShadow: 'var(--shadow-card)', borderLeftColor: accent, color: accent }
@@ -209,10 +212,10 @@ export function ResponsiveShell({
               }
             >
               {Icon && <Icon size={16} />}
-              {!sidebarCollapsed && <span className="flex-1">{item.label}</span>}
+              {!sidebarCollapsed && <span className="flex-1">{tr(item.label)}</span>}
               {!!item.badge && (
                 <span
-                  className={`text-xs bg-red-600 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center ${item.href === '/dashboard/mesaje' || item.href === '/dashboard/programari' || item.href === '/dashboard/oferte' ? 'animate-pulse' : ''}`}
+                  className={`text-xs bg-red-600 text-white rounded-full text-center ${sidebarCollapsed ? 'absolute right-1 top-1 h-2.5 w-2.5 min-w-0 overflow-hidden p-0 text-transparent' : 'min-w-[18px] px-1.5 py-0.5'} ${item.href === '/dashboard/mesaje' || item.href === '/dashboard/programari' || item.href === '/dashboard/oferte' ? 'animate-pulse' : ''}`}
                 >
                   {item.badge}
                 </span>
@@ -220,7 +223,7 @@ export function ResponsiveShell({
             </Link>
           )
         })}
-        {!sidebarCollapsed && <div className="mt-auto px-3 pb-2 text-[11px] font-medium text-blue-500/70">Pontaj clar, zi de zi.</div>}
+        {!sidebarCollapsed && <div className="mt-auto px-3 pb-2"><LanguageSwitcher/><p className="mt-3 text-[11px] font-medium text-blue-500/70">{tr('Pontaj clar, zi de zi.')}</p></div>}
         {!sidebarCollapsed && accountContent}
       </aside>
 

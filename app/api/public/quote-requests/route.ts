@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { getClientIp, rateLimit } from '@/lib/rate-limit'
+import { getEmailTransport } from '@/lib/email-settings'
 
 const atrOcrSchema = z.object({
   customerName: z.string().trim().max(160), customerPhone: z.string().trim().max(40),
@@ -37,9 +38,10 @@ export async function POST(request: NextRequest) {
     VALUES (${id}, ${data.name}, ${data.email.toLowerCase()}, ${data.phone}, ${data.serviceType}, ${data.location || null}, ${data.message || null}, ${data.atrPathname || null}, ${data.atrName || null}, ${elmontBusiness?.id || null}, CAST(${atrOcrJson} AS JSONB))
   `
 
-  if (process.env.RESEND_API_KEY && process.env.ADMIN_NOTIFICATION_EMAIL) {
-    const resend = new Resend(process.env.RESEND_API_KEY)
-    resend.emails.send({ from: process.env.RESEND_FROM_EMAIL || 'Elmont <onboarding@resend.dev>', to: process.env.ADMIN_NOTIFICATION_EMAIL,
+  const emailTransport = await getEmailTransport(elmontBusiness?.id)
+  if (emailTransport?.notificationEmail) {
+    const resend = new Resend(emailTransport.apiKey)
+    resend.emails.send({ from: emailTransport.from, to: emailTransport.notificationEmail,
       subject: `Cerere nouă de ofertă: ${data.serviceType}`,
       html: `<h2>Cerere nouă de ofertă</h2><p><strong>Solicitant:</strong> ${escapeHtml(data.name)}</p><p><strong>Telefon:</strong> ${escapeHtml(data.phone)}</p><p><strong>Email:</strong> ${escapeHtml(data.email)}</p><p><strong>Serviciu:</strong> ${escapeHtml(data.serviceType)}</p><p><strong>Localitate:</strong> ${escapeHtml(data.location || '-')}</p><p><strong>Detalii:</strong> ${escapeHtml(data.message || '-')}</p><p><strong>ATR încărcat:</strong> ${data.atrPathname ? 'Da' : 'Nu'}</p>`,
     }).catch(() => {})
