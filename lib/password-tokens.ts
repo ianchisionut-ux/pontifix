@@ -1,22 +1,9 @@
 import crypto from 'crypto'
 import { prisma } from './prisma'
-import { Resend } from 'resend'
-
-let resendClient: Resend | null = null
-function getResend() {
-  if (!resendClient) {
-    if (!process.env.RESEND_API_KEY) throw new Error('RESEND_API_KEY nu e setat.')
-    resendClient = new Resend(process.env.RESEND_API_KEY)
-  }
-  return resendClient
-}
+import { sendBusinessEmail } from './email-settings'
 
 const TOKEN_EXPIRY_HOURS = 24
 
-// pe medii serverless (Vercel), funcția se poate opri imediat după ce răspunde —
-// "fire and forget" adevărat riscă să nu trimită deloc emailul. Așteptăm trimiterea,
-// dar cu un timeout strict, ca să nu blocăm niciodată cererea la nesfârșit dacă
-// serviciul de email e lent sau indisponibil.
 export async function withEmailTimeout<T>(promise: Promise<T>, ms = 8000): Promise<T | null> {
   try {
     return await Promise.race([
@@ -24,7 +11,7 @@ export async function withEmailTimeout<T>(promise: Promise<T>, ms = 8000): Promi
       new Promise<null>((resolve) => setTimeout(() => resolve(null), ms)),
     ])
   } catch (err) {
-    console.error('Eroare la trimiterea emailului:', err)
+    console.error('Eroare la trimiterea e-mailului:', err)
     return null
   }
 }
@@ -37,41 +24,31 @@ export async function createPasswordToken(userId: string): Promise<string> {
   return token
 }
 
-export async function sendPasswordSetupEmail(email: string, businessName: string, token: string) {
+export async function sendPasswordSetupEmail(email: string, businessName: string, token: string, businessId?: string | null) {
   const link = `${process.env.APP_URL}/reset-password?token=${token}`
-  if (!process.env.RESEND_API_KEY) {
-    console.warn('RESEND_API_KEY lipsește — sar peste trimiterea email-ului de configurare cont.')
-    return
-  }
-  await getResend().emails.send({
-    from: 'Elmont <onboarding@resend.dev>',
+  await sendBusinessEmail(businessId, {
     to: email,
     subject: `Bun venit pe Elmont — configurează-ți contul pentru ${businessName}`,
     html: `
       <p>Salut,</p>
       <p>Contul tău pentru <strong>${businessName}</strong> a fost creat pe Elmont.</p>
-      <p>Apasă pe linkul de mai jos ca să-ți setezi parola și să confirmi adresa de email:</p>
+      <p>Apasă pe linkul de mai jos ca să-ți setezi parola și să confirmi adresa de e-mail:</p>
       <p><a href="${link}">Setează-ți parola</a></p>
       <p style="color:#888; font-size:13px;">Linkul expiră în 24 de ore.</p>
     `,
   })
 }
 
-export async function sendPasswordResetEmail(email: string, token: string) {
+export async function sendPasswordResetEmail(email: string, token: string, businessId?: string | null) {
   const link = `${process.env.APP_URL}/reset-password?token=${token}`
-  if (!process.env.RESEND_API_KEY) {
-    console.warn('RESEND_API_KEY lipsește — sar peste trimiterea email-ului de resetare parolă.')
-    return
-  }
-  await getResend().emails.send({
-    from: 'Elmont <onboarding@resend.dev>',
+  await sendBusinessEmail(businessId, {
     to: email,
     subject: 'Resetare parolă — Elmont',
     html: `
       <p>Salut,</p>
       <p>Ai cerut resetarea parolei pentru contul tău Elmont.</p>
       <p><a href="${link}">Setează o parolă nouă</a></p>
-      <p style="color:#888; font-size:13px;">Dacă nu ai cerut tu asta, ignoră acest email. Linkul expiră în 24 de ore.</p>
+      <p style="color:#888; font-size:13px;">Dacă nu ai cerut tu asta, ignoră acest e-mail. Linkul expiră în 24 de ore.</p>
     `,
   })
 }

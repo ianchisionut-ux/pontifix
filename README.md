@@ -6,14 +6,14 @@ Vezi `bookeasy-arhitectura.md` pentru documentul complet de arhitectură.
 
 ## Stack
 
-Next.js 15 (App Router) · TypeScript · Tailwind CSS v4 · Prisma · PostgreSQL (Neon) · Vercel · Stripe · Resend · Meta Graph API · Claude API
+Next.js 15 (App Router) · TypeScript · Tailwind CSS v4 · Prisma · PostgreSQL (Neon) · Vercel · Stripe · Yahoo SMTP · Meta Graph API · Claude API
 
 ## Setup local
 
 ```bash
 npm install
 cp .env.example .env
-# completează .env cu valorile tale (DB, Meta, Google, Stripe, Anthropic, Resend)
+# completează .env cu valorile tale (DB, Meta, Google, Stripe, Anthropic, Yahoo SMTP)
 
 npx prisma generate
 npx prisma migrate dev --name init
@@ -41,7 +41,7 @@ lib/
   availability.ts        → calcul sloturi libere (staff / resurse)
   channel-senders.ts      → trimitere mesaje pe fiecare canal
   crypto.ts               → criptare AES-256-GCM pentru token-uri
-  email.ts                → alerte prin Resend
+  email.ts                → alerte prin Yahoo SMTP
   auth.ts                 → NextAuth (credentials, JWT)
 prisma/
   schema.prisma            → schema completă a bazei de date

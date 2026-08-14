@@ -46,9 +46,9 @@ export default async function SettingsPage() {
       breakEnd={business?.break1End ?? '12:30'}
     />
     {isSuperAdmin && <EmailSettingsForm
-      configured={!!email?.apiKeyEncrypted || !!process.env.RESEND_API_KEY}
+      configured={!!email?.smtpPasswordEncrypted}
       fromName={email?.fromName || 'Elmont S.A.'}
-      fromEmail={email?.fromEmail || process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'}
+      fromEmail={email?.fromEmail?.toLowerCase().endsWith('@yahoo.com') ? email.fromEmail : 'elmont_zalau@yahoo.com'}
       notificationEmail={email?.notificationEmail || process.env.ADMIN_NOTIFICATION_EMAIL || ''}
       enabled={email?.enabled ?? true}
     />}

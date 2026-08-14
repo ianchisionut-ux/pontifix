@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { Resend } from 'resend'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
@@ -40,11 +39,12 @@ export async function POST(request: NextRequest) {
 
   const emailTransport = await getEmailTransport(elmontBusiness?.id)
   if (emailTransport?.notificationEmail) {
-    const resend = new Resend(emailTransport.apiKey)
-    resend.emails.send({ from: emailTransport.from, to: emailTransport.notificationEmail,
+    emailTransport.transporter.sendMail({
+      from: emailTransport.from,
+      to: emailTransport.notificationEmail,
       subject: `Cerere nouă de ofertă: ${data.serviceType}`,
-      html: `<h2>Cerere nouă de ofertă</h2><p><strong>Solicitant:</strong> ${escapeHtml(data.name)}</p><p><strong>Telefon:</strong> ${escapeHtml(data.phone)}</p><p><strong>Email:</strong> ${escapeHtml(data.email)}</p><p><strong>Serviciu:</strong> ${escapeHtml(data.serviceType)}</p><p><strong>Localitate:</strong> ${escapeHtml(data.location || '-')}</p><p><strong>Detalii:</strong> ${escapeHtml(data.message || '-')}</p><p><strong>ATR încărcat:</strong> ${data.atrPathname ? 'Da' : 'Nu'}</p>`,
-    }).catch(() => {})
+      html: `<h2>Cerere nouă de ofertă</h2><p><strong>Solicitant:</strong> ${escapeHtml(data.name)}</p><p><strong>Telefon:</strong> ${escapeHtml(data.phone)}</p><p><strong>Email:</strong> ${escapeHtml(data.email || '-')}</p><p><strong>Serviciu:</strong> ${escapeHtml(data.serviceType)}</p><p><strong>Localitate:</strong> ${escapeHtml(data.location || '-')}</p><p><strong>Detalii:</strong> ${escapeHtml(data.message || '-')}</p><p><strong>ATR încărcat:</strong> ${data.atrPathname ? 'Da' : 'Nu'}</p>`,
+    }).catch((error) => console.error('Yahoo notification failed:', error))
   }
   return NextResponse.json({ success: true, id }, { status: 201 })
 }

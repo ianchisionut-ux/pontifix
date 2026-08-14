@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
   // existența unui cont, ca să nu putem fi folosiți pentru a "ghici" clienți înregistrați
   if (user) {
     const token = await createPasswordToken(user.id)
-    await withEmailTimeout(sendPasswordResetEmail(user.email, token))
+    await withEmailTimeout(sendPasswordResetEmail(user.email, token, user.businessId))
   }
 
   return NextResponse.json({ success: true })
