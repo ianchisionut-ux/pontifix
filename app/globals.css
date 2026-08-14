@@ -277,10 +277,10 @@ body {
   .attendance-sheet .attendance-name { width:150px; min-width:150px; }
 }
 
-@page attendance-sheet-page { size: A4 landscape; margin: 10mm; }
+@page { size: A4 landscape; margin: 10mm; }
 @media print {
   html, body { background:white !important; }
-  .attendance-page { page:attendance-sheet-page; width:277mm; margin:0 auto !important; }
+  .attendance-page { width:277mm; margin:0 auto !important; }
   .attendance-paper { width:277mm; min-height:190mm; margin:0 auto !important; padding:0; border:0; border-radius:0; box-shadow:none; overflow:visible; }
   .attendance-sheet-wrap { overflow:visible !important; border:none !important; border-radius:0 !important; }
   .attendance-sheet { width:100%; min-width:0; table-layout:fixed; font-size:7pt; }
