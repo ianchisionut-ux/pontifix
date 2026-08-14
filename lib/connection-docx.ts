@@ -43,16 +43,47 @@ function replaceReferences(xml: string, field: string, value: string) {
   return xml.replace(pattern, (_match, before: string, result: string, after: string) => `${before}${replaceTextInRange(result, value)}${after}`)
 }
 
+function replaceFormulaResult(xml: string, formulaStart: string, value: string) {
+  const pattern = new RegExp(`(<w:fldChar\\b[^>]*w:fldCharType="begin"[^>]*/>[\\s\\S]{0,1800}?<w:instrText\\b[^>]*>\\s*${formulaStart}[^<]*<\\/w:instrText>[\\s\\S]{0,900}?<w:fldChar\\b[^>]*w:fldCharType="separate"[^>]*/>)([\\s\\S]*?)(<w:fldChar\\b[^>]*w:fldCharType="end"[^>]*/>)`, 'gi')
+  return xml.replace(pattern, (_match, before: string, result: string, after: string) => `${before}${replaceTextInRange(result, value)}${after}`)
+}
+
+export function parseConnectionMoney(value: string) {
+  const compact = value.trim().replace(/\s+/g, '').replace(/[^\d.,-]/g, '')
+  if (!compact) return null
+  const dot = compact.lastIndexOf('.')
+  const comma = compact.lastIndexOf(',')
+  const decimalIndex = Math.max(dot, comma)
+  let normalized = compact
+  if (decimalIndex >= 0 && compact.length - decimalIndex - 1 <= 2) {
+    normalized = compact.slice(0, decimalIndex).replace(/[.,]/g, '') + '.' + compact.slice(decimalIndex + 1).replace(/[.,]/g, '')
+  } else {
+    normalized = compact.replace(/[.,]/g, '')
+  }
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function money(value: number) {
+  return (Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2)
+}
+
 export async function generateConnectionDocx(fields: ConnectionFields, type: 'contract' | 'a3') {
   const filename = type === 'a3' ? 'a3-template.docx' : 'contract-template.docx'
   const buffer = await fs.readFile(path.join(process.cwd(), 'assets', 'bransamente', filename))
   const zip = new PizZip(buffer)
+  const amount = parseConnectionMoney(fields.SumaFaraTVA)
+  const documentFields = { ...fields, SumaFaraTVA: amount === null ? fields.SumaFaraTVA : money(amount) }
   const xmlFiles = Object.keys(zip.files).filter((name) => /^word\/(document|header\d*|footer\d*)\.xml$/.test(name))
   for (const name of xmlFiles) {
     let xml = zip.file(name)?.asText() || ''
     for (const field of CONNECTION_FIELDS) {
-      xml = replaceBookmark(xml, field, fields[field] || '')
-      xml = replaceReferences(xml, field, fields[field] || '')
+      xml = replaceBookmark(xml, field, documentFields[field] || '')
+      xml = replaceReferences(xml, field, documentFields[field] || '')
+    }
+    if (type === 'contract' && amount !== null) {
+      xml = replaceFormulaResult(xml, '=SUM\\s*\\(\\s*SumaFaraTVA', money(amount * 1.21))
+      xml = replaceFormulaResult(xml, '=PRODUCT\\s*\\(\\s*SumaFaraTVA', money(amount * .21))
     }
     zip.file(name, xml)
   }
