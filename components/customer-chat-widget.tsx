@@ -30,6 +30,6 @@ export function CustomerChatWidget() {
         <button className="btn-primary flex w-full items-center justify-center gap-2" disabled={busy}>{busy?<Loader2 size={17} className="animate-spin"/>:<Send size={17}/>} {busy?tr('Se trimite...'):tr('Trimite mesajul')}</button>
       </form>}
     </div>}
-    <button onClick={()=>setOpen(value=>!value)} className="ml-auto flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-[#0d5d8b] to-[#2f91c8] text-white shadow-xl shadow-[#0d5d8b]/30 transition hover:scale-105" aria-label={tr('Întrebări rapide')}>{open?<X size={25}/>:<MessageCircle size={28}/>}</button>
+    <div className="flex items-center justify-end gap-3">{!open && <button type="button" onClick={()=>setOpen(true)} className="relative rounded-2xl border border-[#d9eef8] bg-white px-4 py-2.5 text-sm font-extrabold text-[#0d5d8b] shadow-lg shadow-[#082b4d]/10 transition hover:-translate-y-0.5 hover:border-[#8bc8e5]">{tr('Ai o întrebare?')}<span className="absolute -right-1.5 top-1/2 h-3 w-3 -translate-y-1/2 rotate-45 border-r border-t border-[#d9eef8] bg-white"/></button>}<button onClick={()=>setOpen(value=>!value)} className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#0d5d8b] to-[#2f91c8] text-white shadow-xl shadow-[#0d5d8b]/30 transition hover:scale-105" aria-label={tr('Întrebări rapide')}>{open?<X size={25}/>:<MessageCircle size={28}/>}</button></div>
   </div>
 }

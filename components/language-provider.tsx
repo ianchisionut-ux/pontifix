@@ -6,6 +6,7 @@ export type Language = 'ro' | 'hu' | 'en'
 
 const translations: Record<'hu' | 'en', Record<string, string>> = {
   hu: {
+    'Ai o \u00eentrebare?': 'K\u00e9rd\u00e9se van?',
     'Despre noi': 'Rólunk', 'Servicii': 'Szolgáltatások', 'Certificări': 'Tanúsítványok', 'Contact': 'Kapcsolat',
     'Portal companie': 'Vállalati portál', 'Cere ofertă': 'Ajánlatkérés', 'Solicită o ofertă': 'Ajánlatot kérek',
     'Vezi capabilitățile': 'Szolgáltatások megtekintése', 'Energie construită responsabil din 1997': 'Felelősen épített energia 1997 óta',
@@ -40,6 +41,7 @@ const translations: Record<'hu' | 'en', Record<string, string>> = {
     'Rețele 0,4–20 kV': '0,4–20 kV hálózatok', 'Posturi de transformare': 'Transzformátorállomások', 'Branșamente și racorduri': 'Csatlakozások és bekötések', 'Execuție linii electrice': 'Villamos vezetékek kivitelezése', 'Stații de medie tensiune': 'Középfeszültségű állomások', 'Lucrări conexe rețelelor': 'Kapcsolódó hálózati munkák', 'Instalații de paratrăsnet': 'Villámvédelmi rendszerek', 'Prize și rețele de pământ': 'Földelő rendszerek', 'Reparații specializate': 'Szakszerű javítások',
   },
   en: {
+    'Ai o \u00eentrebare?': 'Have a question?',
     'Despre noi': 'About us', 'Servicii': 'Services', 'Certificări': 'Certifications', 'Contact': 'Contact',
     'Portal companie': 'Company portal', 'Cere ofertă': 'Request a quote', 'Solicită o ofertă': 'Request a quote', 'Vezi capabilitățile': 'View capabilities',
     'Energie construită responsabil din 1997': 'Responsibly built energy since 1997', 'Putere pentru': 'Power for', 'proiecte reale.': 'real projects.',
