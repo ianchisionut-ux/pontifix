@@ -197,7 +197,6 @@ export function ResponsiveShell({
           {!sidebarCollapsed && <button onClick={() => setSidebarCollapsed(true)} className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/80" aria-label="Restrânge meniul"><PanelLeftClose size={17}/></button>}
         </div>
         {sidebarCollapsed && <button onClick={() => setSidebarCollapsed(false)} className="self-center w-9 h-9 mb-1 rounded-xl flex items-center justify-center hover:bg-white/80" aria-label="Extinde meniul"><PanelLeftOpen size={17}/></button>}
-        {!sidebarCollapsed && profileName && <p className="font-semibold text-base px-3 mb-1 truncate">{profileName}</p>}
         {!sidebarCollapsed && <SidebarClock />}
         {displayNavItems.map((item) => {
           const active = item.href === activeHref

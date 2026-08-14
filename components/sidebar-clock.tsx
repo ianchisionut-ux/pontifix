@@ -20,16 +20,16 @@ export function SidebarClock({ inline }: { inline?: boolean } = {}) {
   if (inline) {
     return (
       <div className="text-right shrink-0">
-        <p className="text-xl font-semibold tabular-nums tracking-tight leading-tight">{time}</p>
-        <p className="text-xs text-gray-500 capitalize leading-tight">{date}</p>
+        <p className="text-2xl font-bold tabular-nums tracking-tight leading-tight text-[#082b4d]">{time}</p>
+        <p className="mt-1 text-sm font-medium capitalize leading-tight text-slate-500">{date}</p>
       </div>
     )
   }
 
   return (
-    <div className="px-3 py-1 mb-1">
-      <p className="text-xl font-semibold tabular-nums tracking-tight leading-tight">{time}</p>
-      <p className="text-xs text-gray-500 capitalize leading-tight">{date}</p>
+    <div className="mb-2 px-3 py-1">
+      <p className="text-2xl font-bold tabular-nums tracking-tight leading-tight text-[#082b4d]">{time}</p>
+      <p className="mt-1 text-sm font-medium capitalize leading-tight text-slate-500">{date}</p>
     </div>
   )
 }
