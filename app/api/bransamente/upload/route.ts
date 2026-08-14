@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
+import { issueSignedToken } from '@vercel/blob'
+import { handleUploadPresigned, type HandleUploadPresignedBody } from '@vercel/blob/client'
 import { getConnectionAccess } from '@/lib/connection-access'
 
 export async function POST(request: Request) {
@@ -7,18 +8,33 @@ export async function POST(request: Request) {
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
   if (!access.canManage) return NextResponse.json({ error: 'Doar Super Adminul poate încărca ATR-uri.' }, { status: 403 })
   try {
-    const body = await request.json() as HandleUploadBody
-    const response = await handleUpload({
+    const body = await request.json() as HandleUploadPresignedBody
+    const response = await handleUploadPresigned({
       body,
       request,
-      onBeforeGenerateToken: async (pathname) => {
+      getSignedToken: async (pathname) => {
         if (!pathname.startsWith('bransamente/')) throw new Error('Cale de încărcare invalidă.')
-        return { allowedContentTypes: ['application/pdf'], maximumSizeInBytes: 20 * 1024 * 1024, addRandomSuffix: true }
+        const validUntil = Date.now() + 20 * 60 * 1000
+        const token = await issueSignedToken({
+          pathname,
+          operations: ['put'],
+          allowedContentTypes: ['application/pdf'],
+          maximumSizeInBytes: 20 * 1024 * 1024,
+          validUntil,
+        })
+        return {
+          token,
+          urlOptions: {
+            allowedContentTypes: ['application/pdf'],
+            maximumSizeInBytes: 20 * 1024 * 1024,
+            validUntil,
+          },
+        }
       },
-      onUploadCompleted: async () => {},
     })
     return NextResponse.json(response)
   } catch (error) {
+    console.error('Connection ATR upload failed:', error)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Încărcarea ATR a eșuat.' }, { status: 400 })
   }
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { upload } from '@vercel/blob/client'
+import { uploadPresigned } from '@vercel/blob/client'
 import { Archive, Download, Eye, FileText, FileUp, Loader2, Plus, Save, Search, ShieldCheck, Trash2, WandSparkles, X } from 'lucide-react'
 import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, defaultConnectionFields, type ConnectionCaseDto, type ConnectionFields } from '@/lib/connection-fields'
 
@@ -62,7 +62,7 @@ export function ConnectionsManager({ initialCases, canManage }: { initialCases: 
           setNotice('OCR-ul nu a găsit toate datele. ATR-ul se salvează și completezi manual.')
         }
         setNotice('Salvez ATR-ul în dosar…')
-        const blob = await upload(`bransamente/${crypto.randomUUID()}/${file.name}`, file, { access: 'private', handleUploadUrl: '/api/bransamente/upload' })
+        const blob = await uploadPresigned(`bransamente/${crypto.randomUUID()}/${file.name}`, file, { access: 'private', handleUploadUrl: '/api/bransamente/upload' })
         atrPathname = blob.pathname
         atrName = file.name
       }
