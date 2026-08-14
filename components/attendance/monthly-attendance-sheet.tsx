@@ -71,6 +71,22 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
     const next = new Date(year, month - 1 + offset, 1)
     router.push('/dashboard/pontaje?month=' + next.getFullYear() + '-' + String(next.getMonth() + 1).padStart(2, '0'))
   }
+  function printAttendance() {
+    const existing = document.getElementById('attendance-page-orientation')
+    existing?.remove()
+    const style = document.createElement('style')
+    style.id = 'attendance-page-orientation'
+    style.textContent = '@page { size: A4 landscape; margin: 10mm; }'
+    document.head.appendChild(style)
+    document.body.classList.add('attendance-printing')
+    const cleanup = () => {
+      document.body.classList.remove('attendance-printing')
+      document.getElementById('attendance-page-orientation')?.remove()
+    }
+    window.addEventListener('afterprint', cleanup, { once: true })
+    window.print()
+    window.setTimeout(cleanup, 3000)
+  }
   function openEditor(employee: Employee, day: number) {
     const existing = entries[employee.id + ':' + dateKey(year, month, day)]
     setEditor({ employee, day }); setStatus(existing?.status ?? 'PRESENT'); setHours(String(existing?.hours ?? employee.dailyHours ?? standardHours)); setNote(existing?.note ?? '')
@@ -131,7 +147,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
   return <div className="attendance-page">
     <div className="attendance-toolbar no-print">
       <div><h1 className="text-2xl font-semibold">Foaie colectivă de prezență</h1><p className="text-sm text-slate-500 mt-1">Pensulă pentru completare · Copiere pentru starea, orele și notița unei căsuțe.</p></div>
-      <div className="flex flex-wrap items-center gap-2"><button onClick={() => setOrderMode((value) => !value)} className={orderMode ? 'btn-primary' : 'btn-secondary'}>{orderMode ? 'Finalizează ordinea' : 'Editare ordine'}</button><div className="attendance-month-picker"><button onClick={() => changeMonth(-1)}><ChevronLeft size={17}/></button><strong>{MONTHS[month - 1]} {year}</strong><button onClick={() => changeMonth(1)}><ChevronRight size={17}/></button></div><button className="btn-primary inline-flex items-center gap-2" onClick={() => window.print()}><Printer size={17}/> Printează / PDF</button></div>
+      <div className="flex flex-wrap items-center gap-2"><button onClick={() => setOrderMode((value) => !value)} className={orderMode ? 'btn-primary' : 'btn-secondary'}>{orderMode ? 'Finalizează ordinea' : 'Editare ordine'}</button><div className="attendance-month-picker"><button onClick={() => changeMonth(-1)}><ChevronLeft size={17}/></button><strong>{MONTHS[month - 1]} {year}</strong><button onClick={() => changeMonth(1)}><ChevronRight size={17}/></button></div><button className="btn-primary inline-flex items-center gap-2" onClick={printAttendance}><Printer size={17}/> Printează / PDF</button></div>
     </div>
     <div className="attendance-brushbar no-print">
       <span className="attendance-brush-label">Instrument:</span>
