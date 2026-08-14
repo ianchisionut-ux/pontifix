@@ -33,7 +33,7 @@ export default async function DashboardPage() {
     prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: startMonth, lt: endMonth } } }),
     prisma.leaveRequest.count({ where: { businessId, status: 'PENDING' } }),
     prisma.business.findUnique({ where: { id: businessId }, select: { break1Start: true, break1End: true, workingHours: true } }),
-    prisma.project.findMany({ where: { businessId, status: { not: 'ARCHIVED' } }, select: { id: true, name: true, updatedAt: true, constructionAuthorizationStatus: true, approvals: { select: { status: true } } }, orderBy: { updatedAt: 'desc' } }),
+    prisma.project.findMany({ where: { businessId, status: { not: 'ARCHIVED' } }, select: { id: true, name: true, updatedAt: true, constructionAuthorizationStatus: true, approvals: { select: { status: true } } }, orderBy: { createdAt: 'desc' } }),
   ])
   const presentEntries = todayEntries.filter((entry) => entry.status === 'PRESENT' || entry.status === 'REMOTE')
   const present = presentEntries.length

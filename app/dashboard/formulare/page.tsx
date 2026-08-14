@@ -23,7 +23,7 @@ export default async function FormsPage() {
       FROM "FormSubmission" WHERE "businessId"=${businessId} ORDER BY "updatedAt" DESC`,
     prisma.$queryRaw<Array<{ id: string; nib: string; fields: Record<string, string> }>>`
       SELECT "id", "nib", "fields" FROM "ConnectionCase" WHERE "businessId"=${businessId} ORDER BY "sequenceNumber" DESC`,
-    prisma.project.findMany({ where: { businessId }, orderBy: { updatedAt: 'desc' }, select: { id: true, name: true, beneficiary: true, beneficiaryPhone: true, address: true, certificateNumber: true, certificateDate: true } }),
+    prisma.project.findMany({ where: { businessId }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, beneficiary: true, beneficiaryPhone: true, address: true, certificateNumber: true, certificateDate: true } }),
   ])
 
   const forms: FormTemplateDto[] = formRows.map((row) => ({ ...row, fieldSchema: Array.isArray(row.fieldSchema) ? row.fieldSchema : [], updatedAt: row.updatedAt.toISOString() }))

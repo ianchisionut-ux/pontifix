@@ -56,3 +56,16 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Configurarea WhatsApp nu a putut fi salvată. Verifică ID-urile introduse.' }, { status: 500 })
   }
 }
+
+
+export async function DELETE() {
+  const session = await auth()
+  const businessId = (session as any)?.businessId as string | undefined
+  const role = (session as any)?.role
+  if (!businessId || role !== 'SUPER_ADMIN') {
+    return NextResponse.json({ error: 'Doar Super Adminul poate șterge configurarea WhatsApp.' }, { status: 403 })
+  }
+  await ensureWhatsAppStorage()
+  await prisma.channel.deleteMany({ where: { businessId, type: 'WHATSAPP' } })
+  return NextResponse.json({ success: true, configured: false })
+}

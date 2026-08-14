@@ -12,7 +12,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   const session = await auth()
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
-  if ((session as any)?.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Doar Super Adminul poate trimite actualizări de proiect.' }, { status: 403 })
+  const role = (session as any)?.role as string | undefined
+  if (role !== 'SUPER_ADMIN' && role !== 'OWNER') return NextResponse.json({ error: 'Doar administratorii pot trimite actualizări de proiect.' }, { status: 403 })
   await ensureProjectAuthorizationStorage()
   const { id } = await params
   const project = await prisma.project.findFirst({ where: { id, businessId }, include: { approvals: { orderBy: { sortOrder: 'asc' } }, business: { select: { name: true } } } })

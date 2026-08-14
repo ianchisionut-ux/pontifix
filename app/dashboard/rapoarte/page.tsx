@@ -31,7 +31,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const [entries, employees, projects] = await Promise.all([
     prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: startDate, lte: endDate } }, include: { employee: true }, orderBy: { workDate: 'asc' } }),
     prisma.attendanceEmployee.findMany({ where: { businessId, active: true }, orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }] }),
-    prisma.project.findMany({ where: { businessId }, include: { approvals: true }, orderBy: { updatedAt: 'desc' } }),
+    prisma.project.findMany({ where: { businessId }, include: { approvals: true }, orderBy: { createdAt: 'desc' } }),
   ])
 
   const totalMinutes = Math.round(entries.reduce((sum, entry) => sum + entry.hours * 60, 0))
