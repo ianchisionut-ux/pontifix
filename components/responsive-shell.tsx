@@ -19,6 +19,7 @@ import {
   Inbox,
   LifeBuoy,
   FolderKanban,
+  Files,
   Zap,
 } from 'lucide-react'
 import { SidebarClock } from './sidebar-clock'
@@ -44,6 +45,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   proiecte: FolderKanban,
   inbox: Inbox,
   bransamente: Zap,
+  formulare: Files,
 }
 
 // amestecă o culoare hex cu alb, la un procent dat — produce o culoare SOLIDĂ (nu transparentă).

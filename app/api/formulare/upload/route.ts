@@ -1,0 +1,27 @@
+import { NextResponse } from 'next/server'
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
+import { auth } from '@/lib/auth'
+
+export async function POST(request: Request) {
+  const session = await auth()
+  const businessId = (session as any)?.businessId as string | undefined
+  if (!businessId) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
+  if ((session as any)?.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Doar Super Adminul poate încărca formulare.' }, { status: 403 })
+  const body = await request.json() as HandleUploadBody
+  try {
+    const response = await handleUpload({
+      body,
+      request,
+      onBeforeGenerateToken: async () => ({
+        allowedContentTypes: ['application/pdf'],
+        maximumSizeInBytes: 20 * 1024 * 1024,
+        addRandomSuffix: true,
+        tokenPayload: JSON.stringify({ businessId }),
+      }),
+      onUploadCompleted: async () => {},
+    })
+    return NextResponse.json(response)
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Încărcarea a eșuat.' }, { status: 400 })
+  }
+}

@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingIncludes: {
+    '/api/formulare/**': ['./assets/formulare/**/*'],
+  },
   images: {
     remotePatterns: [
       {
