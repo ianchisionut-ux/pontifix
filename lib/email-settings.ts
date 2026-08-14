@@ -50,7 +50,7 @@ export async function getEmailTransport(businessId?: string | null) {
   if (!stored || !stored.enabled || !stored.smtpPasswordEncrypted) return null
 
   let password = ''
-  try { password = decrypt(stored.smtpPasswordEncrypted) } catch { return null }
+  try { password = decrypt(stored.smtpPasswordEncrypted).replace(/\s+/g, '') } catch { return null }
   if (!password) return null
 
   const fromEmail = stored.fromEmail.trim().toLowerCase()
@@ -58,8 +58,12 @@ export async function getEmailTransport(businessId?: string | null) {
   return {
     transporter: nodemailer.createTransport({
       host: 'smtp.mail.yahoo.com',
-      port: 465,
-      secure: true,
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      connectionTimeout: 15_000,
+      greetingTimeout: 15_000,
+      socketTimeout: 30_000,
       auth: { user: fromEmail, pass: password },
     }),
     from: { name: fromName, address: fromEmail },

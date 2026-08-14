@@ -4,7 +4,6 @@ import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { getOfferAccess } from '@/lib/offer-access'
 import { normalizeOfferSheet } from '@/lib/offer-sheet'
 import { offerEmailHtml, offerText } from '@/lib/offer-message'
-import { generateOfferPdf, offerPdfFilename } from '@/lib/offer-pdf'
 import { getEmailTransport } from '@/lib/email-settings'
 
 export const runtime = 'nodejs'
@@ -22,23 +21,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!data.customerEmail) return NextResponse.json({ error: 'Beneficiarul nu are adresă de e-mail.' }, { status: 400 })
 
   try {
-    const pdf = await generateOfferPdf(data)
-    await emailTransport.transporter.sendMail({
+    const result = await emailTransport.transporter.sendMail({
       from: emailTransport.from,
       to: data.customerEmail,
       subject: `Oferta Elmont ${data.offerNumber} – ${data.serviceType}`,
       html: offerEmailHtml(data),
       text: offerText(data),
-      attachments: [{
-        filename: offerPdfFilename(data),
-        content: pdf,
-        contentType: 'application/pdf',
-      }],
     })
+    if (!result.accepted.length || result.rejected.length) {
+      const rejected = result.rejected.map(String).join(', ')
+      throw Object.assign(new Error(`Destinatar refuzat: ${rejected || data.customerEmail}`), { code: 'ERECIPIENT' })
+    }
   } catch (error) {
-    console.error('Yahoo SMTP offer send failed:', error)
-    return NextResponse.json({ error: 'Oferta și PDF-ul nu au putut fi trimise prin Yahoo Mail.' }, { status: 502 })
+    const smtpError = error as { code?: string; command?: string; responseCode?: number; message?: string }
+    console.error('Yahoo offer delivery failed:', {
+      code: smtpError.code,
+      command: smtpError.command,
+      responseCode: smtpError.responseCode,
+      message: smtpError.message,
+      recipient: data.customerEmail,
+    })
+    const code = smtpError.code || String(smtpError.responseCode || 'SMTP_ERROR')
+    const message = code === 'EAUTH'
+      ? 'Yahoo a respins autentificarea. Generează o parolă nouă pentru aplicație în Yahoo și salveaz-o din nou în Configurare.'
+      : code === 'EENVELOPE' || code === 'ERECIPIENT' || smtpError.responseCode === 550 || smtpError.responseCode === 553
+        ? 'Yahoo a refuzat adresa beneficiarului. Verifică adresa de e-mail din fișa ofertei.'
+        : ['ETIMEDOUT', 'ESOCKET', 'ECONNECTION'].includes(code)
+          ? 'Conexiunea securizată cu Yahoo a expirat. Încearcă din nou; dacă persistă, folosește Test e-mail din Configurare.'
+          : 'Yahoo nu a acceptat mesajul. Verifică parola pentru aplicație și adresa beneficiarului.'
+    return NextResponse.json({ error: message, diagnostic: code }, { status: 502 })
   }
+
   await prisma.$executeRaw`UPDATE "QuoteRequest" SET "offerData"=CAST(${JSON.stringify(data)} AS JSONB), "status"='QUOTED', "offerSentAt"=CURRENT_TIMESTAMP, "offerEmailSentAt"=CURRENT_TIMESTAMP, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id}`
-  return NextResponse.json({ sent: true, attachments: 1 })
+  return NextResponse.json({ sent: true, attachments: 0 })
 }
