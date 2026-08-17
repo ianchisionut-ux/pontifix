@@ -6,6 +6,7 @@ import { Archive, Download, Eye, FileText, FileUp, LayoutGrid, List, Loader2, Me
 import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, defaultConnectionFields, type ConnectionCaseDto, type ConnectionFields } from '@/lib/connection-fields'
 import { CONNECTION_STATUSES, CONNECTION_STATUS_META, type ConnectionStatus } from '@/lib/connection-status'
 import { AdminConnectionAccordion } from '@/components/connections/admin-connection-accordion'
+import { CONNECTION_WHATSAPP_TEMPLATES, renderConnectionWhatsAppTemplate, type ConnectionWhatsAppTemplateKey } from '@/lib/connection-whatsapp-templates'
 
 function addressHints(address: string) {
   const county = address.match(/jud(?:ețul|\.)?\s*([^,]+)/i)?.[1]?.trim() || 'Sălaj'
@@ -25,6 +26,10 @@ export function ConnectionsManager({ initialCases, canManage }: { initialCases: 
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
   const fileInput = useRef<HTMLInputElement>(null)
+  const [whatsAppOpen, setWhatsAppOpen] = useState(false)
+  const [messageConnectionId, setMessageConnectionId] = useState(initialCases[0]?.id || '')
+  const [messageTemplate, setMessageTemplate] = useState<ConnectionWhatsAppTemplateKey>('PROGRAMMED')
+  const [messageText, setMessageText] = useState('')
 
   const visible = useMemo(() => items.filter((item) => {
     const haystack = `${item.nib} ${item.sequenceNumber} ${item.fields.Beneficiar} ${item.fields.Telefon} ${item.fields.ATR} ${item.fields.Amplasament}`.toLocaleLowerCase('ro-RO')
@@ -102,33 +107,61 @@ export function ConnectionsManager({ initialCases, canManage }: { initialCases: 
     if (!response.ok) return alert(body.error || 'Stadiul nu a putut fi salvat.')
     setItems((current) => current.map((item) => item.id === selected.id ? { ...item, status, updatedAt: new Date().toISOString() } : item))
     setNotice(`Stadiu actualizat: ${CONNECTION_STATUS_META[status].label}.`)
+    if (status === 'PROGRAMAT') openWhatsAppCenter('PROGRAMMED', selected.id)
   }
-  async function sendWhatsApp() {
-    if (!selected || !canManage) return
-    if (!draft.Telefon.trim()) return alert('Completează numărul de telefon al beneficiarului.')
-    if (!draft.Entitate.trim()) return alert('Completează câmpul Entitate / UAT.')
+  function templateText(key: ConnectionWhatsAppTemplateKey, connectionId: string) {
+    const item = items.find((entry) => entry.id === connectionId)
+    if (!item) return ''
+    const fields = selected?.id === item.id ? draft : item.fields
+    return renderConnectionWhatsAppTemplate(key, { nib: item.nib, fields })
+  }
+
+  function openWhatsAppCenter(key: ConnectionWhatsAppTemplateKey = 'PROGRAMMED', connectionId = selected?.id || items[0]?.id || '') {
+    if (!connectionId) return alert('Nu există branșamente disponibile.')
+    setMessageConnectionId(connectionId)
+    setMessageTemplate(key)
+    setMessageText(templateText(key, connectionId))
+    setWhatsAppOpen(true)
+  }
+
+  function chooseMessageConnection(connectionId: string) {
+    setMessageConnectionId(connectionId)
+    setMessageText(templateText(messageTemplate, connectionId))
+  }
+
+  function chooseMessageTemplate(key: ConnectionWhatsAppTemplateKey) {
+    setMessageTemplate(key)
+    setMessageText(templateText(key, messageConnectionId))
+  }
+
+  async function sendWhatsAppMessage() {
+    const item = items.find((entry) => entry.id === messageConnectionId)
+    if (!item || !canManage) return
+    const fields = selected?.id === item.id ? draft : item.fields
+    if (!fields.Telefon.trim()) return alert('Branșamentul selectat nu are număr de telefon.')
+    if (!messageText.trim()) return alert('Mesajul este gol.')
     setBusy('whatsapp')
     setNotice('Trimit mesajul WhatsApp…')
     try {
-      const saveResponse = await fetch(`/api/bransamente/${selected.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: draft }) })
-      const saveBody = await saveResponse.json().catch(() => ({}))
-      if (!saveResponse.ok) throw new Error(saveBody.error || 'Datele branșamentului nu au putut fi salvate înainte de trimitere.')
-      setItems((current) => current.map((item) => item.id === selected.id ? { ...item, fields: { ...draft }, updatedAt: new Date().toISOString() } : item))
-      const response = await fetch(`/api/bransamente/${selected.id}/send-whatsapp`, { method: 'POST' })
+      if (selected?.id === item.id) {
+        const saveResponse = await fetch(`/api/bransamente/${item.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: draft }) })
+        const saveBody = await saveResponse.json().catch(() => ({}))
+        if (!saveResponse.ok) throw new Error(saveBody.error || 'Datele branșamentului nu au putut fi salvate înainte de trimitere.')
+        setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, fields: { ...draft }, updatedAt: new Date().toISOString() } : entry))
+      }
+      const response = await fetch(`/api/bransamente/${item.id}/send-whatsapp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: messageText }) })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'Mesajul nu a putut fi trimis.')
-      if (body.sent) {
-        setNotice('Mesajul WhatsApp a fost trimis beneficiarului.')
-      } else if (body.fallbackUrl) {
+      if (body.sent) setNotice('Mesajul WhatsApp a fost trimis beneficiarului.')
+      else if (body.fallbackUrl) {
         window.open(body.fallbackUrl, '_blank', 'noopener,noreferrer')
         setNotice('Am deschis WhatsApp cu mesajul completat. Verifică și apasă Trimite.')
       }
+      setWhatsAppOpen(false)
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Mesajul nu a putut fi trimis.')
       setNotice('')
-    } finally {
-      setBusy('')
-    }
+    } finally { setBusy('') }
   }
   async function remove() {
     if (!selected || !canManage || !confirm(`Ștergi definitiv dosarul ${selected.fields.Beneficiar || 'fără nume'}?`)) return
@@ -150,7 +183,7 @@ export function ConnectionsManager({ initialCases, canManage }: { initialCases: 
   return <div>
     <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div><span className="text-xs font-black uppercase tracking-[.16em] text-[#197fb5]">Documentații electrice</span><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#082b4d]">Branșamente</h1><p className="mt-1 text-sm text-slate-500">ATR → verificare date → contract, notificare, memoriu și dosar A3.</p></div>
-      <div className="flex flex-wrap items-center gap-2"><div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label="Mod de vizualizare"><button type="button" onClick={() => setViewMode('list')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold ${viewMode === 'list' ? 'bg-[#0d5d8b] text-white' : 'text-slate-500 hover:bg-slate-50'}`} title="Lista compacta"><List size={17}/><span className="hidden sm:inline">Lista</span></button><button type="button" onClick={() => setViewMode('grid')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold ${viewMode === 'grid' ? 'bg-[#0d5d8b] text-white' : 'text-slate-500 hover:bg-slate-50'}`} title="Grila extinsa"><LayoutGrid size={17}/><span className="hidden sm:inline">Grila</span></button></div>{canManage ? <><input ref={fileInput} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => createCase(event.target.files?.[0])}/><button onClick={() => fileInput.current?.click()} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'create' ? <Loader2 size={17} className="animate-spin"/> : <FileUp size={17}/>} Încarcă ATR</button><button onClick={() => createCase()} disabled={!!busy} className="btn-secondary inline-flex items-center gap-2"><Plus size={17}/> Fișă fără ATR</button></> : <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600"><Eye size={16}/> Mod vizualizare</span>}</div>
+      <div className="flex flex-wrap items-center gap-2"><div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label="Mod de vizualizare"><button type="button" onClick={() => setViewMode('list')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold ${viewMode === 'list' ? 'bg-[#0d5d8b] text-white' : 'text-slate-500 hover:bg-slate-50'}`} title="Lista compacta"><List size={17}/><span className="hidden sm:inline">Lista</span></button><button type="button" onClick={() => setViewMode('grid')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold ${viewMode === 'grid' ? 'bg-[#0d5d8b] text-white' : 'text-slate-500 hover:bg-slate-50'}`} title="Grila extinsa"><LayoutGrid size={17}/><span className="hidden sm:inline">Grila</span></button></div>{canManage ? <><button onClick={()=>openWhatsAppCenter('PROGRAMMED')} disabled={!!busy || !items.length} className="btn-secondary inline-flex items-center gap-2"><MessageCircle size={17}/> Mesaje WhatsApp</button><input ref={fileInput} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => createCase(event.target.files?.[0])}/><button onClick={() => fileInput.current?.click()} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'create' ? <Loader2 size={17} className="animate-spin"/> : <FileUp size={17}/>} Încarcă ATR</button><button onClick={() => createCase()} disabled={!!busy} className="btn-secondary inline-flex items-center gap-2"><Plus size={17}/> Fișă fără ATR</button></> : <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600"><Eye size={16}/> Mod vizualizare</span>}</div>
     </header>
     {!canManage && viewMode === 'list' ? <AdminConnectionAccordion items={visible} query={query} onQueryChange={setQuery}/> : <div className={`grid min-h-[720px] overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm ${viewMode === 'list' ? 'xl:grid-cols-[300px_minmax(0,1fr)]' : 'grid-cols-1'}`}>
       <aside className={`border-b border-slate-200 bg-[#f5f9fc] p-4 ${viewMode === 'list' ? 'xl:border-b-0 xl:border-r' : ''}`}>
@@ -159,10 +192,18 @@ export function ConnectionsManager({ initialCases, canManage }: { initialCases: 
         <div className={viewMode === 'grid' ? 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'space-y-2 xl:max-h-[620px] xl:overflow-y-auto xl:pr-1'}>{visible.map((item) => <button key={item.id} onClick={() => select(item)} className={`w-full rounded-2xl border p-3 text-left transition ${item.id === selectedId ? 'border-[#78bfe1] bg-white shadow-sm' : 'border-transparent bg-[#e9f1f8] hover:border-slate-200 hover:bg-white'}`}><div className="mb-1 flex items-center justify-between gap-2"><span className="text-[10px] font-black text-[#197fb5]">#{item.sequenceNumber} / {item.nib}</span><span className="h-2 w-2 rounded-full" style={{ backgroundColor: CONNECTION_STATUS_META[item.status].color }}/></div><p className="truncate text-sm font-black text-[#082b4d]">{item.fields.Beneficiar || 'Beneficiar necompletat'}</p><p className="mt-1 truncate text-xs text-slate-500">{item.fields.ATR || item.atrName || 'Fișă fără ATR'}</p>{viewMode === 'grid' && <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-200/70 pt-3"><span className="truncate text-xs font-semibold text-slate-500">{item.fields.Telefon || 'Telefon necompletat'}</span><span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white" style={{ backgroundColor: CONNECTION_STATUS_META[item.status].color }}>{CONNECTION_STATUS_META[item.status].label}</span></div>}<p className="mt-1 text-[11px] text-slate-400">{new Date(item.updatedAt).toLocaleString('ro-RO', { dateStyle: 'medium', timeStyle: 'short' })}</p></button>)}{!visible.length && <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">Niciun dosar găsit.</p>}</div>
       </aside>
       <section className="min-w-0 p-5 lg:p-7">{selected ? <>
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5"><div><div className="flex items-center gap-2"><WandSparkles size={20} className="text-[#197fb5]"/><h2 className="text-xl font-bold text-[#082b4d]">{draft.Beneficiar || 'Fișă branșament'}</h2></div><div className="mt-2 flex flex-wrap items-center gap-2"><strong className="rounded-lg bg-[#edf7fc] px-2.5 py-1 text-xs text-[#0d5d8b]">{selected.nib}</strong><span className="rounded-lg px-2.5 py-1 text-xs font-bold text-white" style={{ backgroundColor: CONNECTION_STATUS_META[selected.status].color }}>{CONNECTION_STATUS_META[selected.status].label} · {CONNECTION_STATUS_META[selected.status].progress}%</span></div><p className="mt-1 text-xs text-slate-500">Creat de {selected.createdByEmail || 'administrator'} · actualizat {new Date(selected.updatedAt).toLocaleString('ro-RO')}</p>{notice && <p className="mt-2 text-sm font-semibold text-emerald-600">{notice}</p>}</div><div className="flex flex-wrap gap-2">{canManage && <select value={selected.status} disabled={busy === 'status'} onChange={(event) => changeStatus(event.target.value as ConnectionStatus)} className="input-field min-w-[210px] bg-white text-sm font-bold">{CONNECTION_STATUSES.map((status) => <option key={status} value={status}>{CONNECTION_STATUS_META[status].label}</option>)}</select>}{canManage && <> {selected.atrPathname && <a href={`/api/bransamente/${selected.id}/atr`} target="_blank" className="btn-secondary inline-flex items-center gap-2"><FileText size={16}/> ATR</a>}<a href={`/api/bransamente/${selected.id}/document?type=contract`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Contract + memoriu</a><a href={`/api/bransamente/${selected.id}/document?type=a3`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Dosar A3</a> </>}{canManage && <><button onClick={sendWhatsApp} disabled={!!busy || !draft.Telefon.trim() || !draft.Entitate.trim()} className="btn-secondary inline-flex items-center gap-2" title="Trimite notificarea pentru plata taxei la primărie">{busy === 'whatsapp' ? <Loader2 size={16} className="animate-spin"/> : <MessageCircle size={16}/>} WhatsApp</button><button onClick={save} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează</button><button onClick={remove} disabled={!!busy} className="round-action text-rose-500" title="Șterge dosarul"><Trash2 size={17}/></button></>}</div></div>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5"><div><div className="flex items-center gap-2"><WandSparkles size={20} className="text-[#197fb5]"/><h2 className="text-xl font-bold text-[#082b4d]">{draft.Beneficiar || 'Fișă branșament'}</h2></div><div className="mt-2 flex flex-wrap items-center gap-2"><strong className="rounded-lg bg-[#edf7fc] px-2.5 py-1 text-xs text-[#0d5d8b]">{selected.nib}</strong><span className="rounded-lg px-2.5 py-1 text-xs font-bold text-white" style={{ backgroundColor: CONNECTION_STATUS_META[selected.status].color }}>{CONNECTION_STATUS_META[selected.status].label} · {CONNECTION_STATUS_META[selected.status].progress}%</span></div><p className="mt-1 text-xs text-slate-500">Creat de {selected.createdByEmail || 'administrator'} · actualizat {new Date(selected.updatedAt).toLocaleString('ro-RO')}</p>{notice && <p className="mt-2 text-sm font-semibold text-emerald-600">{notice}</p>}</div><div className="flex flex-wrap gap-2">{canManage && <select value={selected.status} disabled={busy === 'status'} onChange={(event) => changeStatus(event.target.value as ConnectionStatus)} className="input-field min-w-[210px] bg-white text-sm font-bold">{CONNECTION_STATUSES.map((status) => <option key={status} value={status}>{CONNECTION_STATUS_META[status].label}</option>)}</select>}{canManage && <> {selected.atrPathname && <a href={`/api/bransamente/${selected.id}/atr`} target="_blank" className="btn-secondary inline-flex items-center gap-2"><FileText size={16}/> ATR</a>}<a href={`/api/bransamente/${selected.id}/document?type=contract`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Contract + memoriu</a><a href={`/api/bransamente/${selected.id}/document?type=a3`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Dosar A3</a> </>}{canManage && <><button onClick={()=>openWhatsAppCenter('PROGRAMMED')} disabled={!!busy || !draft.Telefon.trim()} className="btn-secondary inline-flex items-center gap-2" title="Mesaje predefinite pentru beneficiar">{busy === 'whatsapp' ? <Loader2 size={16} className="animate-spin"/> : <MessageCircle size={16}/>} Mesaje WhatsApp</button><button onClick={save} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează</button><button onClick={remove} disabled={!!busy} className="round-action text-rose-500" title="Șterge dosarul"><Trash2 size={17}/></button></>}</div></div>
         {!canManage && <div className="mb-5 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800"><ShieldCheck size={18}/> Date protejate. Poți consulta datele și stadiul dosarelor. Modificările și documentele sunt rezervate Super Adminului.</div>}
         <div className="space-y-7">{CONNECTION_FIELD_GROUPS.map((group) => <fieldset key={group.title}><div className="mb-3 flex items-center justify-between"><legend className="text-sm font-black uppercase tracking-[.08em] text-[#0d5d8b]">{group.title}</legend>{canManage && <button onClick={() => clearGroup(group.fields)} className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-500"><X size={13}/> Golește secțiunea</button>}</div><div className={`grid gap-3 ${group.title === 'Adresă' || group.title === 'Puteri' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>{group.fields.map((field) => { const large = field === 'Solutia' || field === 'Amplasament' || field === 'AmplasamentA3'; return <label key={field} className={`text-xs font-bold text-slate-500 ${large ? 'md:col-span-full' : ''}`}>{CONNECTION_FIELD_LABELS[field] || field}{large ? <textarea disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 min-h-20 w-full resize-y bg-white disabled:bg-slate-50 disabled:text-slate-700"/> : <input disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/>}</label>})}</div></fieldset>)}</div>
       </> : <div className="flex min-h-[600px] flex-col items-center justify-center text-center"><div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#edf7fc] text-[#197fb5]"><FileText size={30}/></div><h2 className="text-xl font-bold text-[#082b4d]">Niciun dosar selectat</h2><p className="mt-2 max-w-md text-sm text-slate-500">{canManage ? 'Încarcă un ATR sau creează o fișă goală. Datele rămân în istoric și documentele Word se generează oricând.' : 'Nu există încă dosare de branșament disponibile pentru consultare.'}</p></div>}</section>
     </div>}
-  </div>
+    {canManage && whatsAppOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4" role="dialog" aria-modal="true">
+      <div className="w-full max-w-3xl rounded-[26px] bg-white p-5 shadow-2xl lg:p-7">
+        <div className="mb-5 flex items-start justify-between gap-4"><div><span className="text-xs font-black uppercase tracking-[.14em] text-[#197fb5]">Comunicare beneficiar</span><h2 className="mt-1 text-2xl font-bold text-[#082b4d]">Mesaje WhatsApp predefinite</h2><p className="mt-1 text-sm text-slate-500">Selectează branșamentul și mesajul. Textul poate fi modificat înainte de trimitere.</p></div><button onClick={()=>setWhatsAppOpen(false)} className="round-action" aria-label="Închide"><X size={18}/></button></div>
+        <div className="grid gap-4 md:grid-cols-2"><label className="text-xs font-bold text-slate-500">Branșament<select value={messageConnectionId} onChange={(event)=>chooseMessageConnection(event.target.value)} className="input-field mt-1.5 w-full bg-white">{items.map((item)=><option key={item.id} value={item.id}>{item.nib} · {item.fields.Beneficiar||'Beneficiar necompletat'}</option>)}</select></label><label className="text-xs font-bold text-slate-500">Tip mesaj<select value={messageTemplate} onChange={(event)=>chooseMessageTemplate(event.target.value as ConnectionWhatsAppTemplateKey)} className="input-field mt-1.5 w-full bg-white">{CONNECTION_WHATSAPP_TEMPLATES.map((template)=><option key={template.key} value={template.key}>{template.label}</option>)}</select></label></div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">{CONNECTION_WHATSAPP_TEMPLATES.map((template)=><button key={template.key} type="button" onClick={()=>chooseMessageTemplate(template.key)} className={`rounded-2xl border p-3 text-left transition ${messageTemplate===template.key?'border-[#78bfe1] bg-[#edf7fc]':'border-slate-200 hover:bg-slate-50'}`}><strong className="block text-sm text-[#082b4d]">{template.label}</strong><span className="mt-1 block text-xs text-slate-500">{template.description}</span></button>)}</div>
+        <label className="mt-4 block text-xs font-bold text-slate-500">Previzualizare și editare<textarea value={messageText} onChange={(event)=>setMessageText(event.target.value)} maxLength={4000} className="input-field mt-1.5 min-h-[190px] w-full resize-y bg-white text-sm leading-6"/></label>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-500">Destinatar: <strong>{items.find((item)=>item.id===messageConnectionId)?.fields.Telefon||'telefon necompletat'}</strong></p><div className="flex gap-2"><button onClick={()=>setWhatsAppOpen(false)} className="btn-secondary">Renunță</button><button onClick={sendWhatsAppMessage} disabled={busy==='whatsapp'||!messageText.trim()} className="btn-primary inline-flex items-center gap-2">{busy==='whatsapp'?<Loader2 size={17} className="animate-spin"/>:<MessageCircle size={17}/>} Trimite pe WhatsApp</button></div></div>
+      </div>
+    </div>}  </div>
 }

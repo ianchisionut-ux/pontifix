@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/bransamente', label: 'Branșamente', icon: 'bransamente' },
   { href: '/dashboard/formulare', label: 'Formulare', icon: 'formulare' },
   { href: '/dashboard/mesaje', label: 'Mesaje', icon: 'mesaje' },
+  { href: '/dashboard/chat-intern', label: 'Chat intern', icon: 'chat-intern' },
   { href: '/dashboard/rapoarte', label: 'Rapoarte', icon: 'statistici' },
   { href: '/dashboard/pontaje', label: 'Pontaje', icon: 'calendar' },
   { href: '/dashboard/angajati', label: 'Angajați', icon: 'clienti' },

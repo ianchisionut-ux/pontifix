@@ -26,6 +26,7 @@ import { SidebarClock } from './sidebar-clock'
 import { ElmontLogo } from './elmont-logo'
 import { LanguageSwitcher } from './language-switcher'
 import { useLanguage } from './language-provider'
+import { InternalChatNotifier } from './internal-chat/internal-chat-notifier'
 
 const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   calendar: Calendar,
@@ -46,6 +47,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   inbox: Inbox,
   bransamente: Zap,
   formulare: Files,
+  'chat-intern': MessagesSquare,
 }
 
 // amestecă o culoare hex cu alb, la un procent dat — produce o culoare SOLIDĂ (nu transparentă).
@@ -105,6 +107,7 @@ export function ResponsiveShell({
           '/dashboard/mesaje': data.needsOperatorCount > 0 ? data.needsOperatorCount : undefined,
           '/dashboard/programari': data.unseenConfirmationsCount > 0 ? data.unseenConfirmationsCount : undefined,
           '/dashboard/oferte': data.newOffersCount > 0 ? data.newOffersCount : undefined,
+          '/dashboard/chat-intern': data.internalChatCount > 0 ? data.internalChatCount : undefined,
         })
       } catch {
         // eșec silențios — reîncercăm la următorul interval
@@ -117,6 +120,15 @@ export function ResponsiveShell({
       clearInterval(timer)
     }
   }, [enableLiveBadges])
+
+  useEffect(() => {
+    function updateChatBadge(event: Event) {
+      const count = (event as CustomEvent<number>).detail
+      setLiveBadges((current) => ({ ...current, '/dashboard/chat-intern': count > 0 ? count : undefined }))
+    }
+    window.addEventListener('internal-chat-unread', updateChatBadge)
+    return () => window.removeEventListener('internal-chat-unread', updateChatBadge)
+  }, [])
 
   const displayNavItems = enableLiveBadges
     ? navItems.map((item) => ({ ...item, badge: item.href in liveBadges ? liveBadges[item.href] : item.badge }))
@@ -131,6 +143,7 @@ export function ResponsiveShell({
 
   return (
     <div className={`min-h-screen bg-[var(--surface-muted)] lg:grid transition-[grid-template-columns] ${sidebarCollapsed ? 'lg:grid-cols-[76px_1fr]' : 'lg:grid-cols-[216px_1fr]'}`}>
+      {enableLiveBadges && <InternalChatNotifier/>}
       {/* header mobil, doar sub lg */}
       <div className="lg:hidden sticky top-0 z-40 border-b border-[var(--border-soft)] screen-only" style={{ background: accentColor ? softTint : 'white' }}>
         <div className="flex items-center justify-between px-4 py-3">
