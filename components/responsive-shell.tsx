@@ -27,6 +27,7 @@ import { ElmontLogo } from './elmont-logo'
 import { LanguageSwitcher } from './language-switcher'
 import { useLanguage } from './language-provider'
 import { InternalChatNotifier } from './internal-chat/internal-chat-notifier'
+import { InternalChatDock } from './internal-chat/internal-chat-dock'
 
 const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   calendar: Calendar,
@@ -143,7 +144,7 @@ export function ResponsiveShell({
 
   return (
     <div className={`min-h-screen bg-[var(--surface-muted)] lg:grid transition-[grid-template-columns] ${sidebarCollapsed ? 'lg:grid-cols-[76px_1fr]' : 'lg:grid-cols-[216px_1fr]'}`}>
-      {enableLiveBadges && <InternalChatNotifier/>}
+      {enableLiveBadges && <><InternalChatNotifier/><InternalChatDock/></>}
       {/* header mobil, doar sub lg */}
       <div className="lg:hidden sticky top-0 z-40 border-b border-[var(--border-soft)] screen-only" style={{ background: accentColor ? softTint : 'white' }}>
         <div className="flex items-center justify-between px-4 py-3">
