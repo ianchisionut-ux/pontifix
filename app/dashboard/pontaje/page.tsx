@@ -39,6 +39,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
       month={month}
       companyName={business?.name ?? 'Elmont'}
       standardHours={standardHours}
+      canManage={(session as any)?.role !== 'STAFF'}
     />
   </div>
 }

@@ -8,6 +8,7 @@ import { normalizeOfferSheet } from '@/lib/offer-sheet'
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await getOfferAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
+  if (!access.canManage) return NextResponse.json({ error: 'Contul are acces doar pentru vizualizare.' }, { status: 403 })
   await ensureQuoteStorage()
   const { id } = await params
   const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "QuoteRequest" WHERE "id"=${id} AND ("businessId"=${access.businessId} OR "businessId" IS NULL) LIMIT 1`
@@ -17,4 +18,3 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   revalidatePath('/dashboard/oferte')
   return NextResponse.json({ success: true, offerData })
 }
-

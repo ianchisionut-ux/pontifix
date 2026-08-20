@@ -25,9 +25,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const session = await auth()
   if (!session) redirect('/login')
   const businessId = (session as any)?.businessId
+  const role = (session as any)?.role as string | undefined
   if (!businessId) redirect('/superadmin')
+  const navItems = role === 'STAFF' ? NAV_ITEMS.filter((item) => !['/dashboard/angajati', '/dashboard/concedii', '/dashboard/configurare'].includes(item.href)) : NAV_ITEMS
   const business = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true, brandColor: true } })
-  return <ResponsiveShell logoHref="/dashboard" logoLabel="Elmont" profileName={business?.name ?? 'Compania mea'} navItems={NAV_ITEMS} accentColor={'#197fb5'} accountContent={<SidebarUserBlock label={session.user?.email ?? 'Cont'} />} enableLiveBadges>
+  return <ResponsiveShell logoHref="/dashboard" logoLabel="Elmont" profileName={business?.name ?? 'Compania mea'} navItems={navItems} accentColor={'#197fb5'} accountContent={<SidebarUserBlock label={session.user?.email ?? 'Cont'} />} enableLiveBadges>
     {children}
   </ResponsiveShell>
 }

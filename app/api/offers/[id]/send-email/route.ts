@@ -11,6 +11,7 @@ export const runtime = 'nodejs'
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await getOfferAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
+  if (!access.canManage) return NextResponse.json({ error: 'Contul are acces doar pentru vizualizare.' }, { status: 403 })
   const emailTransport = await getEmailTransport(access.businessId)
   if (!emailTransport) return NextResponse.json({ error: 'Yahoo Mail nu este configurat sau este dezactivat.' }, { status: 503 })
   await ensureQuoteStorage()

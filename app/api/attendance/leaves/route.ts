@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   const session = await auth()
   const businessId = (session as any)?.businessId
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
+  if ((session as any)?.role === 'STAFF') return NextResponse.json({ error: 'Cont cu acces doar pentru vizualizare.' }, { status: 403 })
   const parsed = leaveSchema.safeParse(await req.json())
   if (!parsed.success || parsed.data.endDate < parsed.data.startDate) return NextResponse.json({ error: 'Perioadă invalidă.' }, { status: 400 })
   const employee = await prisma.attendanceEmployee.findFirst({ where: { id: parsed.data.employeeId, businessId } })

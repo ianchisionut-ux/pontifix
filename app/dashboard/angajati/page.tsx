@@ -9,6 +9,7 @@ export default async function EmployeesPage() {
   const session = await auth()
   const businessId = (session as any)?.businessId
   if (!businessId) redirect('/login')
+  if ((session as any)?.role === 'STAFF') redirect('/dashboard')
   const employees = await prisma.attendanceEmployee.findMany({
     where: { businessId },
     orderBy: [{ active: 'desc' }, { category: 'desc' }, { lastName: 'asc' }, { firstName: 'asc' }],

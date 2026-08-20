@@ -28,13 +28,14 @@ function cellText(entry?: Entry) {
   return note ? note.slice(0, 2).toUpperCase() : entry ? STATUS[entry.status].short : ''
 }
 
-export function MonthlyAttendanceSheet({ employees, initialEntries, year, month, companyName, standardHours }: {
+export function MonthlyAttendanceSheet({ employees, initialEntries, year, month, companyName, standardHours, canManage }: {
   employees: Employee[]
   initialEntries: Entry[]
   year: number
   month: number
   companyName: string
   standardHours: number
+  canManage: boolean
 }) {
   const router = useRouter()
   const [staff, setStaff] = useState(employees)
@@ -88,6 +89,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
     window.setTimeout(cleanup, 3000)
   }
   function openEditor(employee: Employee, day: number) {
+    if (!canManage) return
     const existing = entries[employee.id + ':' + dateKey(year, month, day)]
     setEditor({ employee, day }); setStatus(existing?.status ?? 'PRESENT'); setHours(String(existing?.hours ?? employee.dailyHours ?? standardHours)); setNote(existing?.note ?? '')
   }
@@ -110,6 +112,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
     try { await persist(employee.id, date, nextStatus, nextHours, nextNote) } catch { setEntries((current) => { const restored = { ...current }; if (previous) restored[key] = previous; else delete restored[key]; return restored }) }
   }
   function startCell(event: React.PointerEvent, employee: Employee, day: number) {
+    if (!canManage) return
     if (orderMode || tool === 'EDIT' || event.button !== 0) return
     const key = employee.id + ':' + dateKey(year, month, day)
     if (tool === 'COPY' && !copiedEntry) {
@@ -131,6 +134,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
     } catch { alert('Pontajul nu a putut fi salvat.') } finally { setSaving(false) }
   }
   async function moveEmployee(targetCategory: Category, targetId?: string) {
+    if (!canManage) return
     if (!draggedId) return
     const dragged = staff.find((employee) => employee.id === draggedId)
     if (!dragged) return
@@ -147,9 +151,9 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
   return <div className="attendance-page">
     <div className="attendance-toolbar no-print">
       <div><h1 className="text-2xl font-semibold">Foaie colectivă de prezență</h1><p className="text-sm text-slate-500 mt-1">Pensulă pentru completare · Copiere pentru starea, orele și notița unei căsuțe.</p></div>
-      <div className="flex flex-wrap items-center gap-2"><button onClick={() => setOrderMode((value) => !value)} className={orderMode ? 'btn-primary' : 'btn-secondary'}>{orderMode ? 'Finalizează ordinea' : 'Editare ordine'}</button><div className="attendance-month-picker"><button onClick={() => changeMonth(-1)}><ChevronLeft size={17}/></button><strong>{MONTHS[month - 1]} {year}</strong><button onClick={() => changeMonth(1)}><ChevronRight size={17}/></button></div><button className="btn-primary inline-flex items-center gap-2" onClick={printAttendance}><Printer size={17}/> Printează / PDF</button></div>
+      <div className="flex flex-wrap items-center gap-2">{canManage&&<button onClick={() => setOrderMode((value) => !value)} className={orderMode ? 'btn-primary' : 'btn-secondary'}>{orderMode ? 'Finalizează ordinea' : 'Editare ordine'}</button>}<div className="attendance-month-picker"><button onClick={() => changeMonth(-1)}><ChevronLeft size={17}/></button><strong>{MONTHS[month - 1]} {year}</strong><button onClick={() => changeMonth(1)}><ChevronRight size={17}/></button></div><button className="btn-primary inline-flex items-center gap-2" onClick={printAttendance}><Printer size={17}/> Printează / PDF</button></div>
     </div>
-    <div className="attendance-brushbar no-print">
+    <div className={canManage ? 'attendance-brushbar no-print' : 'hidden'}>
       <span className="attendance-brush-label">Instrument:</span>
       <button className={'attendance-brush ' + (tool === 'EDIT' ? 'selected' : '')} onClick={() => setTool('EDIT')}><MousePointer2 size={15}/> Selectare</button>
       {(Object.keys(STATUS) as Status[]).map((value) => <button key={value} className={'attendance-brush ' + (tool === value ? 'selected' : '')} onClick={() => setTool(value)}><b className={STATUS[value].className}>{STATUS[value].short}</b>{STATUS[value].label}</button>)}
@@ -166,7 +170,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
         <thead><tr><th className="attendance-nr">Nr.</th><th className="attendance-name">Nume și prenume</th>{Array.from({ length: days }, (_, index) => { const day = index + 1; const weekday = new Date(year, month - 1, day).getDay(); return <th key={day} className={weekday === 0 || weekday === 6 ? 'is-weekend' : ''}><span>{day}</span><small>{['D','L','M','M','J','V','S'][weekday]}</small></th> })}<th className="attendance-total">Ore</th><th className="attendance-total">P</th><th className="attendance-total">C</th></tr></thead>
         <tbody>{orderedStaff.map((employee, index) => <Fragment key={employee.id}>
           {(index === 0 || orderedStaff[index - 1].category !== employee.category) && <tr className="attendance-group-row" onDragOver={(event) => orderMode && event.preventDefault()} onDrop={() => moveEmployee(employee.category)}><th colSpan={days + 5}>{employee.category === 'TESA' ? 'TESA' : 'PRODUCȚIE'}</th></tr>}
-          <tr draggable={orderMode} onDragStart={() => setDraggedId(employee.id)} onDragEnd={() => setDraggedId(null)} onDragOver={(event) => orderMode && event.preventDefault()} onDrop={(event) => { event.stopPropagation(); moveEmployee(employee.category, employee.id) }} className={(orderMode ? 'attendance-order-row ' : '') + (draggedId === employee.id ? 'opacity-35' : '')}>
+          <tr draggable={canManage && orderMode} onDragStart={() => setDraggedId(employee.id)} onDragEnd={() => setDraggedId(null)} onDragOver={(event) => orderMode && event.preventDefault()} onDrop={(event) => { event.stopPropagation(); moveEmployee(employee.category, employee.id) }} className={(orderMode ? 'attendance-order-row ' : '') + (draggedId === employee.id ? 'opacity-35' : '')}>
             <td className="attendance-nr">{index + 1}</td><th className="attendance-name">{orderMode && <GripVertical size={13}/>}<span>{employee.lastName.toUpperCase()} {employee.firstName}</span><small>{employee.position || 'Angajat'} · {employee.dailyHours}h/zi</small></th>
             {Array.from({ length: days }, (_, dayIndex) => { const day = dayIndex + 1; const key = employee.id + ':' + dateKey(year, month, day); const entry = entries[key]; const weekday = new Date(year, month - 1, day).getDay(); return <td key={day} className={(weekday === 0 || weekday === 6 ? 'is-weekend ' : '') + (copySource === key ? 'copy-source' : '')}><button className={entry ? STATUS[entry.status].className : ''} onDoubleClick={() => !orderMode && tool === 'EDIT' && openEditor(employee, day)} onPointerDown={(event) => startCell(event, employee, day)} onPointerEnter={() => painting.current && paintCell(employee, day)} title={entry ? STATUS[entry.status].label + ' · ' + (entry.hours || 0) + ' ore' + (entry.note ? ' · ' + entry.note : '') : 'Nepontat'}>{cellText(entry)}</button></td> })}
             <td className="attendance-total">{totals[employee.id].hours || ''}</td><td className="attendance-total">{totals[employee.id].present || ''}</td><td className="attendance-total">{totals[employee.id].leave || ''}</td>

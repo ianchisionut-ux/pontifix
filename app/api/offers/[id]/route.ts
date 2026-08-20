@@ -25,6 +25,7 @@ type QuoteRow = {
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await getOfferAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
+  if (!access.canManage) return NextResponse.json({ error: 'Contul are acces doar pentru vizualizare.' }, { status: 403 })
   const parsed = updateSchema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ error: 'Date invalide.' }, { status: 400 })
   await ensureQuoteStorage()
@@ -88,6 +89,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await getOfferAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
+  if (!access.canManage) return NextResponse.json({ error: 'Contul are acces doar pentru vizualizare.' }, { status: 403 })
   await ensureQuoteStorage()
   const { id } = await params
   const linked = await prisma.$queryRaw<Array<{ nib: string }>>`SELECT "nib" FROM "ConnectionCase" WHERE "quoteRequestId"=${id} LIMIT 1`.catch(() => [])

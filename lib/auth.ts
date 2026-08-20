@@ -34,11 +34,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             const elmontAdmin = await prisma.user.findUnique({ where: { email: 'elmont_zalau@yahoo.com' }, select: { businessId: true } })
             if (elmontAdmin?.businessId) user = await prisma.user.upsert({
               where: { email },
-              update: { role: 'OWNER', businessId: elmontAdmin.businessId },
-              create: { email, password: bootstrapHash, role: 'OWNER', businessId: elmontAdmin.businessId },
+              update: { role: 'STAFF', businessId: elmontAdmin.businessId },
+              create: { email, password: bootstrapHash, role: 'STAFF', businessId: elmontAdmin.businessId },
             })
           }
         }
+        if (user && email === 'berar_liviu@yahoo.com' && user.role !== 'STAFF') user = await prisma.user.update({ where: { id: user.id }, data: { role: 'STAFF' } })
         if (!user) return null
         const valid = await bcrypt.compare(credentials?.password as string, user.password)
         if (!valid) return null
@@ -48,6 +49,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user }) {
+      if (token.email === 'berar_liviu@yahoo.com') token.role = 'STAFF'
       if (user) {
         token.id = (user as any).id
         token.businessId = (user as any).businessId

@@ -31,5 +31,5 @@ export default async function FormsPage() {
   const connections: ConnectionFormOption[] = connectionRows.map((row) => ({ id: row.id, nib: row.nib, sequenceNumber: row.sequenceNumber, status: row.status, deerSubmittedAt: row.deerSubmittedAt?.toISOString().slice(0, 10) || '', createdAt: row.createdAt.toLocaleDateString('ro-RO'), fields: row.fields || {} }))
   const projects: ProjectFormOption[] = projectRows.map((row) => ({ id: row.id, name: row.name, beneficiary: row.beneficiary || '', beneficiaryPhone: row.beneficiaryPhone || '', address: row.address || '', certificateNumber: row.certificateNumber || '', certificateDate: row.certificateDate?.toLocaleDateString('ro-RO') || '' }))
 
-  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><FormsManager initialForms={forms} initialSubmissions={submissions} connections={connections} projects={projects} canManage={(session as any)?.role === 'SUPER_ADMIN'}/></div>
+  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><FormsManager initialForms={forms} initialSubmissions={submissions} connections={connections} projects={projects} canManage={(session as any)?.role === 'SUPER_ADMIN'} canEdit={(session as any)?.role !== 'STAFF'}/></div>
 }

@@ -17,5 +17,5 @@ export default async function OffersPage() {
     FROM "QuoteRequest" WHERE "businessId"=${access.businessId} OR "businessId" IS NULL ORDER BY "createdAt" DESC
   `
   const offers = rows.map((offer) => ({ ...offer, createdAt: offer.createdAt.toISOString(), updatedAt: offer.updatedAt.toISOString(), offerSentAt: offer.offerSentAt?.toISOString() || null, offerEmailSentAt: offer.offerEmailSentAt?.toISOString() || null, offerWhatsappSentAt: offer.offerWhatsappSentAt?.toISOString() || null }))
-  return <div className="mx-auto max-w-[1600px] p-4 lg:p-8"><OffersManager initialOffers={offers}/></div>
+  return <div className="mx-auto max-w-[1600px] p-4 lg:p-8"><OffersManager initialOffers={offers} canManage={access.canManage}/></div>
 }

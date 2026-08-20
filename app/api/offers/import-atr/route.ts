@@ -23,6 +23,7 @@ const schema = z.object({
 export async function POST(request: NextRequest) {
   const access = await getOfferAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
+  if (!access.canManage) return NextResponse.json({ error: 'Contul are acces doar pentru vizualizare.' }, { status: 403 })
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success || !parsed.data.atrPathname.startsWith('cereri-oferta/')) {
     return NextResponse.json({ error: 'Document ATR invalid.' }, { status: 400 })

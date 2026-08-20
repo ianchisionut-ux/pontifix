@@ -18,8 +18,9 @@ const fields = {
 const employeeSchema = z.object(fields)
 const updateSchema = z.object({ id: z.string().min(1), ...fields, active: z.boolean().default(true) })
 
-async function businessFromSession() {
+async function businessFromSession(write = false) {
   const session = await auth()
+  if (write && (session as any)?.role === 'STAFF') return undefined
   return (session as any)?.businessId as string | undefined
 }
 
@@ -31,7 +32,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const businessId = await businessFromSession()
+  const businessId = await businessFromSession(true)
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
   const parsed = employeeSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Datele angajatului sunt incomplete.' }, { status: 400 })
@@ -40,7 +41,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const businessId = await businessFromSession()
+  const businessId = await businessFromSession(true)
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
   const parsed = updateSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Datele angajatului sunt incomplete.' }, { status: 400 })
@@ -62,7 +63,7 @@ const reorderSchema = z.object({
 })
 
 export async function PUT(req: NextRequest) {
-  const businessId = await businessFromSession()
+  const businessId = await businessFromSession(true)
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
   const parsed = reorderSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Ordinea nu este validă.' }, { status: 400 })

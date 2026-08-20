@@ -11,5 +11,5 @@ export default async function MessagesPage() {
   if(!businessId)redirect('/login')
   await ensureMessageStorage()
   const rows=await prisma.$queryRaw<any[]>`SELECT "id", "name", "email", "phone", "message", "status", "internalNote", "createdAt" FROM "CustomerMessage" WHERE "businessId"=${businessId} OR "businessId" IS NULL ORDER BY "createdAt" DESC`
-  return <div className="mx-auto max-w-[1300px] p-4 lg:p-8"><MessagesManager initialMessages={rows.map(row=>({...row,createdAt:row.createdAt.toISOString()}))}/></div>
+  return <div className="mx-auto max-w-[1300px] p-4 lg:p-8"><MessagesManager initialMessages={rows.map(row=>({...row,createdAt:row.createdAt.toISOString()}))} canManage={(session as any)?.role !== 'STAFF'}/></div>
 }

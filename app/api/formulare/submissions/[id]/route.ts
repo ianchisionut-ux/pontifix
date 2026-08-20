@@ -8,6 +8,7 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   const session = await auth()
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
+  if ((session as any)?.role === 'STAFF') return NextResponse.json({ error: 'Cont cu acces doar pentru vizualizare.' }, { status: 403 })
   await ensureFormStorage(businessId)
   const { id } = await params
   const changed = Number(await prisma.$executeRaw`DELETE FROM "FormSubmission" WHERE "id"=${id} AND "businessId"=${businessId}`)

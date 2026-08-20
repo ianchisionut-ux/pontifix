@@ -14,6 +14,7 @@ export default async function SettingsPage() {
   const businessId = (session as any)?.businessId as string | undefined
   const isSuperAdmin = (session as any)?.role === 'SUPER_ADMIN'
   if (!businessId) redirect('/login')
+  if ((session as any)?.role === 'STAFF') redirect('/dashboard')
 
   if (isSuperAdmin) await ensureWhatsAppStorage()
 

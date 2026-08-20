@@ -8,5 +8,5 @@ export async function getOfferAccess() {
   if (!businessId) return null
   const business = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true } })
   if (role !== 'SUPER_ADMIN' && !business?.name.toLocaleUpperCase('ro-RO').includes('ELMONT')) return null
-  return { session, businessId, role }
+  return { session, businessId, role, canManage: role !== 'STAFF' }
 }
