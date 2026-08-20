@@ -9,6 +9,7 @@ export default async function TimesheetsPage({ searchParams }: { searchParams: P
   const session = await auth()
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) redirect('/login')
+  if ((session as any)?.role === 'STAFF') redirect('/dashboard')
 
   const params = await searchParams
   const requested = /^\d{4}-\d{2}$/.test(params.month || '') ? params.month! : new Date().toISOString().slice(0, 7)
