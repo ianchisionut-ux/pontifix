@@ -16,6 +16,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
+  const [rememberMe, setRememberMe] = useState(true)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -23,12 +24,13 @@ export default function LoginPage() {
     event.preventDefault()
     setError('')
     setLoading(true)
-    const result = await signIn('credentials', { email, password, redirect: false })
+    const result = await signIn('credentials', { email, password, remember: rememberMe ? 'true' : 'false', redirect: false })
     if (result?.error) {
       setError('Email sau parolă greșită.')
       setLoading(false)
       return
     }
+    await fetch('/api/auth/remember-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ remember: rememberMe }) }).catch(() => undefined)
     router.push('/dashboard')
     router.refresh()
   }
@@ -68,6 +70,7 @@ export default function LoginPage() {
                 <button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-xl p-2 text-slate-400 hover:bg-[#edf7fc] hover:text-[#197fb5]" aria-label={showPassword ? 'Ascunde parola' : 'Arată parola'}>{showPassword ? <EyeOff size={19}/> : <Eye size={19}/>}</button>
               </span>
             </label>
+            <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-slate-600"><input type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} className="h-5 w-5 rounded border-slate-300 accent-[#197fb5]"/><span>{tr('Ține-mă autentificat pe acest dispozitiv')}</span></label>
             {error && <p className="rounded-xl bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-600">{error}</p>}
             <button className="group flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#0d5d8b] to-[#2f91c8] font-extrabold text-white shadow-xl shadow-[#197fb5]/20 transition hover:-translate-y-0.5 disabled:cursor-wait disabled:opacity-70" disabled={loading}>{loading ? tr('Se conectează...') : <>{tr('Intră în portal')} <ArrowRight size={18} className="transition group-hover:translate-x-1"/></>}</button>
           </form>
