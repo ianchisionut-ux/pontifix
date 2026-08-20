@@ -14,6 +14,7 @@ const schema = z.object({
   address: z.string().trim().nullable().optional(),
   description: z.string().trim().nullable().optional(),
   status: z.enum(['ACTIVE', 'ON_HOLD', 'COMPLETED', 'ARCHIVED']).optional(),
+  contractSigned: z.boolean().optional(),
   constructionAuthorizationStatus: z.enum(['REQUIRED', 'SUBMITTED', 'OBTAINED']).optional(),
   documentUrl: z.string().trim().nullable().optional(),
   documentName: z.string().trim().nullable().optional(),

@@ -8,7 +8,8 @@ import { rateLimit } from './rate-limit'
 // iar adapter-ul ar căuta tabele (Account, Session, VerificationToken) care
 // nu există în schema noastră (avem doar User simplu, cu parolă hash-uită).
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  session: { strategy: 'jwt' },
+  session: { strategy: 'jwt', maxAge: 60 * 60 * 24 * 90, updateAge: 60 * 60 * 24 },
+  jwt: { maxAge: 60 * 60 * 24 * 90 },
   providers: [
     Credentials({
       credentials: { email: {}, password: {} },

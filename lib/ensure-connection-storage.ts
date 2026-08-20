@@ -11,6 +11,7 @@ export function ensureConnectionStorage() {
       "nib" TEXT,
       "status" TEXT NOT NULL DEFAULT 'DOSAR_APROBAT',
       "quoteRequestId" TEXT,
+      "deerSubmittedAt" DATE,
       "fields" JSONB NOT NULL DEFAULT '{}'::jsonb,
       "atrPathname" TEXT,
       "atrName" TEXT,
@@ -19,7 +20,7 @@ export function ensureConnectionStorage() {
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT "ConnectionCase_pkey" PRIMARY KEY ("id")
     )`).then(async () => {
-      const columns = [`"sequenceNumber" INTEGER`, `"nib" TEXT`, `"status" TEXT NOT NULL DEFAULT 'DOSAR_APROBAT'`, `"quoteRequestId" TEXT`]
+      const columns = [`"sequenceNumber" INTEGER`, `"nib" TEXT`, `"status" TEXT NOT NULL DEFAULT 'DOSAR_APROBAT'`, `"quoteRequestId" TEXT`, `"deerSubmittedAt" DATE`]
       for (const column of columns) await prisma.$executeRawUnsafe(`ALTER TABLE "ConnectionCase" ADD COLUMN IF NOT EXISTS ${column}`)
       await prisma.$executeRawUnsafe(`WITH ranked AS (
         SELECT "id", EXTRACT(YEAR FROM "createdAt")::int AS year,

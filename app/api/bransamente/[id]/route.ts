@@ -10,7 +10,8 @@ import { CONNECTION_STATUSES } from '@/lib/connection-status'
 const updateSchema = z.object({
   fields: connectionFieldsSchema.optional(),
   status: z.enum(CONNECTION_STATUSES).optional(),
-}).refine((value) => value.fields || value.status, 'Nicio modificare.')
+  deerSubmittedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+}).refine((value) => value.fields || value.status || value.deerSubmittedAt !== undefined, 'Nicio modificare.')
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await getConnectionAccess()
@@ -23,6 +24,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   let changed = 0
   if (parsed.data.fields) changed = Number(await prisma.$executeRaw`UPDATE "ConnectionCase" SET "fields"=${JSON.stringify(parsed.data.fields)}::jsonb, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${access.businessId}`)
   if (parsed.data.status) changed = Number(await prisma.$executeRaw`UPDATE "ConnectionCase" SET "status"=${parsed.data.status}, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${access.businessId}`)
+  if (parsed.data.deerSubmittedAt !== undefined) {
+    const deerSubmittedAt = parsed.data.deerSubmittedAt ? new Date(`${parsed.data.deerSubmittedAt}T00:00:00.000Z`) : null
+    changed = Number(await prisma.$executeRaw`UPDATE "ConnectionCase" SET "deerSubmittedAt"=${deerSubmittedAt}, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${access.businessId}`)
+  }
   if (!changed) return NextResponse.json({ error: 'Branșament inexistent.' }, { status: 404 })
   return NextResponse.json({ success: true })
 }

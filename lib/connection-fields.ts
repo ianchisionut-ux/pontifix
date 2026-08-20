@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 export const CONNECTION_FIELD_GROUPS = [
-  { title: 'Identificare', fields: ['Beneficiar', 'Telefon', 'Entitate'] },
+  { title: 'Identificare', fields: ['Beneficiar', 'CnpCif', 'Telefon', 'Entitate'] },
   { title: 'Adresă', fields: ['Judet', 'Oras', 'Sat', 'Strada', 'Nr', 'Nrloc', 'Bloc', 'Ap'] },
   { title: 'Amplasament', fields: ['Amplasament', 'AmplasamentA3'] },
   { title: 'ATR / Branșament', fields: ['ATR', 'TipBransament', 'PTA', 'Solutia'] },
@@ -10,7 +10,7 @@ export const CONNECTION_FIELD_GROUPS = [
 ] as const
 
 export const CONNECTION_FIELD_LABELS: Record<string, string> = {
-  Beneficiar: 'Beneficiar', Telefon: 'Telefon', Entitate: 'Entitate / UAT',
+  Beneficiar: 'Beneficiar', CnpCif: 'CNP / CIF', Telefon: 'Telefon', Entitate: 'Entitate / UAT',
   Judet: 'Județ', Oras: 'Oraș', Sat: 'Localitate / sat', Strada: 'Strada', Nr: 'Număr',
   Nrloc: 'Număr loc consum', Bloc: 'Bloc', Ap: 'Apartament', Amplasament: 'Amplasament complet',
   AmplasamentA3: 'Amplasament dosar A3', ATR: 'Număr / dată ATR', TipBransament: 'Tip branșament',
@@ -25,7 +25,7 @@ export type ConnectionFields = Record<(typeof CONNECTION_FIELDS)[number], string
 
 export function defaultConnectionFields(): ConnectionFields {
   return {
-    Beneficiar: '', Telefon: '', Entitate: 'Mun. Zalău', Judet: 'Sălaj', Oras: 'Zalău', Sat: '',
+    Beneficiar: '', CnpCif: '', Telefon: '', Entitate: 'Mun. Zalău', Judet: 'Sălaj', Oras: 'Zalău', Sat: '',
     Strada: '', Nr: '', Nrloc: '', Bloc: '', Ap: '', Amplasament: '', AmplasamentA3: 'Jud. Sălaj, ',
     ATR: '', PTA: '', Solutia: '', SumaFaraTVA: '', NrContract: '01',
     DATA: new Date().toLocaleDateString('ro-RO'), KW: '05.00 KW', KW2: '05.00', KVA: '05.56 kVA',
@@ -45,6 +45,7 @@ export type ConnectionCaseDto = {
   nib: string
   status: import('@/lib/connection-status').ConnectionStatus
   quoteRequestId: string | null
+  deerSubmittedAt: string | null
   fields: ConnectionFields
   atrPathname: string | null
   atrName: string | null

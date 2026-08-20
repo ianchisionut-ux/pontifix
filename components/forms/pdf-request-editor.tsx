@@ -6,28 +6,34 @@ import { uploadPresigned } from '@vercel/blob/client'
 import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/components/language-provider'
 import type { FormField, FormSubmissionDto, FormTemplateDto } from '@/lib/ensure-form-storage'
+import { CONNECTION_FIELDS, CONNECTION_FIELD_LABELS } from '@/lib/connection-fields'
 
-export type ConnectionFormOption = { id: string; nib: string; fields: Record<string, string> }
+export type ConnectionFormOption = { id: string; nib: string; sequenceNumber: number; status: string; deerSubmittedAt: string; createdAt: string; fields: Record<string, string> }
 export type ProjectFormOption = { id: string; name: string; beneficiary: string; beneficiaryPhone: string; address: string; certificateNumber: string; certificateDate: string }
 
-const BINDINGS = [
-  ['', 'Completare manuală'], ['connection.Beneficiar', 'Branșament: Beneficiar'],
-  ['connection.Telefon', 'Branșament: Telefon'], ['connection.Amplasament', 'Branșament: Amplasament'],
-  ['connection.Entitate', 'Branșament: Entitate / UAT'], ['connection.NIB', 'Branșament: NIB'],
-  ['connection.ATR', 'Branșament: ATR'], ['connection.TipBransament', 'Branșament: Tip branșament'],
-  ['connection.Oras', 'Branșament: Oraș'], ['connection.Judet', 'Branșament: Județ'],
-  ['connection.Strada', 'Branșament: Strada'], ['connection.Nr', 'Branșament: Număr'],
+const BINDINGS: ReadonlyArray<readonly [string, string]> = [
+  ['', 'Completare manuală'],
+  ['connection.NIB', 'Branșament: NIB'],
+  ['connection.sequenceNumber', 'Branșament: Număr de ordine'],
+  ['connection.status', 'Branșament: Stadiu dosar'],
+  ['connection.deerSubmittedAt', 'Branșament: Data predării la DEER'],
+  ['connection.createdAt', 'Branșament: Data înregistrării'],
   ['connection.object', 'Branșament: Obiect complet'],
+  ...CONNECTION_FIELDS.map((field) => [`connection.${field}`, `Branșament: ${CONNECTION_FIELD_LABELS[field] || field}`] as const),
   ['project.name', 'Proiect: Denumire'], ['project.beneficiary', 'Proiect: Beneficiar'],
   ['project.beneficiaryPhone', 'Proiect: Telefon beneficiar'], ['project.address', 'Proiect: Amplasament / adresă'],
   ['project.certificateNumber', 'Proiect: Număr certificat'], ['project.certificateDate', 'Proiect: Data certificatului'],
-] as const
+]
 
 function boundValue(binding: string | undefined, connection?: ConnectionFormOption, project?: ProjectFormOption) {
   if (!binding) return ''
   if (binding.startsWith('project.')) return project?.[binding.replace('project.', '') as keyof ProjectFormOption] || ''
   if (!connection) return ''
   if (binding === 'connection.NIB') return connection.nib
+  if (binding === 'connection.sequenceNumber') return String(connection.sequenceNumber)
+  if (binding === 'connection.status') return connection.status
+  if (binding === 'connection.deerSubmittedAt') return connection.deerSubmittedAt
+  if (binding === 'connection.createdAt') return connection.createdAt
   if (binding === 'connection.object') {
     const f = connection.fields
     const address = f.Amplasament || [f.Oras, f.Strada && `Str. ${f.Strada}`, f.Nr && `nr. ${f.Nr}`].filter(Boolean).join(', ')

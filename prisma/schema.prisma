@@ -864,6 +864,7 @@ model Project {
   address                         String?
   description                     String?
   status                          ProjectStatus     @default(ACTIVE)
+  contractSigned                  Boolean           @default(false)
   constructionAuthorizationStatus ApprovalStatus    @default(REQUIRED)
   documentUrl                     String?
   documentName                    String?
