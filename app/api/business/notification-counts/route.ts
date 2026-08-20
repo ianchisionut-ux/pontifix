@@ -13,23 +13,17 @@ export async function GET() {
   const userId = (session as any)?.userId as string | undefined
   if (!businessId || !userId) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
   await Promise.all([ensureQuoteStorage(), ensureMessageStorage(), ensureInternalChatStorage()])
-  const rows = await prisma.$queryRaw<Array<{ count: bigint }>>`
-    SELECT COUNT(*)::bigint AS "count" FROM "QuoteRequest"
-    WHERE "status" = 'NEW' AND ("businessId" = ${businessId} OR "businessId" IS NULL)
-  `
-  const messageRows = await prisma.$queryRaw<Array<{ count: bigint }>>`
-    SELECT COUNT(*)::bigint AS "count" FROM "CustomerMessage"
-    WHERE "status"='NEW' AND ("businessId"=${businessId} OR "businessId" IS NULL)
-  `
-  const internalRows = await prisma.$queryRaw<Array<{ count: bigint }>>`
-    SELECT COUNT(*)::bigint AS "count" FROM "InternalChatReceipt" r
-    JOIN "InternalChatMessage" m ON m."id"=r."messageId"
-    WHERE r."userId"=${userId} AND r."readAt" IS NULL AND m."businessId"=${businessId}
+  const rows = await prisma.$queryRaw<Array<{ offers: bigint; messages: bigint; internal: bigint }>>`
+    SELECT
+      (SELECT COUNT(*) FROM "QuoteRequest" WHERE "status"='NEW' AND ("businessId"=${businessId} OR "businessId" IS NULL))::bigint AS "offers",
+      (SELECT COUNT(*) FROM "CustomerMessage" WHERE "status"='NEW' AND ("businessId"=${businessId} OR "businessId" IS NULL))::bigint AS "messages",
+      (SELECT COUNT(*) FROM "InternalChatReceipt" r JOIN "InternalChatMessage" m ON m."id"=r."messageId"
+        WHERE r."userId"=${userId} AND r."readAt" IS NULL AND m."businessId"=${businessId})::bigint AS "internal"
   `
   return NextResponse.json({
-    needsOperatorCount: Number(messageRows[0]?.count || 0),
+    needsOperatorCount: Number(rows[0]?.messages || 0),
     unseenConfirmationsCount: 0,
-    newOffersCount: Number(rows[0]?.count || 0),
-    internalChatCount: Number(internalRows[0]?.count || 0),
+    newOffersCount: Number(rows[0]?.offers || 0),
+    internalChatCount: Number(rows[0]?.internal || 0),
   })
 }

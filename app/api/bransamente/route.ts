@@ -21,6 +21,10 @@ export async function POST(request: NextRequest) {
   if (atrPathname && !atrPathname.startsWith('bransamente/')) return NextResponse.json({ error: 'Cale ATR invalidă.' }, { status: 400 })
   await ensureConnectionStorage()
   const createdByEmail = access.session?.user?.email || null
-  const created = await createConnectionCase({ businessId: access.businessId, fields, atrPathname, atrName, createdByEmail })
-  return NextResponse.json({ success: true, ...created }, { status: 201 })
+  try {
+    const created = await createConnectionCase({ businessId: access.businessId, fields, atrPathname, atrName, createdByEmail })
+    return NextResponse.json({ success: true, ...created }, { status: 201 })
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Branșamentul nu a putut fi creat.' }, { status: 409 })
+  }
 }

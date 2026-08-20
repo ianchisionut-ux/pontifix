@@ -27,7 +27,7 @@ export function defaultConnectionFields(): ConnectionFields {
   return {
     Beneficiar: '', CnpCif: '', Telefon: '', Entitate: 'Mun. Zalău', Judet: 'Sălaj', Oras: 'Zalău', Sat: '',
     Strada: '', Nr: '', Nrloc: '', Bloc: '', Ap: '', Amplasament: '', AmplasamentA3: 'Jud. Sălaj, ',
-    ATR: '', PTA: '', Solutia: '', SumaFaraTVA: '', NrContract: '01',
+    ATR: '', PTA: '', Solutia: '', SumaFaraTVA: '', NrContract: '',
     DATA: new Date().toLocaleDateString('ro-RO'), KW: '05.00 KW', KW2: '05.00', KVA: '05.56 kVA',
     TipBransament: 'BRANȘAMENT ELECTRIC TRIFAZAT', NrSX: '', DataSX: '',
   }

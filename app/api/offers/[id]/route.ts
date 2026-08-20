@@ -12,6 +12,7 @@ const updateSchema = z.object({
   status: z.enum(['NEW', 'REVIEWING', 'QUOTED', 'ACCEPTED', 'REJECTED', 'ARCHIVED']).optional(),
   internalNotes: z.string().trim().max(4000).nullable().optional(),
   estimatedValue: z.number().min(0).max(1_000_000_000).nullable().optional(),
+  contractNumber: z.string().trim().max(40).optional(),
 })
 
 type QuoteRow = {
@@ -35,12 +36,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   `
   if (!current[0]) return NextResponse.json({ error: 'Cererea nu există.' }, { status: 404 })
   const quote = current[0]
-  const next = { ...quote, ...parsed.data }
-  await prisma.$executeRaw`
-    UPDATE "QuoteRequest" SET "status"=${next.status}, "internalNotes"=${next.internalNotes},
-      "estimatedValue"=${next.estimatedValue}, "businessId"=COALESCE("businessId", ${access.businessId}), "updatedAt"=CURRENT_TIMESTAMP
-    WHERE "id"=${id} AND ("businessId"=${access.businessId} OR "businessId" IS NULL)
-  `
+  const { contractNumber, ...quotePatch } = parsed.data
+  const next = { ...quote, ...quotePatch }
+  if (next.status === 'ACCEPTED' && quote.status !== 'ACCEPTED' && !contractNumber) return NextResponse.json({ error: 'Introdu Numărul contractului pentru a genera NIB-ul.' }, { status: 400 })
 
   let nib: string | null = null
   let notificationSent = false
@@ -48,16 +46,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     const ocr = quote.atrOcrData || {}
     const offer = quote.offerData || {}
     const fields = defaultConnectionFields()
+    fields.NrContract = contractNumber || fields.NrContract
     fields.Beneficiar = String(offer.customerName || ocr.customerName || quote.name || '')
     fields.Telefon = String(offer.customerPhone || ocr.customerPhone || quote.phone || '')
     fields.Amplasament = String(offer.location || ocr.workAddress || quote.location || '')
     fields.AmplasamentA3 = fields.Amplasament || fields.AmplasamentA3
     fields.ATR = [ocr.atrNumber && `nr. ${ocr.atrNumber}`, ocr.atrDate && `din ${ocr.atrDate}`].filter(Boolean).join(' ')
     fields.TipBransament = String(offer.connectionType || fields.TipBransament)
-    const created = await createConnectionCase({
-      businessId: access.businessId, fields, atrPathname: quote.atrPathname, atrName: quote.atrName,
-      createdByEmail: access.session?.user?.email || null, quoteRequestId: id,
-    })
+    let created: Awaited<ReturnType<typeof createConnectionCase>>
+    try {
+      created = await createConnectionCase({
+        businessId: access.businessId, fields, atrPathname: quote.atrPathname, atrName: quote.atrName,
+        createdByEmail: access.session?.user?.email || null, quoteRequestId: id,
+      })
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'NIB-ul nu a putut fi atribuit.' }, { status: 409 })
+    }
     nib = created.nib
     if (created.created && quote.email) {
       const appUrl = (process.env.APP_URL || 'https://elmontz.vercel.app').replace(/\/$/, '')
@@ -69,6 +73,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
   }
 
+  await prisma.$executeRaw`
+    UPDATE "QuoteRequest" SET "status"=${next.status}, "internalNotes"=${next.internalNotes},
+      "estimatedValue"=${next.estimatedValue}, "businessId"=COALESCE("businessId", ${access.businessId}), "updatedAt"=CURRENT_TIMESTAMP
+    WHERE "id"=${id} AND ("businessId"=${access.businessId} OR "businessId" IS NULL)
+  `
   revalidatePath('/dashboard/oferte')
   revalidatePath('/dashboard/bransamente')
   revalidatePath('/dashboard')
@@ -85,6 +94,7 @@ export async function DELETE(_request: NextRequest, { params }: { params: Promis
   if (linked[0]) return NextResponse.json({ error: `Oferta are deja branșamentul ${linked[0].nib} și nu poate fi ștearsă.` }, { status: 409 })
   const removed = await prisma.$executeRaw`DELETE FROM "QuoteRequest" WHERE "id"=${id} AND ("businessId"=${access.businessId} OR "businessId" IS NULL)`
   if (!removed) return NextResponse.json({ error: 'Cererea nu există.' }, { status: 404 })
+
   revalidatePath('/dashboard/oferte')
   return NextResponse.json({ success: true })
 }

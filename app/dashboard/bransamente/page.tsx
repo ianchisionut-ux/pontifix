@@ -23,5 +23,5 @@ export default async function ConnectionsPage() {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }))
-  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><ConnectionsManager initialCases={cases} canManage={access.canManage}/></div>
+  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><ConnectionsManager initialCases={cases} canManage={access.canManage} canEditDeerDate={access.canEditDeerDate}/></div>
 }

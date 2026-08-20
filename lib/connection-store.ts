@@ -3,6 +3,15 @@ import { prisma } from '@/lib/prisma'
 import { ensureConnectionStorage } from '@/lib/ensure-connection-storage'
 import type { ConnectionFields } from '@/lib/connection-fields'
 
+export function connectionIdentityFromContract(contractNumber: string, year = new Date().getFullYear()) {
+  const match = contractNumber.trim().match(/\d+/)
+  const sequenceNumber = match ? Number.parseInt(match[0], 10) : 0
+  if (!Number.isSafeInteger(sequenceNumber) || sequenceNumber < 1) {
+    throw new Error('Completează un Număr contract valid înainte de salvare.')
+  }
+  return { sequenceNumber, nib: `NIB-${year}-${String(sequenceNumber).padStart(4, '0')}` }
+}
+
 export async function createConnectionCase(input: {
   businessId: string
   fields: ConnectionFields
@@ -20,13 +29,12 @@ export async function createConnectionCase(input: {
       if (existing[0]) return { ...existing[0], created: false }
     }
     const year = new Date().getFullYear()
+    const { sequenceNumber, nib } = connectionIdentityFromContract(input.fields.NrContract, year)
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`connection-nib:${input.businessId}:${year}`}))`
-    const nextRows = await tx.$queryRaw<Array<{ next: number }>>`
-      SELECT COALESCE(MAX("sequenceNumber"), 0)::int + 1 AS "next"
-      FROM "ConnectionCase" WHERE "businessId"=${input.businessId} AND "nib" LIKE ${`NIB-${year}-%`}
+    const duplicate = await tx.$queryRaw<Array<{ id: string }>>`
+      SELECT "id" FROM "ConnectionCase" WHERE "businessId"=${input.businessId} AND "nib"=${nib} LIMIT 1
     `
-    const sequenceNumber = nextRows[0]?.next || 1
-    const nib = `NIB-${year}-${String(sequenceNumber).padStart(4, '0')}`
+    if (duplicate[0]) throw new Error(`Numărul de contract ${input.fields.NrContract} este deja folosit (${nib}).`)
     const id = crypto.randomUUID()
     await tx.$executeRaw`
       INSERT INTO "ConnectionCase" ("id", "businessId", "sequenceNumber", "nib", "status", "quoteRequestId", "fields", "atrPathname", "atrName", "createdByEmail")

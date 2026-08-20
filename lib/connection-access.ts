@@ -5,5 +5,5 @@ export async function getConnectionAccess() {
   const businessId = (session as any)?.businessId as string | undefined
   const role = (session as any)?.role as string | undefined
   if (!businessId) return null
-  return { session, businessId, role, canManage: role === 'SUPER_ADMIN' }
+  return { session, businessId, role, canManage: role === 'SUPER_ADMIN', canEditDeerDate: role === 'SUPER_ADMIN' || role === 'OWNER' }
 }

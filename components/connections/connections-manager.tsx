@@ -16,7 +16,7 @@ function addressHints(address: string) {
   return { county, city, street, number }
 }
 
-export function ConnectionsManager({ initialCases, canManage }: { initialCases: ConnectionCaseDto[]; canManage: boolean }) {
+export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }: { initialCases: ConnectionCaseDto[]; canManage: boolean; canEditDeerDate: boolean }) {
   const [items, setItems] = useState(initialCases)
   const [selectedId, setSelectedId] = useState(initialCases[0]?.id || '')
   const selected = items.find((item) => item.id === selectedId) || null
@@ -44,7 +44,7 @@ export function ConnectionsManager({ initialCases, canManage }: { initialCases: 
   }
 
   async function updateDeerSubmittedAt(item: ConnectionCaseDto, deerSubmittedAt: string) {
-    if (!canManage) return
+    if (!canEditDeerDate) return
     setBusy(`deer-${item.id}`)
     const response = await fetch(`/api/bransamente/${item.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
@@ -59,10 +59,14 @@ export function ConnectionsManager({ initialCases, canManage }: { initialCases: 
     if (!canManage) return
     if (file && file.type !== 'application/pdf') return alert('ATR-ul trebuie să fie PDF.')
     if (file && file.size > 20 * 1024 * 1024) return alert('ATR-ul poate avea maximum 20 MB.')
+    const contractNumber = window.prompt('Introdu Numărul contractului pentru acest branșament:')?.trim()
+    if (!contractNumber) return
+    if (!/\d/.test(contractNumber)) return alert('Numărul contractului trebuie să conțină cel puțin o cifră.')
     setBusy('create')
     setNotice(file ? 'Citesc ATR-ul…' : 'Creez fișa…')
     try {
       const fields = defaultConnectionFields()
+      fields.NrContract = contractNumber
       let atrPathname: string | null = null
       let atrName: string | null = null
       if (file) {
@@ -107,8 +111,8 @@ export function ConnectionsManager({ initialCases, canManage }: { initialCases: 
     const body = await response.json().catch(() => ({}))
     setBusy('')
     if (!response.ok) return alert(body.error || 'Datele nu au putut fi salvate.')
-    setItems((current) => current.map((item) => item.id === selected.id ? { ...item, fields: { ...draft }, updatedAt: new Date().toISOString() } : item))
-    setNotice('Date salvate. Documentele Word sunt pregătite cu valorile actuale.')
+    setItems((current) => current.map((item) => item.id === selected.id ? { ...item, fields: { ...draft }, nib: body.nib || item.nib, sequenceNumber: body.sequenceNumber || item.sequenceNumber, updatedAt: new Date().toISOString() } : item).sort((a, b) => b.sequenceNumber - a.sequenceNumber))
+    setNotice(`Date salvate. Identificare actuală: ${body.nib || selected.nib}.`)
   }
 
   async function changeStatus(status: ConnectionStatus) {
@@ -200,7 +204,7 @@ export function ConnectionsManager({ initialCases, canManage }: { initialCases: 
     </header>
     {showRegister && <section className="mb-5 overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div><h2 className="font-bold text-[#082b4d]">Registrul branșamentelor / dosarelor DEER</h2><p className="text-xs text-slate-500">Numerotarea rămâne în ordinea înregistrării. Data predării se completează când dosarul ajunge la DEER.</p></div><span className="rounded-full bg-[#edf7fc] px-3 py-1 text-xs font-black text-[#0d5d8b]">{items.length} dosare</span></div>
-      <div className="overflow-x-auto"><table className="w-full min-w-[1100px] border-collapse text-left text-sm"><thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Nr.</th><th className="px-4 py-3">NIB</th><th className="px-4 py-3">Beneficiar</th><th className="px-4 py-3">CNP / CIF</th><th className="px-4 py-3">ATR</th><th className="px-4 py-3">Stadiu</th><th className="px-4 py-3">Înregistrat</th><th className="px-4 py-3">Predat la DEER</th></tr></thead><tbody>{items.map((item)=><tr key={item.id} className="border-t border-slate-100 text-slate-700"><td className="px-4 py-3 font-black text-[#197fb5]">{item.sequenceNumber}</td><td className="px-4 py-3 font-bold text-[#082b4d]">{item.nib}</td><td className="px-4 py-3 font-semibold">{item.fields.Beneficiar||'—'}</td><td className="px-4 py-3">{item.fields.CnpCif||'—'}</td><td className="max-w-[220px] truncate px-4 py-3" title={item.fields.ATR}>{item.fields.ATR||'—'}</td><td className="px-4 py-3"><span className="rounded-full px-2 py-1 text-[10px] font-black text-white" style={{backgroundColor:CONNECTION_STATUS_META[item.status].color}}>{CONNECTION_STATUS_META[item.status].label}</span></td><td className="px-4 py-3 whitespace-nowrap">{new Date(item.createdAt).toLocaleDateString('ro-RO')}</td><td className="px-4 py-3">{canManage?<input type="date" value={item.deerSubmittedAt||''} disabled={busy===`deer-${item.id}`} onChange={(event)=>updateDeerSubmittedAt(item,event.target.value)} className="input-field min-w-[155px] !py-2"/>:<span className="whitespace-nowrap">{item.deerSubmittedAt?new Date(`${item.deerSubmittedAt}T00:00:00`).toLocaleDateString('ro-RO'):'Nepredat'}</span>}</td></tr>)}</tbody></table></div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[1100px] border-collapse text-left text-sm"><thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Nr.</th><th className="px-4 py-3">NIB</th><th className="px-4 py-3">Beneficiar</th><th className="px-4 py-3">CNP / CIF</th><th className="px-4 py-3">ATR</th><th className="px-4 py-3">Stadiu</th><th className="px-4 py-3">Înregistrat</th><th className="px-4 py-3">Predat la DEER</th></tr></thead><tbody>{items.map((item)=><tr key={item.id} className="border-t border-slate-100 text-slate-700"><td className="px-4 py-3 font-black text-[#197fb5]">{item.sequenceNumber}</td><td className="px-4 py-3 font-bold text-[#082b4d]">{item.nib}</td><td className="px-4 py-3 font-semibold">{item.fields.Beneficiar||'—'}</td><td className="px-4 py-3">{item.fields.CnpCif||'—'}</td><td className="max-w-[220px] truncate px-4 py-3" title={item.fields.ATR}>{item.fields.ATR||'—'}</td><td className="px-4 py-3"><span className="rounded-full px-2 py-1 text-[10px] font-black text-white" style={{backgroundColor:CONNECTION_STATUS_META[item.status].color}}>{CONNECTION_STATUS_META[item.status].label}</span></td><td className="px-4 py-3 whitespace-nowrap">{new Date(item.createdAt).toLocaleDateString('ro-RO')}</td><td className="px-4 py-3">{canEditDeerDate?<input type="date" value={item.deerSubmittedAt||''} disabled={busy===`deer-${item.id}`} onChange={(event)=>updateDeerSubmittedAt(item,event.target.value)} className="input-field min-w-[155px] !py-2"/>:<span className="whitespace-nowrap">{item.deerSubmittedAt?new Date(`${item.deerSubmittedAt}T00:00:00`).toLocaleDateString('ro-RO'):'Nepredat'}</span>}</td></tr>)}</tbody></table></div>
     </section>}
     {!canManage && viewMode === 'list' ? <AdminConnectionAccordion items={visible} query={query} onQueryChange={setQuery}/> : <div className={`grid min-h-[720px] overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm ${viewMode === 'list' ? 'xl:grid-cols-[300px_minmax(0,1fr)]' : 'grid-cols-1'}`}>
       <aside className={`border-b border-slate-200 bg-[#f5f9fc] p-4 ${viewMode === 'list' ? 'xl:border-b-0 xl:border-r' : ''}`}>

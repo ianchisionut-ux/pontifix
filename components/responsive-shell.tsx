@@ -115,7 +115,7 @@ export function ResponsiveShell({
       }
     }
     poll()
-    const timer = setInterval(poll, 8000)
+    const timer = setInterval(poll, 20000)
     return () => {
       cancelled = true
       clearInterval(timer)

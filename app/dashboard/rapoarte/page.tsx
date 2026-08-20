@@ -19,7 +19,6 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) redirect('/login')
 
-  const connectionStats = await getConnectionStatistics(businessId)
   const requestedDays = Number((await searchParams).days || 30)
   const days = [7, 30, 90].includes(requestedDays) ? requestedDays : 30
   const today = new Date()
@@ -28,7 +27,8 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
   startDate.setUTCDate(startDate.getUTCDate() - days + 1)
 
   await ensureProjectAuthorizationStorage()
-  const [entries, employees, projects] = await Promise.all([
+  const [connectionStats, entries, employees, projects] = await Promise.all([
+    getConnectionStatistics(businessId),
     prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: startDate, lte: endDate } }, include: { employee: true }, orderBy: { workDate: 'asc' } }),
     prisma.attendanceEmployee.findMany({ where: { businessId, active: true }, orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }] }),
     prisma.project.findMany({ where: { businessId }, include: { approvals: true }, orderBy: { createdAt: 'desc' } }),

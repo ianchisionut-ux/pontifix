@@ -22,22 +22,22 @@ export default async function DashboardPage() {
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) redirect('/login')
 
-  const connectionStats = await getConnectionStatistics(businessId)
   const now = new Date()
   const local = bucharestDate(now)
   const startMonth = new Date(Date.UTC(local.date.getUTCFullYear(), local.date.getUTCMonth(), 1))
   const endMonth = new Date(Date.UTC(local.date.getUTCFullYear(), local.date.getUTCMonth() + 1, 1))
-  const [employees, todayEntries, monthEntries, pendingLeaves, business, projects] = await Promise.all([
+  const [connectionStats, employees, todayEntries, monthHours, pendingLeaves, business, projects] = await Promise.all([
+    getConnectionStatistics(businessId),
     prisma.attendanceEmployee.count({ where: { businessId, active: true } }),
     prisma.dailyAttendance.findMany({ where: { businessId, workDate: local.date }, include: { employee: true }, orderBy: { employee: { lastName: 'asc' } } }),
-    prisma.dailyAttendance.findMany({ where: { businessId, workDate: { gte: startMonth, lt: endMonth } } }),
+    prisma.dailyAttendance.aggregate({ where: { businessId, workDate: { gte: startMonth, lt: endMonth } }, _sum: { hours: true } }),
     prisma.leaveRequest.count({ where: { businessId, status: 'PENDING' } }),
     prisma.business.findUnique({ where: { id: businessId }, select: { break1Start: true, break1End: true, workingHours: true } }),
     prisma.project.findMany({ where: { businessId, status: { not: 'ARCHIVED' } }, select: { id: true, name: true, updatedAt: true, constructionAuthorizationStatus: true, approvals: { select: { status: true } } }, orderBy: { createdAt: 'desc' } }),
   ])
   const presentEntries = todayEntries.filter((entry) => entry.status === 'PRESENT' || entry.status === 'REMOTE')
   const present = presentEntries.length
-  const monthMinutes = Math.round(monthEntries.reduce((sum, entry) => sum + entry.hours * 60, 0))
+  const monthMinutes = Math.round((monthHours._sum.hours || 0) * 60)
   const todaySchedule = business?.workingHours.find((item) => item.weekday === local.weekday)
   const defaultSchedule = business?.workingHours[0]
   const schedule = todaySchedule ?? defaultSchedule
