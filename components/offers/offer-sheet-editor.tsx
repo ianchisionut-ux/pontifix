@@ -14,7 +14,7 @@ export function OfferSheetEditor({ offer, onClose, onSaved }: { offer: SheetOffe
   const [busy, setBusy] = useState<'save' | 'email' | 'whatsapp' | null>(null)
   const [notice, setNotice] = useState('')
   const totals = useMemo(() => offerTotals(data), [data])
-  useEffect(() => () => document.body.classList.remove('offer-printing'), [])
+  useEffect(() => () => { document.body.classList.remove('offer-printing'); document.getElementById('offer-page-orientation')?.remove() }, [])
   function update<K extends keyof OfferSheetData>(key: K, value: OfferSheetData[K]) { setData((current) => ({ ...current, [key]: value })) }
 
   async function call(action: 'sheet' | 'send-email' | 'send-whatsapp') {
@@ -35,10 +35,19 @@ export function OfferSheetEditor({ offer, onClose, onSaved }: { offer: SheetOffe
   }
 
   function printOffer() {
+    document.getElementById('offer-page-orientation')?.remove()
+    const style = document.createElement('style')
+    style.id = 'offer-page-orientation'
+    style.textContent = '@page { size: A4 portrait; margin: 0; }'
+    document.head.appendChild(style)
     document.body.classList.add('offer-printing')
-    const cleanup = () => document.body.classList.remove('offer-printing')
+    const cleanup = () => {
+      document.body.classList.remove('offer-printing')
+      document.getElementById('offer-page-orientation')?.remove()
+    }
     window.addEventListener('afterprint', cleanup, { once: true })
-    window.print(); setTimeout(cleanup, 1500)
+    window.print()
+    window.setTimeout(cleanup, 3000)
   }
 
   return <div className="offer-editor-overlay" role="dialog" aria-modal="true">
