@@ -17,9 +17,12 @@ export const CONNECTION_FIELD_LABELS: Record<string, string> = {
   PTA: 'PTA / sursa de alimentare', Solutia: 'Soluția tehnică', KW: 'Putere (kW)', KW2: 'Putere A3 (kW)',
   KVA: 'Putere (kVA)', SumaFaraTVA: 'Sumă fără TVA', NrContract: 'Număr contract',
   DATA: 'Data contractului', NrSX: 'Număr SX', DataSX: 'Data SX', DataExpirareSX: 'Data expirare SX',
+  CiSerie: 'Serie CI', CiNumar: 'Număr CI', CiDomiciliu: 'Domiciliu CI', CiEmisaDe: 'CI emisă de',
+  CiValabilaDeLa: 'CI valabilă de la', CiValabilaPanaLa: 'CI valabilă până la',
 }
 
-export const CONNECTION_FIELDS = CONNECTION_FIELD_GROUPS.flatMap((group) => [...group.fields])
+export const CONNECTION_EXTRA_FIELDS = ['CiSerie', 'CiNumar', 'CiDomiciliu', 'CiEmisaDe', 'CiValabilaDeLa', 'CiValabilaPanaLa'] as const
+export const CONNECTION_FIELDS = [...CONNECTION_FIELD_GROUPS.flatMap((group) => [...group.fields]), ...CONNECTION_EXTRA_FIELDS]
 
 export type ConnectionFields = Record<(typeof CONNECTION_FIELDS)[number], string>
 
@@ -30,6 +33,7 @@ export function defaultConnectionFields(): ConnectionFields {
     ATR: '', PTA: '', Solutia: '', SumaFaraTVA: '', NrContract: '',
     DATA: new Date().toLocaleDateString('ro-RO'), KW: '05.00 KW', KW2: '05.00', KVA: '05.56 kVA',
     TipBransament: 'BRANȘAMENT ELECTRIC TRIFAZAT', NrSX: '', DataSX: '', DataExpirareSX: '',
+    CiSerie: '', CiNumar: '', CiDomiciliu: '', CiEmisaDe: '', CiValabilaDeLa: '', CiValabilaPanaLa: '',
   }
 }
 

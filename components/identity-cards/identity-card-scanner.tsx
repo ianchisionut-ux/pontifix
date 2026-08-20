@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CreditCard, FileUp, Loader2, Save, ShieldCheck, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { IdentityCardRecord } from '@/lib/identity-card-storage'
@@ -11,21 +11,29 @@ const FIELDS: Array<[keyof IdentityCardData, string]> = [
   ['fullName', 'Nume și prenume'], ['cnp', 'CNP'], ['series', 'Serie CI'], ['number', 'Număr CI'],
   ['domicile', 'Domiciliu'], ['issuedBy', 'Emisă de'], ['validFrom', 'Valabilă de la'], ['validUntil', 'Valabilă până la'],
 ]
-
 type ConnectionOption = { id: string; nib: string; beneficiary: string }
 
-export function IdentityCardScanner({ records, connections, canEdit, connectionId }: {
+export function IdentityCardScanner({ records, connections, canEdit, connectionId, embeddedValue, onEmbeddedChange, hideSavedRecords = false }: {
   records: IdentityCardRecord[]
   connections: ConnectionOption[]
   canEdit: boolean
   connectionId?: string
+  embeddedValue?: IdentityCardData
+  onEmbeddedChange?: (data: IdentityCardData) => void
+  hideSavedRecords?: boolean
 }) {
   const router = useRouter()
-  const [draft, setDraft] = useState<IdentityCardData>(EMPTY)
+  const embedded = !!onEmbeddedChange
+  const [draft, setDraft] = useState<IdentityCardData>(embeddedValue || EMPTY)
   const [selectedConnectionId, setSelectedConnectionId] = useState(connectionId || '')
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
+  const [dragging, setDragging] = useState(false)
   const visible = connectionId ? records.filter((record) => record.connectionCaseId === connectionId) : records
+
+  useEffect(() => { if (embeddedValue) setDraft(embeddedValue) }, [embeddedValue])
+
+  function update(next: IdentityCardData) { setDraft(next); onEmbeddedChange?.(next) }
 
   async function scan(file?: File) {
     if (!file) return
@@ -35,10 +43,10 @@ export function IdentityCardScanner({ records, connections, canEdit, connectionI
     try {
       const { analyzeIdentityCardInBrowser } = await import('@/lib/browser-identity-card-ocr')
       const data = await analyzeIdentityCardInBrowser(file, setNotice)
-      setDraft(data)
-      setNotice('Date extrase. Verifică și corectează înainte de salvare. Imaginea nu a fost încărcată și nu este păstrată.')
+      update(data)
+      setNotice(embedded ? 'Date extrase. Verifică-le, apoi apasă Salvează în fișa branșamentului.' : 'Date extrase. Verifică și corectează înainte de salvare. Imaginea nu a fost încărcată și nu este păstrată.')
     } catch (error) { setNotice(error instanceof Error ? error.message : 'CI nu a putut fi citită.') }
-    finally { setBusy('') }
+    finally { setBusy(''); setDragging(false) }
   }
 
   async function save() {
@@ -64,17 +72,20 @@ export function IdentityCardScanner({ records, connections, canEdit, connectionI
   }
 
   return <div className="space-y-5">
-    {canEdit && <section className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="flex flex-wrap items-start justify-between gap-4"><div><div className="flex items-center gap-2"><CreditCard size={20} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">Scanner carte de identitate</h2></div><p className="mt-1 max-w-3xl text-sm text-slate-500">OCR local pentru CI scanată. Fișierul nu este încărcat și nu este stocat; se salvează numai datele pe care le verifici.</p></div><label className="btn-primary inline-flex cursor-pointer items-center gap-2"><FileUp size={17}/>{busy === 'scan' ? 'Se citește…' : 'Scanează CI'}<input type="file" accept="image/*,application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { scan(event.target.files?.[0]); event.currentTarget.value = '' }}/></label></div>
+    {(canEdit || embedded) && <section className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
+      <div><div className="flex items-center gap-2"><CreditCard size={20} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">Scanner carte de identitate</h2></div><p className="mt-1 max-w-3xl text-sm text-slate-500">OCR local pentru CI scanată. Fișierul nu este încărcat și nu este stocat; se păstrează numai datele verificate.</p></div>
+      {canEdit && <label onDragEnter={(event)=>{event.preventDefault();setDragging(true)}} onDragOver={(event)=>event.preventDefault()} onDragLeave={()=>setDragging(false)} onDrop={(event)=>{event.preventDefault();setDragging(false);scan(event.dataTransfer.files?.[0])}} className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition ${dragging ? 'border-[#197fb5] bg-[#e8f6fc]' : 'border-[#8bc8e5] bg-[#f4fbfe] hover:bg-[#edf8fd]'}`}>
+        {busy === 'scan' ? <Loader2 size={28} className="animate-spin text-[#197fb5]"/> : <FileUp size={28} className="text-[#197fb5]"/>}<b className="mt-2 text-sm text-[#082b4d]">{busy === 'scan' ? 'Se citește CI…' : 'Trage CI aici sau apasă pentru selectare'}</b><span className="mt-1 text-xs text-slate-500">Imagine sau PDF scanat · maximum 15 MB</span><input type="file" accept="image/*,application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { scan(event.target.files?.[0]); event.currentTarget.value = '' }}/>
+      </label>}
       {notice && <p className={`mt-4 rounded-xl px-3 py-2 text-sm font-semibold ${notice.includes('nu ') || notice.includes('maximum') ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-800'}`}>{notice}</p>}
       {busy === 'scan' && <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#197fb5]"/></div>}
-      <div className="mt-5 grid gap-3 md:grid-cols-2">{FIELDS.map(([field, label]) => <label key={field} className={`text-xs font-bold text-slate-500 ${field === 'domicile' ? 'md:col-span-2' : ''}`}>{label}<input value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 w-full bg-white"/></label>)}</div>
-      {!connectionId && <label className="mt-4 block text-xs font-bold text-slate-500">Asociază opțional cu branșamentul<select value={selectedConnectionId} onChange={(event) => setSelectedConnectionId(event.target.value)} className="input-field mt-1.5 w-full bg-white"><option value="">Fără branșament</option>{connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.nib} - {connection.beneficiary || 'Beneficiar necompletat'}</option>)}</select></label>}
-      <div className="mt-5 flex items-center justify-between gap-3"><span className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700"><ShieldCheck size={15}/> Nu se păstrează poza sau PDF-ul.</span><button onClick={save} disabled={!!busy || !draft.fullName.trim()} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează datele</button></div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">{FIELDS.map(([field, label]) => <label key={field} className={`text-xs font-bold text-slate-500 ${field === 'domicile' ? 'md:col-span-2' : ''}`}>{label}<input disabled={!canEdit} value={draft[field]} onChange={(event) => update({ ...draft, [field]: event.target.value })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/></label>)}</div>
+      {!embedded && !connectionId && <label className="mt-4 block text-xs font-bold text-slate-500">Asociază opțional cu branșamentul<select value={selectedConnectionId} onChange={(event) => setSelectedConnectionId(event.target.value)} className="input-field mt-1.5 w-full bg-white"><option value="">Fără branșament</option>{connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.nib} - {connection.beneficiary || 'Beneficiar necompletat'}</option>)}</select></label>}
+      <div className="mt-5 flex items-center justify-between gap-3"><span className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700"><ShieldCheck size={15}/> Nu se păstrează poza sau PDF-ul.</span>{embedded ? <span className="text-xs font-bold text-[#0d5d8b]">{canEdit ? 'Se salvează odată cu branșamentul.' : 'Date salvate în fișa branșamentului.'}</span> : <button onClick={save} disabled={!!busy || !draft.fullName.trim()} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează datele</button>}</div>
     </section>}
 
-    <section className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4 flex items-center gap-2"><CreditCard size={18} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">Date CI salvate</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">{visible.length}</span></div>
+    {!hideSavedRecords && <section className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4 flex items-center gap-2"><CreditCard size={18} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">Date CI salvate</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">{visible.length}</span></div>
       {visible.length ? <div className="grid gap-3 xl:grid-cols-2">{visible.map((record) => <article key={record.id} className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-extrabold text-[#082b4d]">{record.fullName}</h3><p className="mt-1 text-xs text-slate-400">Salvat {new Date(record.createdAt).toLocaleString('ro-RO')}</p></div>{canEdit && <button onClick={() => remove(record.id)} className="round-action !text-red-600" title="Șterge datele CI"><Trash2 size={15}/></button>}</div><dl className="mt-4 grid gap-x-4 gap-y-3 text-sm sm:grid-cols-2"><div><dt className="text-[11px] font-bold text-slate-400">CNP</dt><dd className="font-semibold text-slate-700">{record.cnp || '—'}</dd></div><div><dt className="text-[11px] font-bold text-slate-400">Serie / număr</dt><dd className="font-semibold text-slate-700">{[record.series, record.number].filter(Boolean).join(' ') || '—'}</dd></div><div className="sm:col-span-2"><dt className="text-[11px] font-bold text-slate-400">Domiciliu</dt><dd className="font-semibold text-slate-700">{record.domicile || '—'}</dd></div><div><dt className="text-[11px] font-bold text-slate-400">Emisă de</dt><dd className="font-semibold text-slate-700">{record.issuedBy || '—'}</dd></div><div><dt className="text-[11px] font-bold text-slate-400">Valabilitate</dt><dd className="font-semibold text-slate-700">{[record.validFrom, record.validUntil].filter(Boolean).join(' - ') || '—'}</dd></div></dl>{canEdit && !connectionId && <label className="mt-4 block text-[11px] font-bold text-slate-400">Branșament asociat<select value={record.connectionCaseId || ''} onChange={(event) => relink(record.id, event.target.value)} className="input-field mt-1 w-full bg-white text-sm"><option value="">Fără branșament</option>{connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.nib} - {connection.beneficiary}</option>)}</select></label>}</article>)}</div> : <p className="rounded-2xl border border-dashed border-slate-300 py-10 text-center text-sm text-slate-500">Nu există date CI pentru această secțiune.</p>}
-    </section>
+    </section>}
   </div>
 }
