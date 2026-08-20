@@ -8,7 +8,11 @@ import { quoteNotificationEmail } from '@/lib/quote-notification-email'
 
 const atrOcrSchema = z.object({
   customerName: z.string().trim().max(160), customerPhone: z.string().trim().max(40),
-  workAddress: z.string().trim().max(400), atrNumber: z.string().trim().max(80), atrDate: z.string().trim().max(40),
+  workAddress: z.string().trim().max(400),
+  customerId: z.string().trim().max(40).optional(),
+  customerAddress: z.string().trim().max(500).optional(),
+  pta: z.string().trim().max(300).optional(),
+  solution: z.string().trim().max(4000).optional(), atrNumber: z.string().trim().max(80), atrDate: z.string().trim().max(40),
   confidence: z.number().min(0).max(1), source: z.enum(['PDF_TEXT', 'LOCAL_OCR']),
 }).nullable().optional()
 

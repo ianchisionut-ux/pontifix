@@ -19,6 +19,7 @@ export async function createConnectionCase(input: {
   atrName?: string | null
   createdByEmail?: string | null
   quoteRequestId?: string | null
+  overwriteExisting?: boolean
 }) {
   await ensureConnectionStorage()
   return prisma.$transaction(async (tx) => {
@@ -26,20 +27,35 @@ export async function createConnectionCase(input: {
       const existing = await tx.$queryRaw<Array<{ id: string; nib: string }>>`
         SELECT "id", "nib" FROM "ConnectionCase" WHERE "quoteRequestId"=${input.quoteRequestId} LIMIT 1
       `
-      if (existing[0]) return { ...existing[0], created: false }
+      if (existing[0]) return { ...existing[0], created: false, updated: false, previousAtrPathname: null as string | null }
     }
     const year = new Date().getFullYear()
     const { sequenceNumber, nib } = connectionIdentityFromContract(input.fields.NrContract, year)
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`connection-nib:${input.businessId}:${year}`}))`
-    const duplicate = await tx.$queryRaw<Array<{ id: string }>>`
-      SELECT "id" FROM "ConnectionCase" WHERE "businessId"=${input.businessId} AND "nib"=${nib} LIMIT 1
+    const duplicate = await tx.$queryRaw<Array<{ id: string; nib: string; atrPathname: string | null; fields: ConnectionFields }>>`
+      SELECT "id", "nib", "atrPathname", "fields" FROM "ConnectionCase" WHERE "businessId"=${input.businessId} AND "nib"=${nib} LIMIT 1
     `
-    if (duplicate[0]) throw new Error(`Numărul de contract ${input.fields.NrContract} este deja folosit (${nib}).`)
+    if (duplicate[0]) {
+      if (!input.overwriteExisting) throw new Error(`Numărul de contract ${input.fields.NrContract} este deja folosit (${nib}).`)
+      const mergedFields = { ...duplicate[0].fields } as ConnectionFields
+      for (const [key, value] of Object.entries(input.fields)) {
+        if (typeof value === 'string' && value.trim()) mergedFields[key as keyof ConnectionFields] = value
+      }
+      await tx.$executeRaw`
+        UPDATE "ConnectionCase"
+        SET "fields"=${JSON.stringify(mergedFields)}::jsonb,
+            "atrPathname"=${input.atrPathname || null},
+            "atrName"=${input.atrName || null},
+            "updatedAt"=NOW()
+        WHERE "id"=${duplicate[0].id} AND "businessId"=${input.businessId}
+      `
+      return { id: duplicate[0].id, nib: duplicate[0].nib, created: false, updated: true, previousAtrPathname: duplicate[0].atrPathname }
+    }
     const id = crypto.randomUUID()
     await tx.$executeRaw`
       INSERT INTO "ConnectionCase" ("id", "businessId", "sequenceNumber", "nib", "status", "quoteRequestId", "fields", "atrPathname", "atrName", "createdByEmail")
       VALUES (${id}, ${input.businessId}, ${sequenceNumber}, ${nib}, 'DOSAR_APROBAT', ${input.quoteRequestId || null}, ${JSON.stringify(input.fields)}::jsonb, ${input.atrPathname || null}, ${input.atrName || null}, ${input.createdByEmail || null})
     `
-    return { id, nib, created: true }
+    return { id, nib, created: true, updated: false, previousAtrPathname: null as string | null }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
 }

@@ -1,6 +1,8 @@
 export type BrowserAtrResult = {
   customerName: string
   customerPhone: string
+  customerId: string
+  customerAddress: string
   workAddress: string
   atrNumber: string
   atrDate: string
@@ -28,10 +30,11 @@ export function extractAtrText(text: string, source: BrowserAtrResult['source'])
   const nameMatch = namePatterns.map((pattern) => normalized.match(pattern)).find(Boolean)
   const phoneMatch = normalized.match(/\btelefon\s*[:\-]?\s*((?:\+?40|0)[\d .()\/-]{8,18})/i)
   const atrMatch = normalized.match(/AVIZ\s+TEHNIC\s+DE\s+RACORDARE[\s\S]{0,220}?Nr\.?\s*([\w./-]+)\s+din\s+(\d{1,2}[./-]\d{1,2}[./-]\d{2,4})/i)
-  const addressMatch = normalized.match(/amplasat\(a\)\s+in\s+(.{10,260}?)(?:,?\s+nr\.?\s+cadastral|,?\s+in\s+conditiile|\.\s*1\.)/i)
-    || normalized.match(/cu\s+domiciliul\s+in\s+(.{10,260}?)(?:,?\s+telefon\b)/i)
+  const customerAddressMatch = normalized.match(/(?:cu\s+)?(?:domiciliul|sediul)\s+in\s+(.{10,300}?)(?=,?\s+telefon\b|,?\s+(?:CNP|CUI|CIF)\b|\.\s*(?:Locul|Adresa|1\.)|$)/i)
+  const workAddressMatch = normalized.match(/amplasat\(a\)\s+in\s+(.{10,300}?)(?:,?\s+nr\.?\s+cadastral|,?\s+in\s+conditiile|\.\s*1\.)/i)
+  const customerIdMatch = normalized.match(/\b(?:CNP|CUI|CIF|cod\s+numeric\s+personal)\s*(?:nr\.?)?\s*[:\-]?\s*([A-Z]{0,2}\s*\d{6,13})\b/i)
 
-  const ptaMatch = normalized.match(/\b((?:PTA|PTZ)\s*[:\-]?\s*[A-Z0-9][A-Z0-9 _./-]{2,100}?)(?=\s*,?\s*\d{1,2}(?:[.,/]\d+)+\s*kV|\s+[b-dc][')]?\s+|$)/i)
+  const ptaMatch = normalized.match(/\b((?:PTA|PTZ)\s*[:\-]?\s*[A-Z0-9][A-Z0-9 _./-]{0,100}?)(?=\s*,?\s*\d{1,2}(?:[.,/]\d+)*\s*kV|\s+[b-dc][')]?\s+|$)/i)
     || normalized.match(/(?:sursa|punctul)\s+de\s+alimentare\s*[:\-]?\s*((?:PTA|PTZ)[A-Z0-9 _./-]{2,100})/i)
 
   const solutionPatterns = [
@@ -43,13 +46,17 @@ export function extractAtrText(text: string, source: BrowserAtrResult['source'])
 
   const customerName = clean(nameMatch?.[1] || '').replace(/\s+(?:CU DOMICILIUL|PENTRU).*$/i, '')
   const customerPhone = clean(phoneMatch?.[1] || '').replace(/[^+\d]/g, '')
-  const workAddress = clean(addressMatch?.[1] || '')
+  const customerId = clean(customerIdMatch?.[1] || '').replace(/\s+/g, '')
+  const customerAddress = clean(customerAddressMatch?.[1] || '')
+  const workAddress = clean(workAddressMatch?.[1] || customerAddress)
   const pta = clean(ptaMatch?.[1] || '')
   const solution = clean(solutionMatch?.[1] || '')
-  const found = [customerName, customerPhone, workAddress, atrMatch?.[1], pta, solution].filter(Boolean).length
+  const found = [customerName, customerPhone, customerId, customerAddress, workAddress, atrMatch?.[1], pta, solution].filter(Boolean).length
   return {
     customerName,
     customerPhone,
+    customerId,
+    customerAddress,
     workAddress,
     atrNumber: clean(atrMatch?.[1] || ''),
     atrDate: clean(atrMatch?.[2] || ''),
@@ -76,10 +83,10 @@ export async function analyzeAtrInBrowser(file: File, onProgress?: (message: str
   const embeddedPages: string[] = []
   for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) embeddedPages.push(await pageText(pdf, pageNumber))
   let result = extractAtrText(embeddedPages.join('\n'), 'PDF_TEXT')
-  if (result.customerName && result.customerPhone && result.pta && result.solution) return result
+  if (result.customerName && result.customerPhone && result.customerId && result.customerAddress && result.pta && result.solution) return result
 
   const pagesToOcr = new Set<number>()
-  if (!result.customerName || !result.customerPhone) pagesToOcr.add(1)
+  if (!result.customerName || !result.customerPhone || !result.customerId || !result.customerAddress) pagesToOcr.add(1)
   if ((!result.pta || !result.solution) && pageCount >= 2) pagesToOcr.add(2)
   if (!pagesToOcr.size) return result
 

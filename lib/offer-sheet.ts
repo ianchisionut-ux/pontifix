@@ -1,9 +1,14 @@
 export type AtrOcrData = {
   customerName: string | null
   customerPhone: string | null
+  customerId?: string | null
+  customerAddress?: string | null
   workAddress: string | null
   atrNumber: string | null
   atrDate: string | null
+  pta?: string | null
+  solution?: string | null
+  source?: 'PDF_TEXT' | 'LOCAL_OCR'
   requestedPowerKw: string | null
   connectionType: 'MONOFAZAT' | 'TRIFAZAT' | 'NESPECIFICAT'
   confidence: number

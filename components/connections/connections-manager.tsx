@@ -8,14 +8,8 @@ import { CONNECTION_STATUSES, CONNECTION_STATUS_META, type ConnectionStatus } fr
 import { AdminConnectionAccordion } from '@/components/connections/admin-connection-accordion'
 import { CONNECTION_WHATSAPP_TEMPLATES, renderConnectionWhatsAppTemplate, type ConnectionWhatsAppTemplateKey } from '@/lib/connection-whatsapp-templates'
 import { IdentityCardScanner } from '@/components/identity-cards/identity-card-scanner'
+import { parseRomanianAddress } from '@/lib/romanian-address'
 
-function addressHints(address: string) {
-  const county = address.match(/jud(?:ețul|\.)?\s*([^,]+)/i)?.[1]?.trim() || 'Sălaj'
-  const city = address.match(/(?:mun(?:icipiul|\.)?|oraș(?:ul)?)\s*([^,]+)/i)?.[1]?.trim() || ''
-  const street = address.match(/(?:strada|str\.)\s*([^,]+)/i)?.[1]?.trim() || ''
-  const number = address.match(/(?:nr\.|numărul)\s*([\w/-]+)/i)?.[1]?.trim() || ''
-  return { county, city, street, number }
-}
 
 export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }: { initialCases: ConnectionCaseDto[]; canManage: boolean; canEditDeerDate: boolean }) {
   const [items, setItems] = useState(initialCases)
@@ -65,10 +59,14 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     const contractNumber = window.prompt('Introdu Numărul contractului pentru acest branșament:')?.trim()
     if (!contractNumber) return
     if (!/\d/.test(contractNumber)) return alert('Numărul contractului trebuie să conțină cel puțin o cifră.')
+    const contractSequence = Number.parseInt(contractNumber.match(/\d+/)?.[0] || '0', 10)
+    const existing = file ? items.find((item) => item.sequenceNumber === contractSequence || item.fields.NrContract.trim() === contractNumber) : undefined
     setBusy('create')
-    setNotice(file ? 'Citesc ATR-ul…' : 'Creez fișa…')
+    setNotice(existing ? `Actualizez ${existing.nib} din ATR-ul nou…` : file ? 'Citesc ATR-ul…' : 'Creez fișa…')
     try {
-      const fields = defaultConnectionFields()
+      const fields: ConnectionFields = existing
+        ? { ...defaultConnectionFields(), ...existing.fields }
+        : defaultConnectionFields()
       fields.NrContract = contractNumber
       let atrPathname: string | null = null
       let atrName: string | null = null
@@ -76,27 +74,38 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
         try {
           const { analyzeAtrInBrowser } = await import('@/lib/browser-atr-ocr')
           const ocr = await analyzeAtrInBrowser(file, setNotice)
-          const hints = addressHints(ocr.workAddress)
-          fields.Beneficiar = ocr.customerName
-          fields.Telefon = ocr.customerPhone
-          fields.Amplasament = ocr.workAddress
-          fields.AmplasamentA3 = ocr.workAddress || fields.AmplasamentA3
-          fields.ATR = [ocr.atrNumber && `nr. ${ocr.atrNumber}`, ocr.atrDate && `din ${ocr.atrDate}`].filter(Boolean).join(' ')
-          fields.PTA = ocr.pta
-          fields.Solutia = ocr.solution
-          fields.Judet = hints.county
-          fields.Oras = hints.city
-          fields.Strada = hints.street
-          fields.Nr = hints.number
+          const hints = parseRomanianAddress(ocr.customerAddress || ocr.workAddress)
+          if (ocr.customerName) fields.Beneficiar = ocr.customerName
+          if (ocr.customerPhone) fields.Telefon = ocr.customerPhone
+          if (ocr.customerId) fields.CnpCif = ocr.customerId
+          if (ocr.workAddress) {
+            fields.Amplasament = ocr.workAddress
+            fields.AmplasamentA3 = ocr.workAddress
+          }
+          const atrLabel = [ocr.atrNumber && `nr. ${ocr.atrNumber}`, ocr.atrDate && `din ${ocr.atrDate}`].filter(Boolean).join(' ')
+          if (atrLabel) fields.ATR = atrLabel
+          if (ocr.pta) fields.PTA = ocr.pta
+          if (ocr.solution) fields.Solutia = ocr.solution
+          if (hints.county) fields.Judet = hints.county
+          if (hints.city) fields.Oras = hints.city
+          if (hints.village) fields.Sat = hints.village
+          if (hints.street) fields.Strada = hints.street
+          if (hints.number) fields.Nr = hints.number
+          if (hints.block) fields.Bloc = hints.block
+          if (hints.apartment) fields.Ap = hints.apartment
         } catch {
           setNotice('OCR-ul nu a găsit toate datele. ATR-ul se salvează și completezi manual.')
         }
-        setNotice('Salvez ATR-ul în dosar…')
+        setNotice(existing ? 'Înlocuiesc ATR-ul și actualizez dosarul…' : 'Salvez ATR-ul în dosar…')
         const blob = await uploadPresigned(`bransamente/${crypto.randomUUID()}/${file.name}`, file, { access: 'private', handleUploadUrl: '/api/bransamente/upload' })
         atrPathname = blob.pathname
         atrName = file.name
       }
-      const response = await fetch('/api/bransamente', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields, atrPathname, atrName }) })
+      const response = await fetch('/api/bransamente', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields, atrPathname, atrName, overwriteExisting: Boolean(file) }),
+      })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'Fișa nu a putut fi creată.')
       window.location.reload()
@@ -106,7 +115,6 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       setNotice('')
     }
   }
-
   async function save() {
     if (!selected || !canManage) return
     setBusy('save')

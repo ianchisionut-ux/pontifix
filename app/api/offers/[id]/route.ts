@@ -7,6 +7,7 @@ import { getOfferAccess } from '@/lib/offer-access'
 import { defaultConnectionFields } from '@/lib/connection-fields'
 import { createConnectionCase } from '@/lib/connection-store'
 import { sendBusinessEmail } from '@/lib/email-settings'
+import { parseRomanianAddress } from '@/lib/romanian-address'
 
 const updateSchema = z.object({
   status: z.enum(['NEW', 'REVIEWING', 'QUOTED', 'ACCEPTED', 'REJECTED', 'ARCHIVED']).optional(),
@@ -50,10 +51,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     fields.NrContract = contractNumber || fields.NrContract
     fields.Beneficiar = String(offer.customerName || ocr.customerName || quote.name || '')
     fields.Telefon = String(offer.customerPhone || ocr.customerPhone || quote.phone || '')
-    fields.Amplasament = String(offer.location || ocr.workAddress || quote.location || '')
+    fields.CnpCif = String(ocr.customerId || '')
+    fields.Amplasament = String(offer.workLocation || ocr.workAddress || quote.location || '')
     fields.AmplasamentA3 = fields.Amplasament || fields.AmplasamentA3
     fields.ATR = [ocr.atrNumber && `nr. ${ocr.atrNumber}`, ocr.atrDate && `din ${ocr.atrDate}`].filter(Boolean).join(' ')
+    fields.PTA = String(ocr.pta || '')
+    fields.Solutia = String(ocr.solution || '')
     fields.TipBransament = String(offer.connectionType || fields.TipBransament)
+    const address = parseRomanianAddress(String(ocr.customerAddress || ocr.workAddress || ''))
+    fields.Judet = address.county
+    fields.Oras = address.city
+    fields.Sat = address.village
+    fields.Strada = address.street
+    fields.Nr = address.number
+    fields.Bloc = address.block
+    fields.Ap = address.apartment
     let created: Awaited<ReturnType<typeof createConnectionCase>>
     try {
       created = await createConnectionCase({
