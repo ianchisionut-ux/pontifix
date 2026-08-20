@@ -4,6 +4,7 @@ import { ConnectionsManager } from '@/components/connections/connections-manager
 import { getConnectionAccess } from '@/lib/connection-access'
 import { connectionFieldsSchema, type ConnectionCaseDto } from '@/lib/connection-fields'
 import { ensureConnectionStorage } from '@/lib/ensure-connection-storage'
+import { listIdentityCards } from '@/lib/identity-card-storage'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,11 +12,11 @@ export default async function ConnectionsPage() {
   const access = await getConnectionAccess()
   if (!access) redirect('/login')
   await ensureConnectionStorage()
-  const rows = await prisma.$queryRaw<Array<{ id: string; sequenceNumber: number; nib: string; status: ConnectionCaseDto['status']; quoteRequestId: string | null; deerSubmittedAt: Date | null; fields: unknown; atrPathname: string | null; atrName: string | null; createdByEmail: string | null; createdAt: Date; updatedAt: Date }>>`
+  const [rows, identityCards] = await Promise.all([prisma.$queryRaw<Array<{ id: string; sequenceNumber: number; nib: string; status: ConnectionCaseDto['status']; quoteRequestId: string | null; deerSubmittedAt: Date | null; fields: unknown; atrPathname: string | null; atrName: string | null; createdByEmail: string | null; createdAt: Date; updatedAt: Date }>>`
     SELECT "id", "sequenceNumber", "nib", "status", "quoteRequestId", "deerSubmittedAt", "fields", "atrPathname", "atrName", "createdByEmail", "createdAt", "updatedAt"
     FROM "ConnectionCase" WHERE "businessId"=${access.businessId}
     ORDER BY EXTRACT(YEAR FROM "createdAt") DESC, "sequenceNumber" DESC, "createdAt" DESC
-  `
+  `, listIdentityCards(access.businessId)])
   const cases: ConnectionCaseDto[] = rows.map((row) => ({
     ...row,
     fields: connectionFieldsSchema.parse(row.fields),
@@ -23,5 +24,5 @@ export default async function ConnectionsPage() {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }))
-  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><ConnectionsManager initialCases={cases} canManage={access.canManage} canEditDeerDate={access.canEditDeerDate}/></div>
+  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><ConnectionsManager initialCases={cases} identityCards={identityCards} canManage={access.canManage} canEditDeerDate={access.canEditDeerDate}/></div>
 }

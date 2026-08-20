@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { useLanguage } from '@/components/language-provider'
 import type { FormField, FormSubmissionDto, FormTemplateDto } from '@/lib/ensure-form-storage'
 import { CONNECTION_FIELDS, CONNECTION_FIELD_LABELS } from '@/lib/connection-fields'
+import type { IdentityCardRecord } from '@/lib/identity-card-storage'
 
 export type ConnectionFormOption = { id: string; nib: string; sequenceNumber: number; status: string; deerSubmittedAt: string; createdAt: string; fields: Record<string, string> }
 export type ProjectFormOption = { id: string; name: string; beneficiary: string; beneficiaryPhone: string; address: string; certificateNumber: string; certificateDate: string }
@@ -20,13 +21,19 @@ const BINDINGS: ReadonlyArray<readonly [string, string]> = [
   ['connection.createdAt', 'Branșament: Data înregistrării'],
   ['connection.object', 'Branșament: Obiect complet'],
   ...CONNECTION_FIELDS.map((field) => [`connection.${field}`, `Branșament: ${CONNECTION_FIELD_LABELS[field] || field}`] as const),
+  ['identity.fullName', 'CI: Nume și prenume'], ['identity.cnp', 'CI: CNP'],
+  ['identity.series', 'CI: Serie'], ['identity.number', 'CI: Număr'], ['identity.seriesNumber', 'CI: Serie și număr'],
+  ['identity.domicile', 'CI: Domiciliu'], ['identity.issuedBy', 'CI: Emisă de'],
+  ['identity.validFrom', 'CI: Valabilă de la'], ['identity.validUntil', 'CI: Valabilă până la'],
   ['project.name', 'Proiect: Denumire'], ['project.beneficiary', 'Proiect: Beneficiar'],
   ['project.beneficiaryPhone', 'Proiect: Telefon beneficiar'], ['project.address', 'Proiect: Amplasament / adresă'],
   ['project.certificateNumber', 'Proiect: Număr certificat'], ['project.certificateDate', 'Proiect: Data certificatului'],
 ]
 
-function boundValue(binding: string | undefined, connection?: ConnectionFormOption, project?: ProjectFormOption) {
+function boundValue(binding: string | undefined, connection?: ConnectionFormOption, project?: ProjectFormOption, identity?: IdentityCardRecord) {
   if (!binding) return ''
+  if (binding === 'identity.seriesNumber') return identity ? [identity.series, identity.number].filter(Boolean).join(' ') : ''
+  if (binding.startsWith('identity.')) return identity?.[binding.replace('identity.', '') as keyof IdentityCardRecord] as string || ''
   if (binding.startsWith('project.')) return project?.[binding.replace('project.', '') as keyof ProjectFormOption] || ''
   if (!connection) return ''
   if (binding === 'connection.NIB') return connection.nib
@@ -60,11 +67,12 @@ function PdfCanvas({ pdf, pageNumber }: { pdf: any; pageNumber: number }) {
   return <canvas ref={ref} className="block h-auto w-full bg-white" />
 }
 
-export function PdfRequestEditor({ template, initialSubmission, connections, projects, canManage, onClose }: {
+export function PdfRequestEditor({ template, initialSubmission, connections, projects, identityCards, canManage, onClose }: {
   template: FormTemplateDto
   initialSubmission?: FormSubmissionDto
   connections: ConnectionFormOption[]
   projects: ProjectFormOption[]
+  identityCards: IdentityCardRecord[]
   canManage: boolean
   onClose: () => void
 }) {
@@ -130,13 +138,14 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
     const [kind, id] = value.split(':')
     const connection = kind === 'connection' ? connections.find((item) => item.id === id) : undefined
     const project = kind === 'project' ? projects.find((item) => item.id === id) : undefined
-    if (!connection && !project) return
+    const identity = kind === 'identity' ? identityCards.find((item) => item.id === id) : connection ? identityCards.find((item) => item.connectionCaseId === connection.id) : undefined
+    if (!connection && !project && !identity) return
     setValues((current) => {
       const next = { ...current }
-      for (const field of fields) if (field.binding) next[field.id] = boundValue(field.binding, connection, project) || next[field.id] || ''
+      for (const field of fields) if (field.binding) next[field.id] = boundValue(field.binding, connection, project, identity) || next[field.id] || ''
       return next
     })
-    const subject = connection?.fields.Beneficiar || connection?.nib || project?.beneficiary || project?.name
+    const subject = connection?.fields.Beneficiar || connection?.nib || project?.beneficiary || project?.name || identity?.fullName
     if (!submissionId && subject) setTitle(`${template.title} - ${subject}`)
   }
 
@@ -260,6 +269,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
 
   const selectedConnection = useMemo(() => sourceId.startsWith('connection:') ? connections.find((item) => item.id === sourceId.slice(11)) : undefined, [connections, sourceId])
   const selectedProject = useMemo(() => sourceId.startsWith('project:') ? projects.find((item) => item.id === sourceId.slice(8)) : undefined, [projects, sourceId])
+  const selectedIdentity = useMemo(() => sourceId.startsWith('identity:') ? identityCards.find((item) => item.id === sourceId.slice(9)) : selectedConnection ? identityCards.find((item) => item.connectionCaseId === selectedConnection.id) : undefined, [identityCards, selectedConnection, sourceId])
 
   return <div className="fixed inset-0 z-[80] flex flex-col bg-[#eef4f8]">
     <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -268,6 +278,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
       <select className="input-field !w-auto min-w-[290px] !py-2" value={sourceId} onChange={(e) => chooseSource(e.target.value)}>
         <option value="">{tr('Fără legătură - completare manuală')}</option>
         <optgroup label={tr('Branșamente')}>{connections.map((item) => <option key={item.id} value={`connection:${item.id}`}>{item.nib} - {item.fields.Beneficiar || tr('Fără beneficiar')}</option>)}</optgroup>
+        <optgroup label="Cărți de identitate">{identityCards.map((item) => <option key={item.id} value={`identity:${item.id}`}>{item.fullName} - {[item.series, item.number].filter(Boolean).join(' ') || 'fără serie'}</option>)}</optgroup>
         <optgroup label={tr('Proiecte')}>{projects.map((item) => <option key={item.id} value={`project:${item.id}`}>{item.name} - {item.beneficiary || tr('Fără beneficiar')}</option>)}</optgroup>
       </select>
       {canManage && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
@@ -302,7 +313,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
         <div className="mb-4 flex items-center gap-2"><Link2 size={17} className="text-[#197fb5]"/><b className="text-sm text-[#082b4d]">{tr('Configurare câmp')}</b></div>
         {!selected ? <p className="text-sm leading-6 text-slate-500">{tr('Selectează un câmp de pe PDF sau adaugă unul nou.')}</p> : <div className="space-y-4">
           <label className="block text-xs font-bold text-slate-500">{tr('Denumire')}<input className="input-field mt-1 w-full" value={selected.label} onChange={(e) => updateField({ label: e.target.value })}/></label>
-          <label className="block text-xs font-bold text-slate-500">{tr('Preia automat din')}<select className="input-field mt-1 w-full" value={selected.binding || ''} onChange={(e) => { updateField({ binding: e.target.value || undefined }); const value = boundValue(e.target.value, selectedConnection, selectedProject); if (value) setValues((all) => ({ ...all, [selected.id]: value })) }}>{BINDINGS.map(([value, label]) => <option key={value} value={value}>{tr(label)}</option>)}</select></label>
+          <label className="block text-xs font-bold text-slate-500">{tr('Preia automat din')}<select className="input-field mt-1 w-full" value={selected.binding || ''} onChange={(e) => { updateField({ binding: e.target.value || undefined }); const value = boundValue(e.target.value, selectedConnection, selectedProject, selectedIdentity); if (value) setValues((all) => ({ ...all, [selected.id]: value })) }}>{BINDINGS.map(([value, label]) => <option key={value} value={value}>{tr(label)}</option>)}</select></label>
           <div className="grid grid-cols-2 gap-3"><label className="text-xs font-bold text-slate-500">{tr('Pagina')}<input type="number" min={1} max={pageCount || 50} className="input-field mt-1 w-full" value={selected.page} onChange={(e) => updateField({ page: Number(e.target.value) || 1 })}/></label><label className="text-xs font-bold text-slate-500">{tr('Font')}<input type="number" min={6} max={40} className="input-field mt-1 w-full" value={selected.fontSize} onChange={(e) => updateField({ fontSize: Number(e.target.value) || 12 })}/></label></div>
           <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={!!selected.multiline} onChange={(e) => updateField({ multiline: e.target.checked })}/> {tr('Text pe mai multe rânduri')}</label>
           <button className="inline-flex items-center gap-2 text-sm font-bold text-red-600" onClick={() => { setFields((all) => all.filter((item) => item.id !== selected.id)); setSelectedId('') }}><Trash2 size={15}/> {tr('Șterge câmpul')}</button>

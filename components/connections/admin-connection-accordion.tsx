@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { ChevronDown, Search } from 'lucide-react'
 import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, type ConnectionCaseDto } from '@/lib/connection-fields'
 import { CONNECTION_STATUS_META } from '@/lib/connection-status'
+import type { IdentityCardRecord } from '@/lib/identity-card-storage'
 
-export function AdminConnectionAccordion({ items, query, onQueryChange }: { items: ConnectionCaseDto[]; query: string; onQueryChange: (value: string) => void }) {
+export function AdminConnectionAccordion({ items, identityCards, query, onQueryChange }: { items: ConnectionCaseDto[]; identityCards: IdentityCardRecord[]; query: string; onQueryChange: (value: string) => void }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   return <section className="min-h-[720px] bg-[#f5f9fc] p-4 lg:p-6">
@@ -16,6 +17,7 @@ export function AdminConnectionAccordion({ items, query, onQueryChange }: { item
     <div className="space-y-3">{items.map((item) => {
       const expanded = expandedId === item.id
       const meta = CONNECTION_STATUS_META[item.status]
+      const identity = identityCards.find((record) => record.connectionCaseId === item.id)
       return <article key={item.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:border-[#9bcce4]">
         <button type="button" onClick={() => setExpandedId(expanded ? null : item.id)} className="grid w-full items-center gap-3 px-4 py-4 text-left md:grid-cols-[minmax(200px,1.3fr)_minmax(180px,1fr)_minmax(150px,.7fr)_auto] lg:px-5">
           <div className="min-w-0"><p className="text-[11px] font-black text-[#197fb5]">#{item.sequenceNumber} / {item.nib}</p><p className="mt-1 truncate text-base font-black text-[#082b4d]">{item.fields.Beneficiar || 'Beneficiar necompletat'}</p></div>
@@ -29,7 +31,8 @@ export function AdminConnectionAccordion({ items, query, onQueryChange }: { item
             const fields = group.fields.filter((field) => item.fields[field])
             if (!fields.length) return null
             return <section key={group.title} className="rounded-2xl border border-slate-100 bg-white p-4"><h3 className="mb-3 text-xs font-black uppercase tracking-[.08em] text-[#0d5d8b]">{group.title}</h3><dl className="grid gap-3 sm:grid-cols-2">{fields.map((field) => <div key={field} className={field === 'Solutia' || field === 'Amplasament' || field === 'AmplasamentA3' ? 'sm:col-span-2' : ''}><dt className="text-[11px] font-bold text-slate-400">{CONNECTION_FIELD_LABELS[field] || field}</dt><dd className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">{item.fields[field]}</dd></div>)}</dl></section>
-          })}</div>
+})}</div>
+          {identity && <section className="mt-5 rounded-2xl border border-blue-100 bg-white p-4"><div className="mb-3 flex items-center gap-2"><span className="rounded-lg bg-[#edf7fc] px-2 py-1 text-[10px] font-black text-[#0d5d8b]">CI</span><h3 className="font-bold text-[#082b4d]">{identity.fullName}</h3></div><dl className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4"><div><dt className="text-[11px] font-bold text-slate-400">CNP</dt><dd className="font-semibold text-slate-700">{identity.cnp||'—'}</dd></div><div><dt className="text-[11px] font-bold text-slate-400">Serie / număr</dt><dd className="font-semibold text-slate-700">{[identity.series,identity.number].filter(Boolean).join(' ')||'—'}</dd></div><div><dt className="text-[11px] font-bold text-slate-400">Emisă de</dt><dd className="font-semibold text-slate-700">{identity.issuedBy||'—'}</dd></div><div><dt className="text-[11px] font-bold text-slate-400">Valabilitate</dt><dd className="font-semibold text-slate-700">{[identity.validFrom,identity.validUntil].filter(Boolean).join(' - ')||'—'}</dd></div><div className="sm:col-span-2 xl:col-span-4"><dt className="text-[11px] font-bold text-slate-400">Domiciliu</dt><dd className="font-semibold text-slate-700">{identity.domicile||'—'}</dd></div></dl></section>}
         </div>}
       </article>
     })}{!items.length && <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-sm text-slate-500">Nu există branșamente pentru căutarea curentă.</div>}</div>
