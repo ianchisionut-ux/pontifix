@@ -6,7 +6,7 @@ export const CONNECTION_FIELD_GROUPS = [
   { title: 'Amplasament', fields: ['Amplasament', 'AmplasamentA3'] },
   { title: 'ATR / Branșament', fields: ['ATR', 'TipBransament', 'PTA', 'Solutia'] },
   { title: 'Puteri', fields: ['KW', 'KW2', 'KVA'] },
-  { title: 'Contract / Altele', fields: ['SumaFaraTVA', 'NrContract', 'DATA', 'NrSX', 'DataSX'] },
+  { title: 'Contract / Altele', fields: ['SumaFaraTVA', 'NrContract', 'DATA', 'NrSX', 'DataSX', 'DataExpirareSX'] },
 ] as const
 
 export const CONNECTION_FIELD_LABELS: Record<string, string> = {
@@ -16,7 +16,7 @@ export const CONNECTION_FIELD_LABELS: Record<string, string> = {
   AmplasamentA3: 'Amplasament dosar A3', ATR: 'Număr / dată ATR', TipBransament: 'Tip branșament',
   PTA: 'PTA / sursa de alimentare', Solutia: 'Soluția tehnică', KW: 'Putere (kW)', KW2: 'Putere A3 (kW)',
   KVA: 'Putere (kVA)', SumaFaraTVA: 'Sumă fără TVA', NrContract: 'Număr contract',
-  DATA: 'Data contractului', NrSX: 'Număr SX', DataSX: 'Data SX',
+  DATA: 'Data contractului', NrSX: 'Număr SX', DataSX: 'Data SX', DataExpirareSX: 'Data expirare SX',
 }
 
 export const CONNECTION_FIELDS = CONNECTION_FIELD_GROUPS.flatMap((group) => [...group.fields])
@@ -29,7 +29,7 @@ export function defaultConnectionFields(): ConnectionFields {
     Strada: '', Nr: '', Nrloc: '', Bloc: '', Ap: '', Amplasament: '', AmplasamentA3: 'Jud. Sălaj, ',
     ATR: '', PTA: '', Solutia: '', SumaFaraTVA: '', NrContract: '',
     DATA: new Date().toLocaleDateString('ro-RO'), KW: '05.00 KW', KW2: '05.00', KVA: '05.56 kVA',
-    TipBransament: 'BRANȘAMENT ELECTRIC TRIFAZAT', NrSX: '', DataSX: '',
+    TipBransament: 'BRANȘAMENT ELECTRIC TRIFAZAT', NrSX: '', DataSX: '', DataExpirareSX: '',
   }
 }
 
