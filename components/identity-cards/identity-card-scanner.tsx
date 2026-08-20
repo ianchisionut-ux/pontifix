@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { CreditCard, FileUp, Loader2, Save, ShieldCheck, Trash2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { Camera, CameraOff, CreditCard, FileUp, Loader2, Save, ScanLine, ShieldCheck, Trash2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { IdentityCardRecord } from '@/lib/identity-card-storage'
 import type { IdentityCardData } from '@/lib/browser-identity-card-ocr'
+import { useLanguage } from '@/components/language-provider'
 
 const EMPTY: IdentityCardData = { fullName: '', cnp: '', series: '', number: '', domicile: '', issuedBy: '', validFrom: '', validUntil: '' }
 const FIELDS: Array<[keyof IdentityCardData, string]> = [
@@ -23,17 +24,77 @@ export function IdentityCardScanner({ records, connections, canEdit, connectionI
   hideSavedRecords?: boolean
 }) {
   const router = useRouter()
+  const { tr } = useLanguage()
   const embedded = !!onEmbeddedChange
   const [draft, setDraft] = useState<IdentityCardData>(embeddedValue || EMPTY)
   const [selectedConnectionId, setSelectedConnectionId] = useState(connectionId || '')
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
   const [dragging, setDragging] = useState(false)
+  const [cameraOpen, setCameraOpen] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const visible = connectionId ? records.filter((record) => record.connectionCaseId === connectionId) : records
 
   useEffect(() => { if (embeddedValue) setDraft(embeddedValue) }, [embeddedValue])
 
   function update(next: IdentityCardData) { setDraft(next); onEmbeddedChange?.(next) }
+
+  function stopCamera() {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+    streamRef.current = null
+    if (videoRef.current) videoRef.current.srcObject = null
+    setCameraOpen(false)
+  }
+
+  useEffect(() => () => {
+    streamRef.current?.getTracks().forEach((track) => track.stop())
+  }, [])
+
+  useEffect(() => {
+    if (!cameraOpen || !videoRef.current || !streamRef.current) return
+    videoRef.current.srcObject = streamRef.current
+    void videoRef.current.play().catch(() => undefined)
+  }, [cameraOpen])
+
+  async function startCamera() {
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia) {
+      setNotice('Camera este disponibilă pe conexiune securizată HTTPS și într-un browser modern.')
+      return
+    }
+    setBusy('camera'); setNotice('')
+    try {
+      streamRef.current = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      })
+      setCameraOpen(true)
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : ''
+      setNotice(name === 'NotAllowedError' ? 'Permite accesul la cameră din browser și încearcă din nou.' : name === 'NotFoundError' ? 'Nu a fost găsită nicio cameră disponibilă.' : 'Camera nu a putut fi pornită.')
+    } finally { setBusy('') }
+  }
+
+  async function captureCamera() {
+    const video = videoRef.current
+    if (!video?.videoWidth || !video.videoHeight) return setNotice('Camera nu este încă pregătită. Așteaptă o secundă și încearcă din nou.')
+    const cardRatio = 1.586
+    let sourceWidth = video.videoWidth * .9
+    let sourceHeight = sourceWidth / cardRatio
+    if (sourceHeight > video.videoHeight * .82) {
+      sourceHeight = video.videoHeight * .82
+      sourceWidth = sourceHeight * cardRatio
+    }
+    const sourceX = (video.videoWidth - sourceWidth) / 2
+    const sourceY = (video.videoHeight - sourceHeight) / 2
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(sourceWidth)
+    canvas.height = Math.round(sourceHeight)
+    canvas.getContext('2d', { willReadFrequently: true })?.drawImage(video, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Fotografia nu a putut fi creată.')), 'image/jpeg', .96))
+    stopCamera()
+    await scan(new File([blob], `ci-camera-${Date.now()}.jpg`, { type: 'image/jpeg' }))
+  }
 
   async function scan(file?: File) {
     if (!file) return
@@ -73,8 +134,9 @@ export function IdentityCardScanner({ records, connections, canEdit, connectionI
 
   return <div className="space-y-5">
     {(canEdit || embedded) && <section className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm">
-      <div><div className="flex items-center gap-2"><CreditCard size={20} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">Scanner carte de identitate</h2></div><p className="mt-1 max-w-3xl text-sm text-slate-500">OCR local pentru CI scanată. Fișierul nu este încărcat și nu este stocat; se păstrează numai datele verificate.</p></div>
-      {canEdit && <label onDragEnter={(event)=>{event.preventDefault();setDragging(true)}} onDragOver={(event)=>event.preventDefault()} onDragLeave={()=>setDragging(false)} onDrop={(event)=>{event.preventDefault();setDragging(false);scan(event.dataTransfer.files?.[0])}} className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition ${dragging ? 'border-[#197fb5] bg-[#e8f6fc]' : 'border-[#8bc8e5] bg-[#f4fbfe] hover:bg-[#edf8fd]'}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="flex items-center gap-2"><CreditCard size={20} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">Scanner carte de identitate</h2></div><p className="mt-1 max-w-3xl text-sm text-slate-500">OCR local pentru CI scanată. Fișierul nu este încărcat și nu este stocat; se păstrează numai datele verificate.</p></div>{canEdit && <button type="button" onClick={cameraOpen ? stopCamera : startCamera} disabled={!!busy} className="btn-secondary inline-flex items-center gap-2">{busy === 'camera' ? <Loader2 size={17} className="animate-spin"/> : cameraOpen ? <CameraOff size={17}/> : <Camera size={17}/>} {tr(cameraOpen ? 'Închide camera' : 'Deschide camera')}</button>}</div>
+      {canEdit && cameraOpen && <div className="mt-4 overflow-hidden rounded-2xl border border-[#8bc8e5] bg-[#061a2b] p-3"><div className="relative mx-auto max-w-4xl overflow-hidden rounded-xl bg-black"><video ref={videoRef} autoPlay muted playsInline className="aspect-video w-full object-cover"/><div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="aspect-[1.586/1] w-[90%] rounded-xl border-2 border-white shadow-[0_0_0_999px_rgba(0,0,0,.34)]"><span className="absolute left-1/2 top-4 -translate-x-1/2 whitespace-nowrap rounded-full bg-black/65 px-3 py-1.5 text-xs font-bold text-white">{tr('Așază cartea de identitate în chenar')}</span></div></div></div><div className="mt-3 flex flex-wrap items-center justify-between gap-3"><p className="text-xs font-semibold text-blue-100">Ține documentul drept, fără reflexii și cu toate marginile vizibile.</p><button type="button" onClick={captureCamera} className="btn-primary inline-flex items-center gap-2 !bg-[#197fb5]"><ScanLine size={17}/> {tr('Fotografiază și citește')}</button></div></div>}
+      {canEdit && !cameraOpen && <label onDragEnter={(event)=>{event.preventDefault();setDragging(true)}} onDragOver={(event)=>event.preventDefault()} onDragLeave={()=>setDragging(false)} onDrop={(event)=>{event.preventDefault();setDragging(false);scan(event.dataTransfer.files?.[0])}} className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-5 py-7 text-center transition ${dragging ? 'border-[#197fb5] bg-[#e8f6fc]' : 'border-[#8bc8e5] bg-[#f4fbfe] hover:bg-[#edf8fd]'}`}>
         {busy === 'scan' ? <Loader2 size={28} className="animate-spin text-[#197fb5]"/> : <FileUp size={28} className="text-[#197fb5]"/>}<b className="mt-2 text-sm text-[#082b4d]">{busy === 'scan' ? 'Se citește CI…' : 'Trage CI aici sau apasă pentru selectare'}</b><span className="mt-1 text-xs text-slate-500">Imagine sau PDF scanat · maximum 15 MB</span><input type="file" accept="image/*,application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { scan(event.target.files?.[0]); event.currentTarget.value = '' }}/>
       </label>}
       {notice && <p className={`mt-4 rounded-xl px-3 py-2 text-sm font-semibold ${notice.includes('nu ') || notice.includes('maximum') ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-800'}`}>{notice}</p>}
