@@ -9,26 +9,29 @@
   --accent-soft: #eaf5fb;
 
   --surface: #ffffff;
-  --surface-muted: #f7f7f9;
-  --border-soft: #eceef1;
+  --surface-muted: #f3f6f9;
+  --border-soft: #d7e0e9;
 
   --radius-card: 20px;
   --radius-pill: 999px;
 
-  --shadow-card: 0 2px 8px rgba(20, 20, 43, 0.04), 0 12px 24px -8px rgba(20, 20, 43, 0.08);
-  --shadow-card-hover: 0 4px 12px rgba(20, 20, 43, 0.06), 0 16px 32px -8px rgba(20, 20, 43, 0.12);
+  --shadow-card: 0 2px 8px rgba(8, 43, 77, 0.06), 0 12px 28px -10px rgba(8, 43, 77, 0.13);
+  --shadow-card-hover: 0 4px 14px rgba(8, 43, 77, 0.09), 0 18px 36px -10px rgba(8, 43, 77, 0.18);
 }
 
 body {
   font-family: var(--font-sans);
-  color: #14142b;
+  color: #102a43;
   background: var(--surface-muted);
+  font-weight: 450;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 .card {
   background: var(--surface);
   border-radius: var(--radius-card);
-  border: 1px solid var(--border-soft);
+  border: 1px solid #dce4ec;
   box-shadow: var(--shadow-card);
 }
 
@@ -62,12 +65,13 @@ body {
 
 .btn-secondary {
   background: var(--surface);
-  border: 1px solid var(--border-soft);
+  color: #17324d;
+  border: 1px solid #cbd8e4;
   border-radius: var(--radius-pill);
   padding: 0.65rem 1.5rem;
-  font-weight: 600;
+  font-weight: 650;
   font-size: 0.875rem;
-  transition: background 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .btn-secondary:hover {
   background: var(--surface-muted);
@@ -81,12 +85,15 @@ body {
 
 .input-field {
   background: var(--surface);
-  border: 1px solid var(--border-soft);
+  color: #102a43;
+  border: 1px solid #c7d3df;
   border-radius: 12px;
   padding: 0.6rem 0.9rem;
   font-size: 0.875rem;
-  transition: border-color 0.15s ease;
+  font-weight: 500;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+.input-field::placeholder { color:#64748b; opacity:1; }
 .input-field-with-icon {
   padding-left: 2.65rem;
 }
@@ -94,7 +101,13 @@ body {
 .input-field:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(47,145,200,.13);
 }
+
+/* Contrast general: textele secundare rămân discrete, dar sunt mai ușor de citit. */
+.text-slate-400 { color:#64748b; }
+.text-slate-500 { color:#475569; }
+.text-slate-600 { color:#334155; }
 
 .calendar-commandbar { background: rgba(255,255,255,.84); border: 1px solid var(--border-soft); border-radius: 18px; padding: 10px 12px; box-shadow: var(--shadow-card); }
 .calendar-kpi { display:inline-flex; align-items:center; gap:6px; padding:7px 10px; border-radius:999px; background:var(--surface-muted); color:#59606f; font-size:12px; white-space:nowrap; }
