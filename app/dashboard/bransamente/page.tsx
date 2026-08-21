@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
-import { ConnectionsManager } from '@/components/connections/connections-manager'
+import { ConnectionsWorkspace } from '@/components/connections/connections-workspace'
 import { getConnectionAccess } from '@/lib/connection-access'
 import { connectionFieldsSchema, type ConnectionCaseDto } from '@/lib/connection-fields'
 import { ensureConnectionStorage } from '@/lib/ensure-connection-storage'
+import { listConnectionReceptions } from '@/lib/connection-reception-storage'
 
 export const dynamic = 'force-dynamic'
 
@@ -23,5 +24,6 @@ export default async function ConnectionsPage() {
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   }))
-  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><ConnectionsManager initialCases={cases} canManage={access.canManage} canEditDeerDate={access.canEditDeerDate}/></div>
+  const receptions = await listConnectionReceptions(access.businessId)
+  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><ConnectionsWorkspace initialCases={cases} initialReceptions={receptions} canManage={access.canManage} canEditDeerDate={access.canEditDeerDate}/></div>
 }
