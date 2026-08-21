@@ -42,17 +42,15 @@ export function ensureConnectionReceptionStorage(businessId: string) {
         "notes" TEXT NOT NULL DEFAULT '',
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE TABLE IF NOT EXISTS "ConnectionReceptionImport" (
-        "businessId" TEXT NOT NULL REFERENCES "Business"("id") ON DELETE CASCADE,
-        "sourceName" TEXT NOT NULL,
-        "importedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY ("businessId", "sourceName")
-      );
+      )
+    `)
+    await prisma.$executeRawUnsafe(`
       CREATE UNIQUE INDEX IF NOT EXISTS "ConnectionReception_business_source_key"
-        ON "ConnectionReception" ("businessId", "sourceKey");
+      ON "ConnectionReception" ("businessId", "sourceKey")
+    `)
+    await prisma.$executeRawUnsafe(`
       CREATE INDEX IF NOT EXISTS "ConnectionReception_business_year_order_idx"
-        ON "ConnectionReception" ("businessId", "year" DESC, "orderNumber" DESC);
+      ON "ConnectionReception" ("businessId", "year" DESC, "orderNumber" DESC)
     `)
 
   })().catch((error) => {
