@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     if (rowNumber === 1) return
     const first = cellText(row.getCell(1).value)
     const detectedYear = Number.parseInt(first, 10)
-    const populated = [1, 2, 3, 4, 5, 6, 7, 8, 9].some((column) => cellText(row.getCell(column).value))
+    const populated = [1, 2, 3, 4, 5, 6, 7, 8].some((column) => cellText(row.getCell(column).value))
     if (/^20\d{2}$/.test(first) && !cellText(row.getCell(2).value)) {
       currentYear = detectedYear
       return
@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     if (!populated) return
     const orderNumber = Number.parseInt(first, 10)
     if (!Number.isFinite(orderNumber)) return
-    const receivedText = cellText(row.getCell(9).value).toLocaleLowerCase('ro-RO')
+    const receivedText = cellText(row.getCell(8).value).toLocaleLowerCase('ro-RO')
     rows.push({
       sourceRow: rowNumber,
       year: currentYear,
