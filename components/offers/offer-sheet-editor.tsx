@@ -38,7 +38,7 @@ export function OfferSheetEditor({ offer, onClose, onSaved }: { offer: SheetOffe
     document.getElementById('offer-page-orientation')?.remove()
     const style = document.createElement('style')
     style.id = 'offer-page-orientation'
-    style.textContent = '@page { size: A4 portrait; margin: 0; }'
+    style.textContent = '@page { size: A4; margin: 0; }'
     document.head.appendChild(style)
     document.body.classList.add('offer-printing')
     const cleanup = () => {

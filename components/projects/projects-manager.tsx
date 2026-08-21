@@ -2,8 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { uploadPresigned } from '@vercel/blob/client'
-import { BarChart3, Building2, CheckCircle2, ChevronDown, ChevronUp, Download, Eye, FileText, LayoutGrid, Link2, List, LoaderCircle, MessageCircle, Pencil, Plus, Printer, Save, Search, Trash2, UploadCloud } from 'lucide-react'
-import { ProjectProgressList } from '@/components/projects/project-progress-list'
+import { CheckCircle2, ChevronDown, ChevronUp, Download, Eye, LayoutGrid, Link2, List, LoaderCircle, MessageCircle, Pencil, Plus, Printer, Save, Search, Trash2, UploadCloud } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 type ApprovalStatus = 'REQUIRED' | 'SUBMITTED' | 'OBTAINED' | 'NOT_REQUIRED'
@@ -48,8 +47,6 @@ export function ProjectsManager({ initialProjects, canManage, canSendWhatsApp }:
   const [sendingProjectId,setSendingProjectId] = useState<string|null>(null)
 
   const visible = useMemo(() => initialProjects.filter(project => (filter === 'ALL' || project.status === filter) && (!query || [project.name,project.beneficiary,project.beneficiaryPhone,project.address].some(value => value?.toLowerCase().includes(query.toLowerCase())))), [initialProjects,filter,query])
-  const chart = initialProjects.filter(project => project.status !== 'ARCHIVED').map(project => ({ id:project.id, name:project.name, updatedAt:project.updatedAt, progress:projectProgress(project), authorizationStatus:project.constructionAuthorizationStatus }))
-  const allApprovals = initialProjects.flatMap(project => project.approvals)
 
   async function api(url:string,method:string,data?:unknown){
     const response = await fetch(url,{method,headers:data?{'Content-Type':'application/json'}:undefined,body:data?JSON.stringify(data):undefined})
@@ -114,8 +111,6 @@ export function ProjectsManager({ initialProjects, canManage, canSendWhatsApp }:
       <div className="grid xl:grid-cols-2 gap-3">{visible.map(project=><article key={project.id} className="border border-slate-300 rounded-xl p-4 break-inside-avoid"><div className="flex justify-between gap-4"><div><h2 className="font-bold">{project.name}</h2><p className="text-xs text-slate-600">{project.beneficiary||'Beneficiar nespecificat'}{project.beneficiaryPhone?' · '+project.beneficiaryPhone:''}{project.address?' · '+project.address:''}</p></div><strong>{projectProgress(project)}%</strong></div><div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">{project.approvals.map(approval=><div key={approval.id} className="flex justify-between border-b border-slate-200 py-1"><span>{approval.name}</span><b>{STAGE_LABELS[approval.status]}</b></div>)}</div><p className="mt-3 text-xs font-bold">Autorizația de construire: {STAGE_LABELS[project.constructionAuthorizationStatus]}</p></article>)}</div>
     </section>
     <div className="screen-only">
-    <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5"><Stat icon={<Building2/>} label="Proiecte în lucru" value={initialProjects.filter(p=>p.status==='ACTIVE').length}/><Stat icon={<CheckCircle2/>} label="Avize obținute" value={allApprovals.filter(a=>a.status==='OBTAINED').length}/><Stat icon={<FileText/>} label="Avize depuse" value={allApprovals.filter(a=>a.status==='SUBMITTED').length}/><Stat icon={<BarChart3/>} label="Progres mediu" value={(chart.length?Math.round(chart.reduce((sum,p)=>sum+p.progress,0)/chart.length):0)+'%'}/></div>
-    {chart.length>0 && <section className="card p-5 mb-5"><h2 className="font-semibold">Stadiul fizic al proiectelor</h2><p className="text-xs text-slate-500 mb-4">Fiecare bară reprezintă un singur proiect · albastru = autorizație depusă · verde = autorizație obținută</p><ProjectProgressList projects={chart}/></section>}
     <div className="flex flex-wrap gap-2 mb-4"><div className="calendar-search !ml-0"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Caută proiect, beneficiar…"/></div>{(['ALL','ACTIVE','ON_HOLD','COMPLETED','ARCHIVED'] as const).map(value=><button key={value} onClick={()=>setFilter(value)} className={filter===value?'btn-primary':'btn-secondary'}>{value==='ALL'?'Toate':PROJECT_LABELS[value]}</button>)}<div className="ml-auto inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label="Mod de vizualizare"><button type="button" onClick={()=>setViewMode('grid')} className={`rounded-lg p-2 ${viewMode==='grid'?'bg-[#0d5d8b] text-white':'text-slate-500 hover:bg-slate-50'}`} title="Vizualizare grilă"><LayoutGrid size={17}/></button><button type="button" onClick={()=>setViewMode('list')} className={`rounded-lg p-2 ${viewMode==='list'?'bg-[#0d5d8b] text-white':'text-slate-500 hover:bg-slate-50'}`} title="Vizualizare listă"><List size={17}/></button></div></div>
     <div className={`grid gap-3 ${viewMode==='grid'?'xl:grid-cols-2':'grid-cols-1'}`}>
       {visible.map(project => (
@@ -153,8 +148,6 @@ export function ProjectsManager({ initialProjects, canManage, canSendWhatsApp }:
     </div>
   </div>
 }
-
-function Stat({icon,label,value}:{icon:React.ReactNode;label:string;value:string|number}){return <div className="card p-4 flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center">{icon}</div><div><p className="text-xs text-slate-500">{label}</p><p className="text-xl font-semibold">{value}</p></div></div>}
 
 function ProjectCard({project,compact,editing,canSendWhatsApp,open,toggle,patchProject,deleteProject,edit,addApproval,patchApproval,deleteApproval,attachApproval,attachAuthorization,attachCertificate,sendUpdate,sending}:any){
   const progress=projectProgress(project)

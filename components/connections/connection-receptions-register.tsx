@@ -94,13 +94,33 @@ export function ConnectionReceptionsRegister({ initialRecords, canManage }: { in
     finally { setBusy(''); if (importInput.current) importInput.current.value = '' }
   }
 
+
+  function printRegister() {
+    const style = document.createElement('style')
+    style.id = 'reception-landscape-print'
+    style.textContent = `@page { size: A4; margin: 10mm; }
+      @media print {
+        .reception-print-root { width: 100% !important; max-width: none !important; margin: 0 auto !important; }
+        .reception-print-root section { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+        .reception-print-root table { width: 100% !important; min-width: 0 !important; table-layout: fixed !important; font-size: 7.5pt !important; }
+        .reception-print-root thead { display: table-header-group !important; }
+        .reception-print-root tr { break-inside: avoid !important; page-break-inside: avoid !important; }
+        .reception-print-root th, .reception-print-root td { padding: 1.6mm 1mm !important; overflow-wrap: anywhere !important; }
+      }`
+    document.head.appendChild(style)
+    const cleanup = () => style.remove()
+    window.addEventListener('afterprint', cleanup, { once: true })
+    window.print()
+    window.setTimeout(cleanup, 1500)
+  }
+
   const yearRecords = year === 'ALL' ? records : records.filter((item) => item.year === year)
   const selectedYear = year === 'ALL' ? new Date().getFullYear() : year
 
-  return <div>
+  return <div className="reception-print-root">
     <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div><span className="text-xs font-black uppercase tracking-[.16em] text-[#197fb5]">Registru tehnic</span><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#082b4d]">Recepții</h1><p className="mt-1 text-sm text-slate-500">Istoricul avizelor și urmărirea recepției lucrărilor, separat de dosarele branșamentelor.</p></div>
-      <div className="screen-only flex flex-wrap gap-2"><button type="button" onClick={() => window.print()} className="btn-secondary inline-flex items-center gap-2"><Printer size={17}/> Printează</button>{canManage&&<><input ref={importInput} type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => importExcel(event.target.files?.[0])}/><button type="button" disabled={busy==='import'} onClick={() => importInput.current?.click()} className="btn-secondary inline-flex items-center gap-2"><FileSpreadsheet size={17}/> {busy==='import'?'Se importă…':'Importă Excel'}</button><button type="button" onClick={() => setModal('new')} className="btn-primary inline-flex items-center gap-2"><Plus size={17}/> Adaugă recepție</button></>}</div>
+      <div className="screen-only flex flex-wrap gap-2"><button type="button" onClick={printRegister} className="btn-secondary inline-flex items-center gap-2"><Printer size={17}/> Printează</button>{canManage&&<><input ref={importInput} type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => importExcel(event.target.files?.[0])}/><button type="button" disabled={busy==='import'} onClick={() => importInput.current?.click()} className="btn-secondary inline-flex items-center gap-2"><FileSpreadsheet size={17}/> {busy==='import'?'Se importă…':'Importă Excel'}</button><button type="button" onClick={() => setModal('new')} className="btn-primary inline-flex items-center gap-2"><Plus size={17}/> Adaugă recepție</button></>}</div>
     </header>
 
     <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
