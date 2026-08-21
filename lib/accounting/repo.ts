@@ -321,7 +321,8 @@ export async function deleteProduct(id: number) {
 // ---------- Counters / numbering ----------
 export async function peekNextNumber(series: string): Promise<number> {
   const pool = await ready();
-  const { rows } = await pool.query(`SELECT "lastNumber" FROM counters WHERE series=$1`, [series]);
+  const normalized = series.trim().toUpperCase() || "FAC";
+  const { rows } = await pool.query(`SELECT "lastNumber" FROM counters WHERE series=$1`, [normalized]);
   return (rows[0]?.lastNumber ?? 0) + 1;
 }
 
@@ -335,6 +336,22 @@ async function takeNextNumber(series: string): Promise<number> {
     [series]
   );
   return rows[0].lastNumber as number;
+}
+
+async function takeInvoiceNumber(series: string, requested?: number): Promise<number> {
+  if (requested === undefined) return takeNextNumber(series);
+  if (!Number.isInteger(requested) || requested <= 0) {
+    throw new Error("Numărul facturii trebuie să fie un număr întreg pozitiv.");
+  }
+  const pool = await ready();
+  const duplicate = await pool.query(`SELECT id FROM invoices WHERE series=$1 AND number=$2 LIMIT 1`, [series, requested]);
+  if (duplicate.rows[0]) throw new Error(`Factura ${series} ${requested} există deja.`);
+  await pool.query(
+    `INSERT INTO counters (series, "lastNumber") VALUES ($1,$2)
+     ON CONFLICT (series) DO UPDATE SET "lastNumber"=GREATEST(counters."lastNumber", EXCLUDED."lastNumber")`,
+    [series, requested]
+  );
+  return requested;
 }
 
 // ---------- Invoices ----------
@@ -354,6 +371,7 @@ function computeTotals(items: InvoiceItemInput[], discountPercent = 0) {
 
 export async function createInvoice(input: {
   series: string;
+  number?: number;
   clientId: number;
   userId?: number | null;
   issueDate: string;
@@ -375,7 +393,9 @@ export async function createInvoice(input: {
   initialStatus?: Invoice["status"];
 }): Promise<number> {
   const pool = await ready();
-  const number = await takeNextNumber(input.series);
+  const series = input.series.trim().toUpperCase();
+  if (!series) throw new Error("Completează seria facturii.");
+  const number = await takeInvoiceNumber(series, input.number);
   const discountPercent = input.discountPercent ?? 0;
   const { computed, subtotal, vatTotal } = computeTotals(input.items, discountPercent);
   const total = round2(subtotal + vatTotal);
@@ -386,7 +406,7 @@ export async function createInvoice(input: {
      VALUES ($1,$2,$3,$4,$5,$6,'issued',0,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      RETURNING id`,
     [
-      input.series,
+      series,
       number,
       input.clientId,
       input.userId ?? null,
@@ -510,7 +530,43 @@ export async function setInvoiceStatus(id: number, status: Invoice["status"]) {
 
 export async function deleteInvoice(id: number) {
   const pool = await ready();
-  await pool.query(`DELETE FROM invoices WHERE id=$1`, [id]);
+  const connection = await pool.connect();
+  try {
+    await connection.query("BEGIN");
+    const { rows } = await connection.query(
+      `SELECT id, status, "invoiceType", "originalInvoiceId", total, "paidAmount" FROM invoices WHERE id=$1 FOR UPDATE`,
+      [id]
+    );
+    const invoice = rows[0] as Invoice | undefined;
+    if (!invoice) throw new Error("Factura nu există.");
+
+    if (invoice.invoiceType === "STORNO") {
+      await connection.query(`DELETE FROM receipts WHERE "invoiceId"=$1`, [id]);
+      await connection.query(`DELETE FROM invoices WHERE id=$1`, [id]);
+      if (invoice.originalInvoiceId) {
+        const original = (await connection.query(`SELECT total, "paidAmount" FROM invoices WHERE id=$1`, [invoice.originalInvoiceId])).rows[0];
+        if (original) {
+          const paid = Number(original.paidAmount || 0);
+          const total = Number(original.total || 0);
+          const status: Invoice["status"] = paid <= 0 ? "issued" : paid >= total ? "paid" : "partial";
+          await connection.query(`UPDATE invoices SET status=$1 WHERE id=$2`, [status, invoice.originalInvoiceId]);
+        }
+      }
+    } else {
+      await connection.query(
+        `DELETE FROM receipts WHERE "invoiceId"=$1 OR "invoiceId" IN (SELECT id FROM invoices WHERE "originalInvoiceId"=$1)`,
+        [id]
+      );
+      await connection.query(`DELETE FROM invoices WHERE "originalInvoiceId"=$1`, [id]);
+      await connection.query(`DELETE FROM invoices WHERE id=$1`, [id]);
+    }
+    await connection.query("COMMIT");
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 // ---------- Payments ----------

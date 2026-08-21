@@ -7,9 +7,13 @@ async function GETHandler() {
 }
 
 async function POSTHandler(req: NextRequest) {
-  const data = await req.json();
-  const id = await createInvoice(data);
-  return NextResponse.json({ id });
+  try {
+    const data = await req.json();
+    const id = await createInvoice(data);
+    return NextResponse.json({ id });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Factura nu a putut fi emisă." }, { status: 400 });
+  }
 }
 
 export const GET = accountingApi(GETHandler)

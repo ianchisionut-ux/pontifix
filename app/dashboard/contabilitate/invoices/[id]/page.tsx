@@ -71,8 +71,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   }
 
   async function removeInvoice() {
-    if (!confirm("Stergi definitiv aceasta factura?")) return;
-    await fetch(`/api/accounting/invoices/${id}`, { method: "DELETE" });
+    if (!data) return;
+    const relationWarning = data.invoice.invoiceType === "STORNO"
+      ? " Factura inițială va redeveni activă."
+      : data.invoice.status === "stornoed" ? " Se va șterge și factura storno legată." : "";
+    if (!confirm(`Ștergi definitiv această factură?${relationWarning}`)) return;
+    const response = await fetch(`/api/accounting/invoices/${id}`, { method: "DELETE" });
+    const result = await response.json();
+    if (!response.ok) return alert(result.error || "Factura nu a putut fi ștearsă.");
     router.push("/dashboard/contabilitate/invoices");
   }
 
@@ -107,9 +113,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         {canStorno && <a href={`/dashboard/contabilitate/invoices/storno?invoice=${id}`} className="btn-secondary">
           <RotateCcw size={14} /> Stornează factura
         </a>}
-        {!financialLocked && <button onClick={removeInvoice} className="btn-danger">
+        <button onClick={removeInvoice} className="btn-danger">
           <Trash2 size={14} /> Sterge factura
-        </button>}
+        </button>
       </div>
 
       <div className="card-table mb-6">

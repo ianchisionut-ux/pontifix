@@ -10,9 +10,13 @@ async function GETHandler(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 async function DELETEHandler(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  await deleteInvoice(Number(id));
-  return NextResponse.json({ ok: true });
+  try {
+    const { id } = await params;
+    await deleteInvoice(Number(id));
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Factura nu a putut fi ștearsă." }, { status: 400 });
+  }
 }
 
 export const GET = accountingApi(GETHandler)

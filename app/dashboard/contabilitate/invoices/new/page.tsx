@@ -44,6 +44,7 @@ export default function NewInvoicePage() {
   const [userId, setUserId] = useState<number | "">("");
   const [series, setSeries] = useState("FAC");
   const [nextNumber, setNextNumber] = useState<number | null>(null);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
   const [discountPercent, setDiscountPercent] = useState(0);
@@ -82,7 +83,7 @@ export default function NewInvoicePage() {
   useEffect(() => {
     fetch(`/api/accounting/invoices/next-number?series=${series}`)
       .then((r) => r.json())
-      .then((d) => setNextNumber(d.number));
+      .then((d) => { setNextNumber(d.number); setInvoiceNumber(String(d.number)); });
   }, [series]);
 
   async function importConnectionBeneficiary() {
@@ -205,12 +206,18 @@ export default function NewInvoicePage() {
       alert("Completeaza denumirea pentru fiecare produs/serviciu.");
       return;
     }
+    const selectedNumber = Number(invoiceNumber);
+    if (!Number.isInteger(selectedNumber) || selectedNumber <= 0) {
+      alert("Numărul facturii trebuie să fie un număr întreg pozitiv.");
+      return;
+    }
     setSaving(true);
     const res = await fetch("/api/accounting/invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         series,
+        number: selectedNumber,
         clientId,
         userId: userId || null,
         issueDate,
@@ -237,6 +244,7 @@ export default function NewInvoicePage() {
     });
     const data = await res.json();
     setSaving(false);
+    if (!res.ok) return alert(data.error || "Factura nu a putut fi emisă.");
     router.push(`/dashboard/contabilitate/invoices/${data.id}`);
   }
 
@@ -296,7 +304,7 @@ export default function NewInvoicePage() {
         )}
       </div>
 
-      <div className="card mb-4" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 16 }}>
+      <div className="card mb-4" style={{ display: "grid", gridTemplateColumns: "1.4fr .65fr .75fr 1fr", gap: 16 }}>
         <div>
           <label className="field-label">Client</label>
           <select className="input" value={clientId} onChange={(e) => setClientId(Number(e.target.value))}>
@@ -324,8 +332,13 @@ export default function NewInvoicePage() {
           <label className="field-label">Serie</label>
           <input className="input" value={series} onChange={(e) => setSeries(e.target.value.toUpperCase())} />
           <p className="text-xs mt-1" style={{ color: "var(--text-faint)" }}>
-            Numar urmator: {nextNumber !== null ? String(nextNumber).padStart(4, "0") : "..."}
+            Sugerat: {nextNumber !== null ? String(nextNumber).padStart(4, "0") : "..."}
           </p>
+        </div>
+        <div>
+          <label className="field-label">Număr factură</label>
+          <input type="number" min={1} step={1} className="input" value={invoiceNumber} onChange={(e) => setInvoiceNumber(e.target.value)} />
+          <p className="text-xs mt-1" style={{ color: "var(--text-faint)" }}>Următoarea va continua de aici.</p>
         </div>
         <div>
           <label className="field-label">Data emiterii</label>

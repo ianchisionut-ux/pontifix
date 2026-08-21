@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/accounting/StatusBadge";
-import { Plus, Download, RotateCcw } from "lucide-react";
+import { Plus, Download, RotateCcw, Trash2 } from "lucide-react";
 
 type InvoiceRow = {
   id: number;
@@ -32,6 +32,18 @@ export default function InvoicesPage() {
       .then((r) => r.json())
       .then(setInvoices);
   }, []);
+
+  async function removeInvoice(invoice: InvoiceRow) {
+    const relationWarning = invoice.invoiceType === "STORNO"
+      ? " Factura inițială va redeveni activă."
+      : invoice.status === "stornoed" ? " Se va șterge și factura storno legată." : "";
+    if (!confirm(`Ștergi definitiv factura ${invoice.series} ${String(invoice.number).padStart(4, "0")}?${relationWarning}`)) return;
+    const response = await fetch(`/api/accounting/invoices/${invoice.id}`, { method: "DELETE" });
+    const result = await response.json();
+    if (!response.ok) return alert(result.error || "Factura nu a putut fi ștearsă.");
+    const updated = await fetch("/api/accounting/invoices").then((result) => result.json()) as InvoiceRow[];
+    setInvoices(updated);
+  }
 
   const filtered = invoices.filter((i) => filter === "all" || i.status === filter);
 
@@ -84,12 +96,13 @@ export default function InvoicesPage() {
               <th className="text-right">Total</th>
               <th className="text-right">Rest de plata</th>
               <th>Status</th>
+              <th className="text-right">Acțiuni</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="empty-row">
+                <td colSpan={8} className="empty-row">
                   Nicio factura in aceasta categorie.
                 </td>
               </tr>
@@ -108,6 +121,11 @@ export default function InvoicesPage() {
                 <td className="text-right num">{inv.invoiceType === "STORNO" || inv.status === "stornoed" ? "—" : `${fmt(Math.max(0, inv.total - inv.paidAmount))} RON`}</td>
                 <td>
                   <StatusBadge status={inv.status} />
+                </td>
+                <td className="text-right">
+                  <button type="button" onClick={() => removeInvoice(inv)} className="link-danger" title="Șterge factura">
+                    <Trash2 size={15}/>
+                  </button>
                 </td>
               </tr>
             ))}
