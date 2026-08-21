@@ -21,6 +21,7 @@ import {
   FolderKanban,
   Files,
   Zap,
+  Calculator,
 } from 'lucide-react'
 import { SidebarClock } from './sidebar-clock'
 import { ElmontLogo } from './elmont-logo'
@@ -48,6 +49,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   inbox: Inbox,
   bransamente: Zap,
   formulare: Files,
+  contabilitate: Calculator,
   'chat-intern': MessagesSquare,
 }
 

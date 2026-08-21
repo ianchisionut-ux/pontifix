@@ -1,0 +1,580 @@
+import { ready } from "./db";
+
+export type User = {
+  id: number;
+  name: string;
+  ci: string;
+  cnp: string;
+  role: string;
+  active: number;
+  createdAt: string;
+};
+
+export type Company = {
+  id: number;
+  name: string;
+  regCom: string;
+  cif: string;
+  address: string;
+  iban: string;
+  bank: string;
+  phone: string;
+  email: string;
+  vatIncasare: number;
+};
+
+export type Client = {
+  id: number;
+  name: string;
+  regCom: string;
+  cif: string;
+  address: string;
+  judet: string;
+  phone: string;
+  email: string;
+  flagged: number;
+  createdAt: string;
+};
+
+export type Product = {
+  id: number;
+  name: string;
+  um: string;
+  price: number;
+  cost: number;
+  vatRate: number;
+};
+
+export type InvoiceItemInput = {
+  productId?: number | null;
+  description: string;
+  um: string;
+  qty: number;
+  unitPrice: number;
+  vatRate: number;
+};
+
+export type InvoiceItem = InvoiceItemInput & {
+  id: number;
+  invoiceId: number;
+  productId: number | null;
+  valoare: number;
+  vatValue: number;
+};
+
+export type Invoice = {
+  id: number;
+  series: string;
+  number: number;
+  clientId: number;
+  userId: number | null;
+  issueDate: string;
+  dueDate: string | null;
+  status: "issued" | "paid" | "partial" | "canceled";
+  paidAmount: number;
+  subtotal: number;
+  vatTotal: number;
+  total: number;
+  discountPercent: number;
+  currency: string;
+  exchangeRate: number;
+  notes: string;
+  delegateName: string;
+  delegateCI: string;
+  delegateCNP: string;
+  vehiclePlate: string;
+  deliveryDate: string;
+  deliveryTime: string;
+  createdAt: string;
+};
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100;
+}
+
+// ---------- Company ----------
+export async function getCompany(): Promise<Company> {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM company WHERE id = 1`);
+  return rows[0] as Company;
+}
+
+export async function updateCompany(data: Omit<Company, "id">) {
+  const pool = await ready();
+  await pool.query(
+    `UPDATE company SET name=$1, "regCom"=$2, cif=$3, address=$4, iban=$5, bank=$6, phone=$7, email=$8, "vatIncasare"=$9 WHERE id=1`,
+    [data.name, data.regCom, data.cif, data.address, data.iban, data.bank, data.phone, data.email, data.vatIncasare]
+  );
+}
+
+// ---------- Users ----------
+export async function listUsers(includeInactive = false): Promise<User[]> {
+  const pool = await ready();
+  const { rows } = await pool.query(
+    includeInactive
+      ? `SELECT * FROM users ORDER BY active DESC, name`
+      : `SELECT * FROM users WHERE active=1 ORDER BY name`
+  );
+  return rows as User[];
+}
+
+export async function getUser(id: number): Promise<User | undefined> {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM users WHERE id=$1`, [id]);
+  return rows[0] as User | undefined;
+}
+
+export async function createUser(data: { name: string; ci: string; cnp: string; role: string }): Promise<number> {
+  const pool = await ready();
+  const { rows } = await pool.query(
+    `INSERT INTO users (name, ci, cnp, role, active) VALUES ($1,$2,$3,$4,1) RETURNING id`,
+    [data.name, data.ci, data.cnp, data.role]
+  );
+  return rows[0].id as number;
+}
+
+export async function updateUser(
+  id: number,
+  data: { name: string; ci: string; cnp: string; role: string; active: number }
+) {
+  const pool = await ready();
+  await pool.query(`UPDATE users SET name=$1, ci=$2, cnp=$3, role=$4, active=$5 WHERE id=$6`, [
+    data.name,
+    data.ci,
+    data.cnp,
+    data.role,
+    data.active,
+    id,
+  ]);
+}
+
+export async function deleteUser(id: number) {
+  const pool = await ready();
+  await pool.query(`DELETE FROM users WHERE id=$1`, [id]);
+}
+
+// ---------- Clients ----------
+export async function listClients(): Promise<Client[]> {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM clients ORDER BY name`);
+  return rows as Client[];
+}
+
+export async function getClient(id: number): Promise<Client | undefined> {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM clients WHERE id=$1`, [id]);
+  return rows[0] as Client | undefined;
+}
+
+export async function createClient(data: Omit<Client, "id" | "createdAt" | "flagged">): Promise<number> {
+  const pool = await ready();
+  const { rows } = await pool.query(
+    `INSERT INTO clients (name, "regCom", cif, address, judet, phone, email) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+    [data.name, data.regCom, data.cif, data.address, data.judet, data.phone, data.email]
+  );
+  return rows[0].id as number;
+}
+
+export async function updateClient(id: number, data: Omit<Client, "id" | "createdAt" | "flagged">) {
+  const pool = await ready();
+  await pool.query(
+    `UPDATE clients SET name=$1, "regCom"=$2, cif=$3, address=$4, judet=$5, phone=$6, email=$7 WHERE id=$8`,
+    [data.name, data.regCom, data.cif, data.address, data.judet, data.phone, data.email, id]
+  );
+}
+
+export async function setClientFlagged(id: number, flagged: boolean) {
+  const pool = await ready();
+  await pool.query(`UPDATE clients SET flagged=$1 WHERE id=$2`, [flagged ? 1 : 0, id]);
+}
+
+export async function deleteClient(id: number) {
+  const pool = await ready();
+  await pool.query(`DELETE FROM clients WHERE id=$1`, [id]);
+}
+
+// ---------- Products ----------
+export async function listProducts(): Promise<Product[]> {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM products ORDER BY name`);
+  return rows as Product[];
+}
+
+export async function createProduct(data: Omit<Product, "id">): Promise<number> {
+  const pool = await ready();
+  const { rows } = await pool.query(
+    `INSERT INTO products (name, um, price, cost, "vatRate") VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+    [data.name, data.um, data.price, data.cost, data.vatRate]
+  );
+  return rows[0].id as number;
+}
+
+export async function updateProduct(id: number, data: Omit<Product, "id">) {
+  const pool = await ready();
+  await pool.query(`UPDATE products SET name=$1, um=$2, price=$3, cost=$4, "vatRate"=$5 WHERE id=$6`, [
+    data.name,
+    data.um,
+    data.price,
+    data.cost,
+    data.vatRate,
+    id,
+  ]);
+}
+
+export async function deleteProduct(id: number) {
+  const pool = await ready();
+  await pool.query(`DELETE FROM products WHERE id=$1`, [id]);
+}
+
+// ---------- Counters / numbering ----------
+export async function peekNextNumber(series: string): Promise<number> {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT "lastNumber" FROM counters WHERE series=$1`, [series]);
+  return (rows[0]?.lastNumber ?? 0) + 1;
+}
+
+async function takeNextNumber(series: string): Promise<number> {
+  const pool = await ready();
+  // Atomic upsert-and-increment so two concurrent requests never collide.
+  const { rows } = await pool.query(
+    `INSERT INTO counters (series, "lastNumber") VALUES ($1, 1)
+     ON CONFLICT (series) DO UPDATE SET "lastNumber" = counters."lastNumber" + 1
+     RETURNING "lastNumber"`,
+    [series]
+  );
+  return rows[0].lastNumber as number;
+}
+
+// ---------- Invoices ----------
+function computeTotals(items: InvoiceItemInput[], discountPercent = 0) {
+  let subtotal = 0;
+  let vatTotal = 0;
+  const factor = 1 - (discountPercent || 0) / 100;
+  const computed = items.map((it) => {
+    const valoare = round2(it.qty * it.unitPrice * factor);
+    const vatValue = round2((valoare * it.vatRate) / 100);
+    subtotal += valoare;
+    vatTotal += vatValue;
+    return { ...it, valoare, vatValue };
+  });
+  return { computed, subtotal: round2(subtotal), vatTotal: round2(vatTotal) };
+}
+
+export async function createInvoice(input: {
+  series: string;
+  clientId: number;
+  userId?: number | null;
+  issueDate: string;
+  dueDate?: string;
+  notes?: string;
+  delegateName?: string;
+  delegateCI?: string;
+  delegateCNP?: string;
+  vehiclePlate?: string;
+  deliveryDate?: string;
+  deliveryTime?: string;
+  discountPercent?: number;
+  currency?: string;
+  exchangeRate?: number;
+  items: InvoiceItemInput[];
+}): Promise<number> {
+  const pool = await ready();
+  const number = await takeNextNumber(input.series);
+  const discountPercent = input.discountPercent ?? 0;
+  const { computed, subtotal, vatTotal } = computeTotals(input.items, discountPercent);
+  const total = round2(subtotal + vatTotal);
+
+  const { rows } = await pool.query(
+    `INSERT INTO invoices
+      (series, number, "clientId", "userId", "issueDate", "dueDate", status, "paidAmount", subtotal, "vatTotal", total, "discountPercent", currency, "exchangeRate", notes, "delegateName", "delegateCI", "delegateCNP", "vehiclePlate", "deliveryDate", "deliveryTime")
+     VALUES ($1,$2,$3,$4,$5,$6,'issued',0,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+     RETURNING id`,
+    [
+      input.series,
+      number,
+      input.clientId,
+      input.userId ?? null,
+      input.issueDate,
+      input.dueDate ?? null,
+      subtotal,
+      vatTotal,
+      total,
+      discountPercent,
+      input.currency ?? "RON",
+      input.exchangeRate ?? 1,
+      input.notes ?? "",
+      input.delegateName ?? "",
+      input.delegateCI ?? "",
+      input.delegateCNP ?? "",
+      input.vehiclePlate ?? "",
+      input.deliveryDate ?? "",
+      input.deliveryTime ?? "",
+    ]
+  );
+
+  const invoiceId = rows[0].id as number;
+  for (const it of computed) {
+    await pool.query(
+      `INSERT INTO invoice_items ("invoiceId", "productId", description, um, qty, "unitPrice", "vatRate", valoare, "vatValue")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [invoiceId, it.productId ?? null, it.description, it.um, it.qty, it.unitPrice, it.vatRate, it.valoare, it.vatValue]
+    );
+  }
+  return invoiceId;
+}
+
+export async function listInvoices(): Promise<(Invoice & { clientName: string; userName: string | null })[]> {
+  const pool = await ready();
+  const { rows } = await pool.query(
+    `SELECT i.*, c.name as "clientName", u.name as "userName" FROM invoices i
+     JOIN clients c ON c.id = i."clientId"
+     LEFT JOIN users u ON u.id = i."userId"
+     ORDER BY i."issueDate" DESC, i.id DESC`
+  );
+  return rows as (Invoice & { clientName: string; userName: string | null })[];
+}
+
+export async function getInvoice(id: number): Promise<Invoice | undefined> {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM invoices WHERE id=$1`, [id]);
+  return rows[0] as Invoice | undefined;
+}
+
+export async function getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]> {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM invoice_items WHERE "invoiceId"=$1`, [invoiceId]);
+  return rows as InvoiceItem[];
+}
+
+export async function getInvoiceFull(id: number) {
+  const invoice = await getInvoice(id);
+  if (!invoice) return undefined;
+  const items = await getInvoiceItems(id);
+  const client = await getClient(invoice.clientId);
+  const company = await getCompany();
+  const receipts = await listReceiptsForInvoice(id);
+  const payments = await listPaymentsForInvoice(id);
+  const user = invoice.userId ? await getUser(invoice.userId) : undefined;
+  return { invoice, items, client, company, receipts, payments, user };
+}
+
+export async function setInvoiceStatus(id: number, status: Invoice["status"]) {
+  const pool = await ready();
+  await pool.query(`UPDATE invoices SET status=$1 WHERE id=$2`, [status, id]);
+}
+
+export async function deleteInvoice(id: number) {
+  const pool = await ready();
+  await pool.query(`DELETE FROM invoices WHERE id=$1`, [id]);
+}
+
+// ---------- Payments ----------
+export async function addPayment(invoiceId: number, amount: number, date: string, method: string, notes?: string) {
+  const pool = await ready();
+  await pool.query(`INSERT INTO payments ("invoiceId", amount, date, method, notes) VALUES ($1,$2,$3,$4,$5)`, [
+    invoiceId,
+    amount,
+    date,
+    method,
+    notes ?? "",
+  ]);
+  const { rows: sumRows } = await pool.query(
+    `SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE "invoiceId"=$1`,
+    [invoiceId]
+  );
+  const invoice = (await getInvoice(invoiceId))!;
+  const paid = round2(Number(sumRows[0].s));
+  let status: Invoice["status"] = "issued";
+  if (paid <= 0) status = "issued";
+  else if (paid >= invoice.total) status = "paid";
+  else status = "partial";
+  await pool.query(`UPDATE invoices SET "paidAmount"=$1, status=$2 WHERE id=$3`, [paid, status, invoiceId]);
+}
+
+export async function listPaymentsForInvoice(invoiceId: number) {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM payments WHERE "invoiceId"=$1 ORDER BY date`, [invoiceId]);
+  return rows as { id: number; invoiceId: number; amount: number; date: string; method: string; notes: string }[];
+}
+
+// ---------- Receipts ----------
+export async function createReceipt(
+  invoiceId: number,
+  issueDate: string,
+  amount: number,
+  cashier?: string
+): Promise<number> {
+  const pool = await ready();
+  const number = await takeNextNumber("CH1");
+  const { rows } = await pool.query(
+    `INSERT INTO receipts (series, number, "invoiceId", "issueDate", amount, cashier) VALUES ('CH1',$1,$2,$3,$4,$5) RETURNING id`,
+    [number, invoiceId, issueDate, amount, cashier ?? ""]
+  );
+  return rows[0].id as number;
+}
+
+export async function listReceiptsForInvoice(invoiceId: number) {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM receipts WHERE "invoiceId"=$1 ORDER BY id`, [invoiceId]);
+  return rows as {
+    id: number;
+    series: string;
+    number: number;
+    invoiceId: number;
+    issueDate: string;
+    amount: number;
+    cashier: string;
+  }[];
+}
+
+export async function getReceipt(id: number) {
+  const pool = await ready();
+  const { rows } = await pool.query(`SELECT * FROM receipts WHERE id=$1`, [id]);
+  return rows[0] as
+    | { id: number; series: string; number: number; invoiceId: number; issueDate: string; amount: number; cashier: string }
+    | undefined;
+}
+
+// ---------- Dashboard stats ----------
+export async function getDashboardStats() {
+  const pool = await ready();
+  const totalInvoices = Number((await pool.query(`SELECT COUNT(*) as c FROM invoices`)).rows[0].c);
+  const totalOutstanding = round2(
+    Number(
+      (
+        await pool.query(`SELECT COALESCE(SUM(total - "paidAmount"),0) as s FROM invoices WHERE status != 'canceled'`)
+      ).rows[0].s
+    )
+  );
+  const totalCollected = round2(
+    Number((await pool.query(`SELECT COALESCE(SUM("paidAmount"),0) as s FROM invoices`)).rows[0].s)
+  );
+  const thisMonth = new Date().toISOString().slice(0, 7);
+  const monthRevenue = round2(
+    Number(
+      (
+        await pool.query(`SELECT COALESCE(SUM(total),0) as s FROM invoices WHERE substring("issueDate",1,7)=$1`, [
+          thisMonth,
+        ])
+      ).rows[0].s
+    )
+  );
+  const totalClients = Number((await pool.query(`SELECT COUNT(*) as c FROM clients`)).rows[0].c);
+  return { totalInvoices, totalOutstanding, totalCollected, monthRevenue, totalClients };
+}
+
+// ---------- Rapoarte avansate ----------
+export type DateRange = { from?: string; to?: string };
+
+function dateFilter(range: DateRange | undefined, col: string, startIndex: number) {
+  const clauses: string[] = [];
+  const params: string[] = [];
+  let idx = startIndex;
+  if (range?.from) {
+    clauses.push(`${col} >= $${idx++}`);
+    params.push(range.from);
+  }
+  if (range?.to) {
+    clauses.push(`${col} <= $${idx++}`);
+    params.push(range.to);
+  }
+  return { where: clauses.length ? "AND " + clauses.join(" AND ") : "", params };
+}
+
+export async function getSalesByProduct(range?: DateRange) {
+  const pool = await ready();
+  const { where, params } = dateFilter(range, `i."issueDate"`, 1);
+  const { rows } = await pool.query(
+    `SELECT it.description as name, SUM(it.qty) as qty, SUM(it.valoare) as total, SUM(it."vatValue") as vat
+     FROM invoice_items it
+     JOIN invoices i ON i.id = it."invoiceId"
+     WHERE i.status != 'canceled' ${where}
+     GROUP BY it.description
+     ORDER BY total DESC`,
+    params
+  );
+  return rows.map((r) => ({ name: r.name, qty: Number(r.qty), total: Number(r.total), vat: Number(r.vat) })) as {
+    name: string;
+    qty: number;
+    total: number;
+    vat: number;
+  }[];
+}
+
+export async function getProfitByProduct(range?: DateRange) {
+  const pool = await ready();
+  const { where, params } = dateFilter(range, `i."issueDate"`, 1);
+  const { rows } = await pool.query(
+    `SELECT it.description as name, SUM(it.qty) as qty, SUM(it.valoare) as revenue,
+            SUM(it.qty * COALESCE(p.cost, 0)) as cost,
+            (SUM(it.valoare) - SUM(it.qty * COALESCE(p.cost, 0))) as profit
+     FROM invoice_items it
+     JOIN invoices i ON i.id = it."invoiceId"
+     LEFT JOIN products p ON p.id = it."productId"
+     WHERE i.status != 'canceled' ${where}
+     GROUP BY it.description
+     ORDER BY profit DESC`,
+    params
+  );
+  return rows.map((r) => ({
+    name: r.name,
+    qty: Number(r.qty),
+    revenue: Number(r.revenue),
+    cost: Number(r.cost),
+    profit: Number(r.profit),
+  })) as { name: string; qty: number; revenue: number; cost: number; profit: number }[];
+}
+
+export async function getSalesByAgent(range?: DateRange) {
+  const pool = await ready();
+  const { where, params } = dateFilter(range, `i."issueDate"`, 1);
+  const { rows } = await pool.query(
+    `SELECT COALESCE(u.name, 'Fara utilizator') as name, COUNT(i.id) as "invoiceCount",
+            SUM(i.total) as total, SUM(i."paidAmount") as collected
+     FROM invoices i
+     LEFT JOIN users u ON u.id = i."userId"
+     WHERE i.status != 'canceled' ${where}
+     GROUP BY i."userId", u.name
+     ORDER BY total DESC`,
+    params
+  );
+  return rows.map((r) => ({
+    name: r.name,
+    invoiceCount: Number(r.invoiceCount),
+    total: Number(r.total),
+    collected: Number(r.collected),
+  })) as { name: string; invoiceCount: number; total: number; collected: number }[];
+}
+
+export async function getOverdueInvoices() {
+  const pool = await ready();
+  const today = new Date().toISOString().slice(0, 10);
+  const { rows } = await pool.query(
+    `SELECT i.*, c.name as "clientName" FROM invoices i
+     JOIN clients c ON c.id = i."clientId"
+     WHERE i.status IN ('issued','partial') AND i."dueDate" IS NOT NULL AND i."dueDate" != '' AND i."dueDate" < $1
+     ORDER BY i."dueDate" ASC`,
+    [today]
+  );
+  return rows as (Invoice & { clientName: string })[];
+}
+
+export async function getOutstandingByClient() {
+  const pool = await ready();
+  const { rows } = await pool.query(
+    `SELECT c.id, c.name, c.flagged, ROUND(CAST(SUM(i.total - i."paidAmount") AS numeric), 2) as outstanding, COUNT(i.id) as "invoiceCount"
+     FROM invoices i
+     JOIN clients c ON c.id = i."clientId"
+     WHERE i.status IN ('issued','partial')
+     GROUP BY c.id
+     HAVING SUM(i.total - i."paidAmount") > 0
+     ORDER BY outstanding DESC`
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    flagged: r.flagged,
+    outstanding: Number(r.outstanding),
+    invoiceCount: Number(r.invoiceCount),
+  })) as { id: number; name: string; flagged: number; outstanding: number; invoiceCount: number }[];
+}
