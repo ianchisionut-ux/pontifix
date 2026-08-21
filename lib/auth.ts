@@ -10,6 +10,7 @@ import { rateLimit } from './rate-limit'
 const SESSION_MAX_AGE = 60 * 60 * 24 * 90
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  trustHost: true,
   cookies: {
     sessionToken: {
       name: process.env.NODE_ENV === 'production' ? '__Secure-authjs.session-token' : 'authjs.session-token',

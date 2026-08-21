@@ -13,12 +13,11 @@ export const metadata: Metadata = {
     capable: true,
     title: 'Elmont',
     statusBarStyle: 'default',
-    startupImage: ['/pwa-icon-512.png'],
   },
   formatDetection: { telephone: false },
   icons: {
-    icon: [{ url: '/pwa-icon-192.png', sizes: '192x192', type: 'image/png' }],
-    apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }],
+    icon: [{ url: '/pwa-icon-v2-192.png', sizes: '192x192', type: 'image/png' }],
+    apple: [{ url: '/apple-touch-icon-v2.png', sizes: '180x180', type: 'image/png' }],
   },
   other: {
     'mobile-web-app-capable': 'yes',

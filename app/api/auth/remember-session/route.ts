@@ -21,8 +21,10 @@ export async function POST(request: NextRequest) {
       sameSite: 'lax',
       path: '/',
       secure: process.env.NODE_ENV === 'production',
+      priority: 'high',
       ...(body.remember ? { maxAge: SESSION_MAX_AGE, expires: new Date(Date.now() + SESSION_MAX_AGE * 1000) } : {}),
     })
   }
+  response.headers.set('Cache-Control', 'no-store')
   return response
 }

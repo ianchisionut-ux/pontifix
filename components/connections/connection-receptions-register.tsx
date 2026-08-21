@@ -102,10 +102,23 @@ export function ConnectionReceptionsRegister({ initialRecords, canManage }: { in
       @media print {
         .reception-print-root { width: 100% !important; max-width: none !important; margin: 0 auto !important; }
         .reception-print-root section { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
-        .reception-print-root table { width: 100% !important; min-width: 0 !important; table-layout: fixed !important; font-size: 7.5pt !important; }
+        .reception-print-root .overflow-x-auto { overflow: visible !important; }
+        .reception-print-root table { width: 100% !important; min-width: 0 !important; table-layout: fixed !important; font-size: 6.7pt !important; line-height: 1.15 !important; }
+        .reception-print-root th:nth-child(1), .reception-print-root td:nth-child(1) { width: 4% !important; }
+        .reception-print-root th:nth-child(2), .reception-print-root td:nth-child(2) { width: 4% !important; }
+        .reception-print-root th:nth-child(3), .reception-print-root td:nth-child(3) { width: 17% !important; }
+        .reception-print-root th:nth-child(4), .reception-print-root td:nth-child(4) { width: 17% !important; }
+        .reception-print-root th:nth-child(5), .reception-print-root td:nth-child(5) { width: 27% !important; }
+        .reception-print-root th:nth-child(6), .reception-print-root td:nth-child(6) { width: 5% !important; }
+        .reception-print-root th:nth-child(7), .reception-print-root td:nth-child(7) { width: 8% !important; }
+        .reception-print-root th:nth-child(8), .reception-print-root td:nth-child(8) { width: 10% !important; }
+        .reception-print-root th:nth-child(9), .reception-print-root td:nth-child(9) { width: 8% !important; }
         .reception-print-root thead { display: table-header-group !important; }
         .reception-print-root tr { break-inside: avoid !important; page-break-inside: avoid !important; }
-        .reception-print-root th, .reception-print-root td { padding: 1.6mm 1mm !important; overflow-wrap: anywhere !important; }
+        .reception-print-root th, .reception-print-root td { padding: 1.1mm .7mm !important; overflow-wrap: break-word !important; word-break: normal !important; hyphens: auto !important; vertical-align: top !important; }
+        .reception-print-root th { white-space: normal !important; }
+        .reception-print-root td:nth-child(9) button { display: inline-flex !important; padding: 0 !important; background: transparent !important; color: #0f172a !important; font-size: 6.7pt !important; }
+        .reception-print-root td:nth-child(9) svg { display: none !important; }
       }`
     document.head.appendChild(style)
     const cleanup = () => style.remove()
@@ -118,12 +131,12 @@ export function ConnectionReceptionsRegister({ initialRecords, canManage }: { in
   const selectedYear = year === 'ALL' ? new Date().getFullYear() : year
 
   return <div className="reception-print-root">
-    <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
+    <header className="screen-only mb-5 flex flex-wrap items-end justify-between gap-4">
       <div><span className="text-xs font-black uppercase tracking-[.16em] text-[#197fb5]">Registru tehnic</span><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#082b4d]">Recepții</h1><p className="mt-1 text-sm text-slate-500">Istoricul avizelor și urmărirea recepției lucrărilor, separat de dosarele branșamentelor.</p></div>
       <div className="screen-only flex flex-wrap gap-2"><button type="button" onClick={printRegister} className="btn-secondary inline-flex items-center gap-2"><Printer size={17}/> Printează</button>{canManage&&<><input ref={importInput} type="file" accept=".xlsx,.xls" className="hidden" onChange={(event) => importExcel(event.target.files?.[0])}/><button type="button" disabled={busy==='import'} onClick={() => importInput.current?.click()} className="btn-secondary inline-flex items-center gap-2"><FileSpreadsheet size={17}/> {busy==='import'?'Se importă…':'Importă Excel'}</button><button type="button" onClick={() => setModal('new')} className="btn-primary inline-flex items-center gap-2"><Plus size={17}/> Adaugă recepție</button></>}</div>
     </header>
 
-    <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="screen-only mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <Stat label="Poziții în registru" value={records.length}/><Stat label={year === 'ALL' ? 'Poziții afișate' : `Poziții ${year}`} value={yearRecords.length}/><Stat label="Recepționate" value={yearRecords.filter((item) => item.received).length} green/><Stat label="În așteptare" value={yearRecords.filter((item) => !item.received).length}/>
     </div>
 
