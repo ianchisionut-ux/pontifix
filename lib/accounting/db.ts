@@ -149,6 +149,17 @@ async function ensureSchema(pool: Pool) {
   // sa ramana cu cota aplicata la data emiterii.
   await pool.query(`ALTER TABLE products ALTER COLUMN "vatRate" SET DEFAULT 21;`);
   await pool.query(`ALTER TABLE invoice_items ALTER COLUMN "vatRate" SET DEFAULT 21;`);
+
+  // Date extinse de identificare si legatura stabila cu dosarul de bransament.
+  // Coloanele sunt adaugate incremental pentru bazele deja existente in productie.
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "clientType" TEXT NOT NULL DEFAULT 'PJ';`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS cnp TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS city TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "ciSeries" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "ciNumber" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "sourceConnectionId" TEXT;`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "sourceNib" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "clients_sourceConnectionId_key" ON clients ("sourceConnectionId") WHERE "sourceConnectionId" IS NOT NULL;`);
 }
 
 export function getPool(): Pool {

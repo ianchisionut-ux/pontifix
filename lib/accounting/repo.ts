@@ -26,14 +26,26 @@ export type Company = {
 export type Client = {
   id: number;
   name: string;
+  clientType: "PF" | "PJ";
   regCom: string;
   cif: string;
+  cnp: string;
   address: string;
   judet: string;
+  city: string;
   phone: string;
   email: string;
+  ciSeries: string;
+  ciNumber: string;
+  sourceConnectionId: string | null;
+  sourceNib: string;
   flagged: number;
   createdAt: string;
+};
+
+export type ClientInput = Omit<Client, "id" | "createdAt" | "flagged" | "sourceConnectionId" | "sourceNib"> & {
+  sourceConnectionId?: string | null;
+  sourceNib?: string;
 };
 
 export type Product = {
@@ -166,21 +178,57 @@ export async function getClient(id: number): Promise<Client | undefined> {
   return rows[0] as Client | undefined;
 }
 
-export async function createClient(data: Omit<Client, "id" | "createdAt" | "flagged">): Promise<number> {
+export async function createClient(data: ClientInput): Promise<number> {
   const pool = await ready();
   const { rows } = await pool.query(
-    `INSERT INTO clients (name, "regCom", cif, address, judet, phone, email) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-    [data.name, data.regCom, data.cif, data.address, data.judet, data.phone, data.email]
+    `INSERT INTO clients (name, "clientType", "regCom", cif, cnp, address, judet, city, phone, email, "ciSeries", "ciNumber", "sourceConnectionId", "sourceNib")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
+    [data.name, data.clientType || "PJ", data.regCom ?? "", data.cif ?? "", data.cnp ?? "", data.address ?? "", data.judet ?? "", data.city ?? "", data.phone ?? "", data.email ?? "", data.ciSeries ?? "", data.ciNumber ?? "", data.sourceConnectionId ?? null, data.sourceNib ?? ""]
   );
   return rows[0].id as number;
 }
 
-export async function updateClient(id: number, data: Omit<Client, "id" | "createdAt" | "flagged">) {
+export async function updateClient(id: number, data: ClientInput) {
   const pool = await ready();
   await pool.query(
-    `UPDATE clients SET name=$1, "regCom"=$2, cif=$3, address=$4, judet=$5, phone=$6, email=$7 WHERE id=$8`,
-    [data.name, data.regCom, data.cif, data.address, data.judet, data.phone, data.email, id]
+    `UPDATE clients SET name=$1, "clientType"=$2, "regCom"=$3, cif=$4, cnp=$5, address=$6, judet=$7, city=$8, phone=$9, email=$10, "ciSeries"=$11, "ciNumber"=$12 WHERE id=$13`,
+    [data.name, data.clientType || "PJ", data.regCom ?? "", data.cif ?? "", data.cnp ?? "", data.address ?? "", data.judet ?? "", data.city ?? "", data.phone ?? "", data.email ?? "", data.ciSeries ?? "", data.ciNumber ?? "", id]
   );
+}
+
+export async function syncClientFromConnection(data: {
+  connectionId: string; nib: string; name: string; identifier: string; address: string;
+  judet: string; city: string; phone: string; ciSeries: string; ciNumber: string;
+}): Promise<number> {
+  const pool = await ready();
+  const digits = data.identifier.replace(/\D/g, "");
+  const clientType: "PF" | "PJ" = digits.length === 13 ? "PF" : "PJ";
+  const cnp = clientType === "PF" ? digits : "";
+  const cif = clientType === "PJ" ? data.identifier.trim() : "";
+  const existing = await pool.query(
+    `SELECT id FROM clients WHERE "sourceConnectionId"=$1 OR ($2<>'' AND cnp=$2) OR ($3<>'' AND cif=$3) ORDER BY ("sourceConnectionId"=$1) DESC LIMIT 1`,
+    [data.connectionId, cnp, cif]
+  );
+  if (existing.rows[0]) {
+    const id = Number(existing.rows[0].id);
+    await pool.query(
+      `UPDATE clients SET name=COALESCE(NULLIF($1,''),name), "clientType"=$2,
+       cif=CASE WHEN $2='PJ' THEN COALESCE(NULLIF($3,''),cif) ELSE cif END,
+       cnp=CASE WHEN $2='PF' THEN COALESCE(NULLIF($4,''),cnp) ELSE cnp END,
+       address=COALESCE(NULLIF($5,''),address), judet=COALESCE(NULLIF($6,''),judet),
+       city=COALESCE(NULLIF($7,''),city), phone=COALESCE(NULLIF($8,''),phone),
+       "ciSeries"=COALESCE(NULLIF($9,''),"ciSeries"), "ciNumber"=COALESCE(NULLIF($10,''),"ciNumber"),
+       "sourceConnectionId"=$11, "sourceNib"=$12 WHERE id=$13`,
+      [data.name, clientType, cif, cnp, data.address, data.judet, data.city, data.phone, data.ciSeries, data.ciNumber, data.connectionId, data.nib, id]
+    );
+    return id;
+  }
+  return createClient({
+    name: data.name || `Beneficiar ${data.nib}`, clientType, regCom: "", cif, cnp,
+    address: data.address, judet: data.judet, city: data.city, phone: data.phone,
+    email: "", ciSeries: data.ciSeries, ciNumber: data.ciNumber,
+    sourceConnectionId: data.connectionId, sourceNib: data.nib,
+  });
 }
 
 export async function setClientFlagged(id: number, flagged: boolean) {

@@ -1,212 +1,103 @@
-import { Document, Page, Text, View, StyleSheet, Font } from "@react-pdf/renderer";
+import React from "react";
+import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import type { Company, Client, Invoice, InvoiceItem } from "@/lib/accounting/repo";
 import { amountToWordsRO } from "@/lib/accounting/numberToWords";
+import { ACCOUNTING_LOGO_DATA_URI } from "@/lib/accounting/logo";
 
-const CYAN = "#29ABD4";
-const PURPLE = "#6B2FB3";
+const NAVY = "#082b4d";
+const BLUE = "#197fb5";
+const SKY = "#eaf5fb";
+const LINE = "#cfe2ed";
+const TEXT = "#334e68";
+const MUTED = "#6b8296";
+const LOGO = ACCOUNTING_LOGO_DATA_URI;
 
 const styles = StyleSheet.create({
-  page: { padding: 32, fontSize: 9, fontFamily: "Helvetica", color: "#222" },
-  headerBar: {
-    backgroundColor: CYAN,
-    color: "#fff",
-    padding: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  headerTitle: { fontSize: 16, fontFamily: "Helvetica-Bold" },
-  headerNumber: { fontSize: 16, fontFamily: "Helvetica-Bold" },
-  headerSub: { fontSize: 8, color: "#fff", marginTop: 10 },
-  row: { flexDirection: "row", justifyContent: "space-between", marginTop: 14 },
-  col: { width: "48%" },
-  label: { color: "#555", fontSize: 8, marginTop: 4 },
-  bold: { fontFamily: "Helvetica-Bold" },
-  sectionTitle: { fontFamily: "Helvetica-Bold", fontSize: 11, marginBottom: 4 },
-  table: { marginTop: 16, borderWidth: 1, borderColor: "#ddd" },
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: CYAN,
-    color: "#fff",
-    fontFamily: "Helvetica-Bold",
-    fontSize: 8,
-    padding: 5,
-  },
-  tableRow: {
-    flexDirection: "row",
-    fontSize: 8,
-    padding: 5,
-    borderTopWidth: 1,
-    borderTopColor: "#eee",
-  },
-  cNr: { width: "6%" },
-  cDenumire: { width: "38%" },
-  cUM: { width: "10%", textAlign: "center" },
-  cCant: { width: "10%", textAlign: "center" },
-  cPret: { width: "12%", textAlign: "right" },
-  cVal: { width: "12%", textAlign: "right" },
-  cTva: { width: "12%", textAlign: "right" },
-  totalsBox: { marginTop: 6, alignItems: "flex-end" },
-  totalsRow: { flexDirection: "row", width: 220, justifyContent: "space-between", marginTop: 2 },
-  totalPlataRow: {
-    flexDirection: "row",
-    width: 220,
-    justifyContent: "space-between",
-    marginTop: 6,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: "#ccc",
-  },
-  totalPlataLabel: { fontFamily: "Helvetica-Bold", fontSize: 11 },
-  totalPlataValue: { fontFamily: "Helvetica-Bold", fontSize: 11, color: PURPLE },
-  footerBox: {
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: CYAN,
-    borderRadius: 4,
-    padding: 10,
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  footerCol: { width: "32%" },
-  footerLabel: { fontFamily: "Helvetica-Bold", fontSize: 8, marginBottom: 3 },
-  footerText: { fontSize: 8, lineHeight: 1.4 },
-  amountWords: { fontSize: 8, marginTop: 10, fontStyle: "italic" },
+  page: { padding: 30, fontSize: 8.5, fontFamily: "Helvetica", color: TEXT, backgroundColor: "#ffffff" },
+  brandLine: { height: 5, backgroundColor: BLUE, borderRadius: 3, marginBottom: 14 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+  identity: { flexDirection: "row", alignItems: "center", width: "57%" },
+  logo: { width: 64, height: 45, objectFit: "contain", marginRight: 12 },
+  companyName: { fontFamily: "Helvetica-Bold", fontSize: 17, color: NAVY },
+  companyTagline: { marginTop: 3, fontSize: 7.5, color: MUTED },
+  invoiceBox: { width: "35%", backgroundColor: NAVY, borderRadius: 8, padding: 12, color: "#ffffff" },
+  invoiceLabel: { fontSize: 8, letterSpacing: 1.2, color: "#b9dcef" },
+  invoiceNumber: { fontFamily: "Helvetica-Bold", fontSize: 17, marginTop: 3 },
+  invoiceMeta: { marginTop: 8, fontSize: 8, lineHeight: 1.5, color: "#e4f2f8" },
+  partyRow: { flexDirection: "row", gap: 10, marginBottom: 14 },
+  partyCard: { width: "50%", borderWidth: 1, borderColor: LINE, borderRadius: 7, padding: 10, backgroundColor: "#fbfdfe" },
+  partyCardClient: { width: "50%", borderWidth: 1.2, borderColor: BLUE, borderRadius: 7, padding: 10, backgroundColor: SKY },
+  kicker: { fontFamily: "Helvetica-Bold", fontSize: 7, letterSpacing: 1, color: BLUE, marginBottom: 5 },
+  partyName: { fontFamily: "Helvetica-Bold", fontSize: 11, color: NAVY, marginBottom: 4 },
+  detail: { fontSize: 7.6, lineHeight: 1.5, color: TEXT },
+  table: { borderWidth: 1, borderColor: LINE, borderRadius: 5, overflow: "hidden" },
+  tableHeader: { flexDirection: "row", backgroundColor: NAVY, color: "#ffffff", fontFamily: "Helvetica-Bold", fontSize: 7.2, paddingVertical: 7, paddingHorizontal: 5 },
+  tableRow: { flexDirection: "row", minHeight: 28, alignItems: "center", fontSize: 7.6, paddingVertical: 6, paddingHorizontal: 5, borderTopWidth: 1, borderTopColor: LINE },
+  tableRowAlt: { backgroundColor: "#f5fafc" },
+  cNr: { width: "5%" }, cDenumire: { width: "39%" }, cUM: { width: "8%", textAlign: "center" },
+  cCant: { width: "9%", textAlign: "right" }, cPret: { width: "13%", textAlign: "right" },
+  cVal: { width: "13%", textAlign: "right" }, cTva: { width: "13%", textAlign: "right" },
+  summaryArea: { flexDirection: "row", justifyContent: "space-between", marginTop: 12 },
+  words: { width: "55%", backgroundColor: SKY, borderRadius: 6, padding: 9, fontSize: 7.5, lineHeight: 1.5 },
+  wordsTitle: { fontFamily: "Helvetica-Bold", color: BLUE, marginBottom: 3 },
+  totals: { width: "38%" },
+  totalsRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 3 },
+  totalsMuted: { color: MUTED },
+  totalFinal: { flexDirection: "row", justifyContent: "space-between", backgroundColor: BLUE, color: "#fff", borderRadius: 6, padding: 9, marginTop: 4, fontFamily: "Helvetica-Bold", fontSize: 10 },
+  notes: { marginTop: 11, padding: 8, borderLeftWidth: 3, borderLeftColor: BLUE, backgroundColor: "#f8fbfd", fontSize: 7.5, lineHeight: 1.5 },
+  footer: { position: "absolute", left: 30, right: 30, bottom: 26, borderTopWidth: 1, borderTopColor: LINE, paddingTop: 9, flexDirection: "row", justifyContent: "space-between" },
+  footerCol: { width: "32%" }, footerTitle: { fontFamily: "Helvetica-Bold", color: NAVY, fontSize: 7.5, marginBottom: 3 },
+  footerText: { color: MUTED, fontSize: 7, lineHeight: 1.4 },
+  badge: { alignSelf: "flex-start", marginTop: 5, paddingVertical: 3, paddingHorizontal: 6, borderRadius: 8, backgroundColor: "#dff2fb", color: BLUE, fontFamily: "Helvetica-Bold", fontSize: 6.5 },
 });
 
-function fmt(n: number) {
-  return n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function fmt(n: number) { return n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function identification(client: Client) {
+  return client.clientType === "PF"
+    ? [client.cnp && `CNP: ${client.cnp}`, (client.ciSeries || client.ciNumber) && `CI: ${client.ciSeries} ${client.ciNumber}`]
+    : [client.cif && `CIF/CUI: ${client.cif}`, client.regCom && `Reg. com.: ${client.regCom}`];
 }
 
-export function InvoicePdf({
-  invoice,
-  items,
-  client,
-  company,
-}: {
-  invoice: Invoice;
-  items: InvoiceItem[];
-  client: Client;
-  company: Company;
-}) {
+export function InvoicePdf({ invoice, items, client, company }: { invoice: Invoice; items: InvoiceItem[]; client: Client; company: Company }) {
   const numStr = String(invoice.number).padStart(4, "0");
-  return (
-    <Document>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.headerBar}>
-          <Text style={styles.headerTitle}>Factura</Text>
-          <Text style={styles.headerNumber}>
-            {invoice.series} {numStr}
-          </Text>
-        </View>
-        <Text style={styles.headerSub}>
-          Data emiterii: {formatDate(invoice.issueDate)}
-          {company.vatIncasare ? "                              TVA la Incasare (21%)" : ""}
-        </Text>
+  return <Document><Page size="A4" style={styles.page}>
+    <View style={styles.brandLine}/>
+    <View style={styles.header}>
+      <View style={styles.identity}><Image src={LOGO} style={styles.logo}/><View><Text style={styles.companyName}>{company.name}</Text><Text style={styles.companyTagline}>Proiectare si executie instalatii electrice</Text><Text style={styles.badge}>DOCUMENT FISCAL</Text></View></View>
+      <View style={styles.invoiceBox}><Text style={styles.invoiceLabel}>FACTURA</Text><Text style={styles.invoiceNumber}>{invoice.series} {numStr}</Text><Text style={styles.invoiceMeta}>Emisa: {formatDate(invoice.issueDate)}{"\n"}Scadenta: {invoice.dueDate ? formatDate(invoice.dueDate) : "—"}{"\n"}Moneda: {invoice.currency}</Text></View>
+    </View>
 
-        <View style={styles.row}>
-          <View style={styles.col}>
-            <Text style={styles.sectionTitle}>Furnizor:</Text>
-            <Text style={styles.bold}>{company.name}</Text>
-            <Text style={styles.label}>Reg. com: {company.regCom}</Text>
-            <Text style={styles.label}>CIF: {company.cif}</Text>
-            <Text style={styles.label}>Adresa: {company.address}</Text>
-            <Text style={styles.label}>IBAN (RON): {company.iban}</Text>
-            <Text style={styles.label}>Banca: {company.bank}</Text>
-          </View>
-          <View style={styles.col}>
-            <Text style={styles.sectionTitle}>Client:</Text>
-            <Text style={styles.bold}>{client.name}</Text>
-            <Text style={styles.label}>Reg. com: {client.regCom}</Text>
-            <Text style={styles.label}>CIF: {client.cif}</Text>
-            <Text style={styles.label}>Adresa: {client.address}</Text>
-            <Text style={styles.label}>Judet: {client.judet}</Text>
-          </View>
-        </View>
+    <View style={styles.partyRow}>
+      <View style={styles.partyCard}><Text style={styles.kicker}>FURNIZOR</Text><Text style={styles.partyName}>{company.name}</Text>
+        <Text style={styles.detail}>CIF: {company.cif}</Text><Text style={styles.detail}>Reg. com.: {company.regCom}</Text><Text style={styles.detail}>{company.address}</Text>
+        {company.iban && <Text style={styles.detail}>IBAN: {company.iban}</Text>}{company.bank && <Text style={styles.detail}>Banca: {company.bank}</Text>}
+        <Text style={styles.detail}>{[company.phone, company.email].filter(Boolean).join(" · ")}</Text>
+      </View>
+      <View style={styles.partyCardClient}><Text style={styles.kicker}>BENEFICIAR · {client.clientType === "PF" ? "PERSOANA FIZICA" : "PERSOANA JURIDICA"}</Text><Text style={styles.partyName}>{client.name}</Text>
+        {identification(client).filter(Boolean).map((line, index)=><Text key={index} style={styles.detail}>{line}</Text>)}
+        <Text style={styles.detail}>{client.address || "Adresa necompletata"}</Text>
+        <Text style={styles.detail}>{[client.city, client.judet].filter(Boolean).join(", ")}</Text>
+        <Text style={styles.detail}>{[client.phone, client.email].filter(Boolean).join(" · ")}</Text>
+        {client.sourceNib && <Text style={styles.badge}>DOSAR {client.sourceNib}</Text>}
+      </View>
+    </View>
 
-        <View style={styles.table}>
-          <View style={styles.tableHeader}>
-            <Text style={styles.cNr}>Nr.</Text>
-            <Text style={styles.cDenumire}>Denumire produs/serviciu</Text>
-            <Text style={styles.cUM}>U.M.</Text>
-            <Text style={styles.cCant}>Cant.</Text>
-            <Text style={styles.cPret}>Pret unitar (RON fara TVA)</Text>
-            <Text style={styles.cVal}>Valoare (RON)</Text>
-            <Text style={styles.cTva}>TVA (RON)</Text>
-          </View>
-          {items.map((it, idx) => (
-            <View style={styles.tableRow} key={it.id}>
-              <Text style={styles.cNr}>{idx + 1}</Text>
-              <Text style={styles.cDenumire}>{it.description}</Text>
-              <Text style={styles.cUM}>{it.um}</Text>
-              <Text style={styles.cCant}>{it.qty}</Text>
-              <Text style={styles.cPret}>{fmt(it.unitPrice)}</Text>
-              <Text style={styles.cVal}>{fmt(it.valoare)}</Text>
-              <Text style={styles.cTva}>{fmt(it.vatValue)}</Text>
-            </View>
-          ))}
-        </View>
+    <View style={styles.table}>
+      <View style={styles.tableHeader}><Text style={styles.cNr}>Nr.</Text><Text style={styles.cDenumire}>Produs / serviciu</Text><Text style={styles.cUM}>U.M.</Text><Text style={styles.cCant}>Cant.</Text><Text style={styles.cPret}>Pret unitar</Text><Text style={styles.cVal}>Valoare</Text><Text style={styles.cTva}>TVA</Text></View>
+      {items.map((it,idx)=><View key={it.id} style={[styles.tableRow, idx%2 ? styles.tableRowAlt : {}]}><Text style={styles.cNr}>{idx+1}</Text><Text style={styles.cDenumire}>{it.description}</Text><Text style={styles.cUM}>{it.um}</Text><Text style={styles.cCant}>{fmt(it.qty)}</Text><Text style={styles.cPret}>{fmt(it.unitPrice)}</Text><Text style={styles.cVal}>{fmt(it.valoare)}</Text><Text style={styles.cTva}>{fmt(it.vatValue)} ({it.vatRate}%)</Text></View>)}
+    </View>
 
-        <View style={styles.totalsBox}>
-          <View style={styles.totalsRow}>
-            <Text>Subtotal</Text>
-            <Text>{fmt(invoice.subtotal)}</Text>
-            <Text>{fmt(invoice.vatTotal)}</Text>
-          </View>
-          {invoice.discountPercent > 0 && (
-            <View style={styles.totalsRow}>
-              <Text>Discount ({invoice.discountPercent}%)</Text>
-              <Text></Text>
-              <Text></Text>
-            </View>
-          )}
-          <View style={styles.totalPlataRow}>
-            <Text style={styles.totalPlataLabel}>Total plata</Text>
-            <Text style={styles.totalPlataValue}>
-              {fmt(invoice.total)} {invoice.currency}
-            </Text>
-          </View>
-          {invoice.currency !== "RON" && (
-            <Text style={{ fontSize: 8, color: "#666", marginTop: 3 }}>
-              Echivalent: {fmt(invoice.total * invoice.exchangeRate)} RON (curs {invoice.exchangeRate} RON/{invoice.currency})
-            </Text>
-          )}
-        </View>
+    <View style={styles.summaryArea}><View style={styles.words}><Text style={styles.wordsTitle}>TOTAL IN LITERE</Text><Text>{amountToWordsRO(invoice.total, invoice.currency)}</Text>{company.vatIncasare ? <Text style={{marginTop:4,color:MUTED}}>TVA la incasare</Text> : null}</View>
+      <View style={styles.totals}><View style={styles.totalsRow}><Text style={styles.totalsMuted}>Subtotal</Text><Text>{fmt(invoice.subtotal)} {invoice.currency}</Text></View><View style={styles.totalsRow}><Text style={styles.totalsMuted}>TVA</Text><Text>{fmt(invoice.vatTotal)} {invoice.currency}</Text></View>{invoice.discountPercent>0&&<View style={styles.totalsRow}><Text style={styles.totalsMuted}>Discount</Text><Text>{invoice.discountPercent}%</Text></View>}<View style={styles.totalFinal}><Text>TOTAL</Text><Text>{fmt(invoice.total)} {invoice.currency}</Text></View></View>
+    </View>
+    {invoice.notes && <View style={styles.notes}><Text style={{fontFamily:"Helvetica-Bold",marginBottom:2}}>Observatii</Text><Text>{invoice.notes}</Text></View>}
 
-        <Text style={styles.amountWords}>
-          Adica {amountToWordsRO(invoice.total, invoice.currency)}.
-        </Text>
-
-        <View style={styles.footerBox}>
-          <View style={styles.footerCol}>
-            <Text style={styles.footerLabel}>Intocmit de:</Text>
-            <Text style={styles.footerText}>{invoice.delegateName || company.name}</Text>
-            <Text style={styles.footerText}>CI: {invoice.delegateCI}</Text>
-            <Text style={styles.footerText}>CNP: {invoice.delegateCNP}</Text>
-          </View>
-          <View style={styles.footerCol}>
-            <Text style={styles.footerLabel}>Date privind expeditia:</Text>
-            <Text style={styles.footerText}>
-              {invoice.vehiclePlate ? `Autoturism cu nr. ${invoice.vehiclePlate}.` : ""}
-            </Text>
-            <Text style={styles.footerText}>
-              {invoice.deliveryDate ? `Expediat la ${formatDate(invoice.deliveryDate)}` : ""}
-              {invoice.deliveryTime ? `, ora ${invoice.deliveryTime}` : ""}
-            </Text>
-          </View>
-          <View style={styles.footerCol}>
-            <Text style={styles.footerLabel}>Semnatura de primire:</Text>
-          </View>
-        </View>
-      </Page>
-    </Document>
-  );
+    <View style={styles.footer}><View style={styles.footerCol}><Text style={styles.footerTitle}>Intocmit de</Text><Text style={styles.footerText}>{invoice.delegateName || company.name}</Text><Text style={styles.footerText}>{invoice.delegateCI ? `CI ${invoice.delegateCI}` : ""}</Text></View><View style={styles.footerCol}><Text style={styles.footerTitle}>Expeditie</Text><Text style={styles.footerText}>{invoice.vehiclePlate ? `Auto ${invoice.vehiclePlate}` : "—"}</Text><Text style={styles.footerText}>{invoice.deliveryDate ? formatDate(invoice.deliveryDate) : ""} {invoice.deliveryTime}</Text></View><View style={styles.footerCol}><Text style={styles.footerTitle}>Semnatura beneficiar</Text><Text style={styles.footerText}>{"\n"}________________________</Text></View></View>
+  </Page></Document>;
 }
 
 export function formatDate(d: string) {
   if (!d) return "";
   const date = new Date(d);
-  if (isNaN(date.getTime())) return d;
-  return date.toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return isNaN(date.getTime()) ? d : date.toLocaleDateString("ro-RO", { day: "2-digit", month: "2-digit", year: "numeric" });
 }

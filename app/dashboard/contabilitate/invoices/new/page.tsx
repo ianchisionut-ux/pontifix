@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CURRENT_USER_KEY } from "@/components/accounting/CurrentUserBox";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Cable, RefreshCw } from "lucide-react";
 
-type Client = { id: number; name: string };
+type Client = { id: number; name: string; clientType: "PF" | "PJ"; cif: string; cnp: string; address: string; phone: string; sourceNib: string };
+type ConnectionBeneficiary = { id: string; nib: string; beneficiary: string; identifier: string; address: string; phone: string };
 type Product = { id: number; name: string; um: string; price: number; vatRate: number };
 type UserT = { id: number; name: string; ci: string; cnp: string };
 
@@ -51,9 +52,13 @@ export default function NewInvoicePage() {
   const [deliveryTime, setDeliveryTime] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
+  const [connections, setConnections] = useState<ConnectionBeneficiary[]>([]);
+  const [connectionId, setConnectionId] = useState("");
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     fetch("/api/accounting/clients").then((r) => r.json()).then(setClients);
+    fetch("/api/accounting/connection-beneficiaries").then((r) => r.json()).then(setConnections);
     fetch("/api/accounting/products").then((r) => r.json()).then(setProducts);
     fetch("/api/accounting/users").then((r) => r.json()).then((list: UserT[]) => {
       setUsers(list);
@@ -68,6 +73,24 @@ export default function NewInvoicePage() {
       .then((r) => r.json())
       .then((d) => setNextNumber(d.number));
   }, [series]);
+
+  async function importConnectionBeneficiary() {
+    if (!connectionId) return;
+    setImporting(true);
+    const response = await fetch("/api/accounting/connection-beneficiaries", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ connectionId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setImporting(false);
+      return alert(data.error || "Beneficiarul nu a putut fi preluat.");
+    }
+    const updated = await fetch("/api/accounting/clients").then((r) => r.json()) as Client[];
+    setClients(updated);
+    setClientId(data.clientId);
+    setImporting(false);
+  }
 
   function applyUser(u: UserT) {
     setUserId(u.id);
@@ -105,6 +128,7 @@ export default function NewInvoicePage() {
   const vatTotal = items.reduce((s, it) => s + (it.qty * it.unitPrice * discountFactor * it.vatRate) / 100, 0);
   const total = subtotal + vatTotal;
   const discountAmount = rawSubtotal - subtotal;
+  const selectedClient = clients.find((client) => client.id === clientId);
 
   async function submit() {
     if (!clientId) {
@@ -159,6 +183,22 @@ export default function NewInvoicePage() {
         </div>
       </div>
 
+      <div className="card mb-4" style={{ background: "linear-gradient(135deg,#eef7fc,#fff)" }}>
+        <div className="flex items-center gap-3 mb-3">
+          <span className="settings-icon"><Cable size={18}/></span>
+          <div><div className="font-bold">Beneficiar din Branșamente</div><p className="page-subtitle">Preia automat datele dosarului și selectează clientul pentru factură.</p></div>
+        </div>
+        <div className="flex gap-3">
+          <select className="input" value={connectionId} onChange={(e) => setConnectionId(e.target.value)}>
+            <option value="">— selectează branșamentul —</option>
+            {connections.map((item) => <option key={item.id} value={item.id}>{item.nib} · {item.beneficiary || "Beneficiar necompletat"} · {item.identifier || "fără CNP/CIF"}</option>)}
+          </select>
+          <button type="button" className="btn-secondary" onClick={importConnectionBeneficiary} disabled={!connectionId || importing}>
+            <RefreshCw size={14}/>{importing ? "Se preia..." : "Preia beneficiarul"}
+          </button>
+        </div>
+      </div>
+
       <div className="card mb-4" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 16 }}>
         <div>
           <label className="field-label">Client</label>
@@ -170,6 +210,13 @@ export default function NewInvoicePage() {
               </option>
             ))}
           </select>
+          {selectedClient && (
+            <div className="mt-2 rounded-xl border border-[#cfe2ed] bg-[#f4f9fc] px-3 py-2 text-xs">
+              <div className="font-bold text-[#082b4d]">{selectedClient.clientType === "PF" ? `CNP ${selectedClient.cnp || "necompletat"}` : `CIF ${selectedClient.cif || "necompletat"}`}</div>
+              <div className="mt-1 text-slate-500">{selectedClient.address || "Adresă necompletată"} · {selectedClient.phone || "telefon necompletat"}</div>
+              {selectedClient.sourceNib && <div className="mt-1 font-semibold text-[#197fb5]">Preluat din {selectedClient.sourceNib}</div>}
+            </div>
+          )}
           {clients.length === 0 && (
             <p className="text-xs mt-1" style={{ color: "var(--amber)" }}>
               Nu ai niciun client inregistrat. <a href="/dashboard/contabilitate/clients" className="link-action">Adauga unul</a>.

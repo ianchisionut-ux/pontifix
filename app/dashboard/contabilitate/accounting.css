@@ -84,3 +84,9 @@
   .accounting-heading, .accounting-toolbar { display:none !important; }
   .accounting-root, .accounting-content { padding:0 !important; border:0 !important; box-shadow:none !important; background:white !important; }
 }
+.accounting-choice-active {
+  border-color: var(--cyan-strong) !important;
+  background: #eaf5fb !important;
+  color: #082b4d !important;
+  box-shadow: inset 0 0 0 1px rgba(25,127,181,.14);
+}
