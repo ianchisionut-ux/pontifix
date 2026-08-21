@@ -98,7 +98,7 @@ export function ConnectionReceptionsRegister({ initialRecords, canManage }: { in
   function printRegister() {
     const style = document.createElement('style')
     style.id = 'reception-landscape-print'
-    style.textContent = `@page { size: A4; margin: 10mm; }
+    style.textContent = `@page { margin: 10mm; }
       @media print {
         .reception-print-root { width: 100% !important; max-width: none !important; margin: 0 auto !important; }
         .reception-print-root section { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }

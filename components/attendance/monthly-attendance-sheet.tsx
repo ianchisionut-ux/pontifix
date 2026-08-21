@@ -77,7 +77,7 @@ export function MonthlyAttendanceSheet({ employees, initialEntries, year, month,
     existing?.remove()
     const style = document.createElement('style')
     style.id = 'attendance-page-orientation'
-    style.textContent = '@page { size: A4; margin: 10mm; }'
+    style.textContent = '@page { margin: 10mm; }'
     document.head.appendChild(style)
     document.body.classList.add('attendance-printing')
     const cleanup = () => {
