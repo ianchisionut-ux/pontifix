@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Download } from "lucide-react";
 
-type Product = { id: number; name: string; um: string; price: number; cost: number; vatRate: number };
-const emptyForm = { name: "", um: "buc", price: 0, cost: 0, vatRate: 21 };
+type Product = { id: number; name: string; um: string; price: number; cost: number; vatRate: number; unitCode: string; vatCategoryCode: string; taxExemptionReasonCode: string; taxExemptionReason: string };
+const emptyForm = { name: "", um: "buc", price: 0, cost: 0, vatRate: 21, unitCode: "H87", vatCategoryCode: "S", taxExemptionReasonCode: "", taxExemptionReason: "" };
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -41,7 +41,7 @@ export default function ProductsPage() {
   }
 
   function edit(p: Product) {
-    setForm({ name: p.name, um: p.um, price: p.price, cost: p.cost, vatRate: p.vatRate });
+    setForm({ name: p.name, um: p.um, price: p.price, cost: p.cost, vatRate: p.vatRate, unitCode: p.unitCode || "H87", vatCategoryCode: p.vatCategoryCode || "S", taxExemptionReasonCode: p.taxExemptionReasonCode || "", taxExemptionReason: p.taxExemptionReason || "" });
     setEditingId(p.id);
     setShowForm(true);
   }
@@ -118,6 +118,19 @@ export default function ProductsPage() {
               onChange={(e) => setForm({ ...form, vatRate: Number(e.target.value) })}
             />
           </div>
+          <div>
+            <label className="field-label">Cod U.M. UBL</label>
+            <select className="input" value={form.unitCode} onChange={(e) => setForm({ ...form, unitCode: e.target.value })}>
+              <option value="H87">H87 · bucată</option><option value="C62">C62 · unitate</option><option value="HUR">HUR · oră</option><option value="DAY">DAY · zi</option><option value="MTR">MTR · metru</option><option value="KGM">KGM · kilogram</option><option value="LTR">LTR · litru</option>
+            </select>
+          </div>
+          <div>
+            <label className="field-label">Categorie TVA UBL</label>
+            <select className="input" value={form.vatCategoryCode} onChange={(e) => setForm({ ...form, vatCategoryCode: e.target.value })}>
+              <option value="S">S · cotă standard</option><option value="Z">Z · cotă zero</option><option value="E">E · scutit</option><option value="AE">AE · taxare inversă</option><option value="O">O · în afara TVA</option>
+            </select>
+          </div>
+          {form.vatCategoryCode !== "S" && <><div><label className="field-label">Cod motiv scutire</label><input className="input" value={form.taxExemptionReasonCode} onChange={(e)=>setForm({...form,taxExemptionReasonCode:e.target.value})}/></div><div><label className="field-label">Motiv scutire / regim TVA</label><input className="input" value={form.taxExemptionReason} onChange={(e)=>setForm({...form,taxExemptionReason:e.target.value})}/></div></>}
           <div className="col-span-4">
             <button onClick={submit} className="btn-primary">
               {editingId ? "Salveaza modificarile" : "Adauga produs"}
@@ -131,7 +144,7 @@ export default function ProductsPage() {
           <thead>
             <tr>
               <th>Denumire</th>
-              <th>U.M.</th>
+              <th>U.M. / UBL</th>
               <th className="text-right">Pret vanzare</th>
               <th className="text-right">Cost</th>
               <th className="text-right">TVA %</th>
@@ -149,7 +162,7 @@ export default function ProductsPage() {
             {products.map((p) => (
               <tr key={p.id}>
                 <td>{p.name}</td>
-                <td>{p.um}</td>
+                <td>{p.um}<div className="text-xs">{p.unitCode || "H87"} · TVA {p.vatCategoryCode || "S"}</div></td>
                 <td className="text-right num">{p.price.toFixed(2)}</td>
                 <td className="text-right num" style={{ color: "var(--text-faint)" }}>{p.cost.toFixed(2)}</td>
                 <td className="text-right num">{p.vatRate}%</td>

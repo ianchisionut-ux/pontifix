@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { CURRENT_USER_KEY } from "@/components/accounting/CurrentUserBox";
 import { Plus, X, Cable, RefreshCw, FileText } from "lucide-react";
 
-type Client = { id: number; name: string; clientType: "PF" | "PJ"; cif: string; cnp: string; address: string; phone: string; sourceNib: string };
+type Client = { id: number; name: string; clientType: "PF" | "PJ"; cif: string; cnp: string; address: string; judet: string; city: string; countryCode: string; postalCode: string; phone: string; sourceNib: string };
 type ConnectionBeneficiary = { id: string; nib: string; beneficiary: string; identifier: string; address: string; phone: string };
 type AccountingOffer = {
   id: string; offerNumber: string; customerName: string; customerPhone: string; customerEmail: string;
@@ -13,7 +13,7 @@ type AccountingOffer = {
   executionNet: number; projectNet: number; panelIncluded: boolean; panelDescription: string;
   panelNet: number; vatRate: number; hasExecution: boolean; hasProject: boolean; hasPanel: boolean;
 };
-type Product = { id: number; name: string; um: string; price: number; vatRate: number };
+type Product = { id: number; name: string; um: string; price: number; vatRate: number; unitCode: string; vatCategoryCode: string; taxExemptionReasonCode: string; taxExemptionReason: string };
 type UserT = { id: number; name: string; ci: string; cnp: string };
 
 type Item = {
@@ -24,11 +24,15 @@ type Item = {
   qty: number;
   unitPrice: number;
   vatRate: number;
+  unitCode: string;
+  vatCategoryCode: string;
+  taxExemptionReasonCode: string;
+  taxExemptionReason: string;
 };
 
 let keySeq = 1;
 function newItem(): Item {
-  return { key: keySeq++, productId: null, description: "", um: "buc", qty: 1, unitPrice: 0, vatRate: 21 };
+  return { key: keySeq++, productId: null, description: "", um: "buc", qty: 1, unitPrice: 0, vatRate: 21, unitCode: "H87", vatCategoryCode: "S", taxExemptionReasonCode: "", taxExemptionReason: "" };
 }
 
 function fmt(n: number) {
@@ -47,6 +51,10 @@ export default function NewInvoicePage() {
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
   const [dueDate, setDueDate] = useState("");
+  const [taxPointDate, setTaxPointDate] = useState("");
+  const [paymentMeansCode, setPaymentMeansCode] = useState("30");
+  const [paymentTerms, setPaymentTerms] = useState("");
+  const [buyerReference, setBuyerReference] = useState("");
   const [discountPercent, setDiscountPercent] = useState(0);
   const [currency, setCurrency] = useState("RON");
   const [exchangeRate, setExchangeRate] = useState(1);
@@ -185,7 +193,7 @@ export default function NewInvoicePage() {
   function pickProduct(key: number, productId: number) {
     const p = products.find((x) => x.id === productId);
     if (!p) return;
-    updateItem(key, { productId: p.id, description: p.name, um: p.um, unitPrice: p.price, vatRate: p.vatRate });
+    updateItem(key, { productId: p.id, description: p.name, um: p.um, unitPrice: p.price, vatRate: p.vatRate, unitCode: p.unitCode || "H87", vatCategoryCode: p.vatCategoryCode || "S", taxExemptionReasonCode: p.taxExemptionReasonCode || "", taxExemptionReason: p.taxExemptionReason || "" });
   }
 
   const rawSubtotal = items.reduce((s, it) => s + it.qty * it.unitPrice, 0);
@@ -222,6 +230,11 @@ export default function NewInvoicePage() {
         userId: userId || null,
         issueDate,
         dueDate: dueDate || undefined,
+        invoiceTypeCode: "380",
+        taxPointDate,
+        paymentMeansCode,
+        paymentTerms,
+        buyerReference,
         discountPercent,
         currency,
         exchangeRate: currency === "RON" ? 1 : exchangeRate,
@@ -239,6 +252,10 @@ export default function NewInvoicePage() {
           qty: it.qty,
           unitPrice: it.unitPrice,
           vatRate: it.vatRate,
+          unitCode: it.unitCode,
+          vatCategoryCode: it.vatCategoryCode,
+          taxExemptionReasonCode: it.taxExemptionReasonCode,
+          taxExemptionReason: it.taxExemptionReason,
         })),
       }),
     });
@@ -381,6 +398,17 @@ export default function NewInvoicePage() {
         </div>
       </div>
 
+      <div className="card mb-4">
+        <div className="section-label mb-3">Date pentru RO e-Factura</div>
+        <div className="grid grid-cols-4 gap-4">
+          <div><label className="field-label">Modalitate de plată</label><select className="input" value={paymentMeansCode} onChange={(e)=>setPaymentMeansCode(e.target.value)}><option value="30">30 · transfer bancar</option><option value="10">10 · numerar</option><option value="48">48 · card bancar</option><option value="42">42 · plată în cont bancar</option><option value="ZZZ">ZZZ · stabilită de comun acord</option></select></div>
+          <div><label className="field-label">Data exigibilității TVA</label><input type="date" className="input" value={taxPointDate} onChange={(e)=>setTaxPointDate(e.target.value)}/></div>
+          <div><label className="field-label">Referință cumpărător / contract</label><input className="input" value={buyerReference} onChange={(e)=>setBuyerReference(e.target.value)} placeholder="Opțional"/></div>
+          <div><label className="field-label">Condiții de plată</label><input className="input" value={paymentTerms} onChange={(e)=>setPaymentTerms(e.target.value)} placeholder="Ex.: 15 zile"/></div>
+        </div>
+        <p className="text-xs mt-3" style={{color:"var(--text-faint)"}}>Factura normală va folosi codul UBL 380; factura storno folosește automat codul 381.</p>
+      </div>
+
       <div className="card mb-6">
         <label className="field-label">Intocmit de (utilizator)</label>
         <select className="input" value={userId} onChange={(e) => onUserChange(e.target.value)}>
@@ -404,10 +432,10 @@ export default function NewInvoicePage() {
             <tr>
               <th style={{ width: 28 }}>Nr.</th>
               <th>Produs/Serviciu</th>
-              <th style={{ width: 80 }}>U.M.</th>
+              <th style={{ width: 112 }}>U.M. / UBL</th>
               <th className="text-right" style={{ width: 90 }}>Cant.</th>
               <th className="text-right" style={{ width: 110 }}>Pret unitar</th>
-              <th className="text-right" style={{ width: 90 }}>TVA %</th>
+              <th style={{ width: 150 }}>TVA / regim</th>
               <th className="text-right" style={{ width: 100 }}>Valoare</th>
               <th style={{ width: 32 }}></th>
             </tr>
@@ -431,6 +459,9 @@ export default function NewInvoicePage() {
                 </td>
                 <td>
                   <input className="input" value={it.um} onChange={(e) => updateItem(it.key, { um: e.target.value })} />
+                  <select className="input mt-1" value={it.unitCode} onChange={(e)=>updateItem(it.key,{unitCode:e.target.value})}>
+                    <option value="H87">H87 · buc.</option><option value="C62">C62 · unit.</option><option value="HUR">HUR · oră</option><option value="DAY">DAY · zi</option><option value="MTR">MTR · metru</option><option value="KGM">KGM · kg</option><option value="LTR">LTR · litru</option>
+                  </select>
                 </td>
                 <td>
                   <input
@@ -449,15 +480,12 @@ export default function NewInvoicePage() {
                   />
                 </td>
                 <td>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={1}
-                    className="input text-right num"
-                    value={it.vatRate}
-                    onChange={(e) => updateItem(it.key, { vatRate: Number(e.target.value) })}
-                  />
+                  <input type="number" min={0} max={100} step={1} className="input text-right num" value={it.vatRate}
+                    onChange={(e) => updateItem(it.key, { vatRate: Number(e.target.value), vatCategoryCode: Number(e.target.value) === 0 && it.vatCategoryCode === "S" ? "Z" : it.vatCategoryCode })}/>
+                  <select className="input mt-1" value={it.vatCategoryCode} onChange={(e)=>updateItem(it.key,{vatCategoryCode:e.target.value})}>
+                    <option value="S">S · standard</option><option value="Z">Z · cotă zero</option><option value="E">E · scutit</option><option value="AE">AE · taxare inversă</option><option value="O">O · în afara TVA</option>
+                  </select>
+                  {it.vatCategoryCode !== "S" && <><input className="input mt-1" value={it.taxExemptionReasonCode} onChange={(e)=>updateItem(it.key,{taxExemptionReasonCode:e.target.value})} placeholder="Cod motiv"/><input className="input mt-1" value={it.taxExemptionReason} onChange={(e)=>updateItem(it.key,{taxExemptionReason:e.target.value})} placeholder="Motiv / temei legal"/></>}
                 </td>
                 <td className="text-right num" style={{ padding: "0 16px" }}>
                   {fmt(it.qty * it.unitPrice)}

@@ -23,6 +23,11 @@ export type Company = {
   phone: string;
   email: string;
   vatIncasare: number;
+  vatPayer: number;
+  countryCode: string;
+  county: string;
+  city: string;
+  postalCode: string;
 };
 
 export type Client = {
@@ -37,6 +42,9 @@ export type Client = {
   city: string;
   phone: string;
   email: string;
+  vatPayer: number;
+  countryCode: string;
+  postalCode: string;
   ciSeries: string;
   ciNumber: string;
   sourceConnectionId: string | null;
@@ -57,6 +65,10 @@ export type Product = {
   price: number;
   cost: number;
   vatRate: number;
+  unitCode: string;
+  vatCategoryCode: string;
+  taxExemptionReasonCode: string;
+  taxExemptionReason: string;
 };
 
 export type InvoiceItemInput = {
@@ -66,6 +78,10 @@ export type InvoiceItemInput = {
   qty: number;
   unitPrice: number;
   vatRate: number;
+  unitCode?: string;
+  vatCategoryCode?: string;
+  taxExemptionReasonCode?: string;
+  taxExemptionReason?: string;
 };
 
 export type InvoiceItem = InvoiceItemInput & {
@@ -88,6 +104,13 @@ export type Invoice = {
   invoiceType: "STANDARD" | "STORNO";
   originalInvoiceId: number | null;
   stornoReason: string;
+  invoiceTypeCode: string;
+  paymentMeansCode: string;
+  paymentTerms: string;
+  taxPointDate: string;
+  buyerReference: string;
+  sellerSnapshot: Company | Record<string, never>;
+  clientSnapshot: Client | Record<string, never>;
   paidAmount: number;
   subtotal: number;
   vatTotal: number;
@@ -119,8 +142,10 @@ export async function getCompany(): Promise<Company> {
 export async function updateCompany(data: Omit<Company, "id">) {
   const pool = await ready();
   await pool.query(
-    `UPDATE company SET name=$1, "regCom"=$2, cif=$3, address=$4, iban=$5, "iban2"=$6, "iban3"=$7, bank=$8, phone=$9, email=$10, "vatIncasare"=$11 WHERE id=1`,
-    [data.name, data.regCom, data.cif, data.address, data.iban, data.iban2, data.iban3, data.bank, data.phone, data.email, data.vatIncasare]
+    `UPDATE company SET name=$1, "regCom"=$2, cif=$3, address=$4, iban=$5, "iban2"=$6, "iban3"=$7, bank=$8, phone=$9, email=$10, "vatIncasare"=$11,
+     "vatPayer"=$12, "countryCode"=$13, county=$14, city=$15, "postalCode"=$16 WHERE id=1`,
+    [data.name, data.regCom, data.cif, data.address, data.iban, data.iban2, data.iban3, data.bank, data.phone, data.email, data.vatIncasare,
+      data.vatPayer ? 1 : 0, data.countryCode || "RO", data.county ?? "", data.city ?? "", data.postalCode ?? ""]
   );
 }
 
@@ -186,9 +211,10 @@ export async function getClient(id: number): Promise<Client | undefined> {
 export async function createClient(data: ClientInput): Promise<number> {
   const pool = await ready();
   const { rows } = await pool.query(
-    `INSERT INTO clients (name, "clientType", "regCom", cif, cnp, address, judet, city, phone, email, "ciSeries", "ciNumber", "sourceConnectionId", "sourceNib")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
-    [data.name, data.clientType || "PJ", data.regCom ?? "", data.cif ?? "", data.cnp ?? "", data.address ?? "", data.judet ?? "", data.city ?? "", data.phone ?? "", data.email ?? "", data.ciSeries ?? "", data.ciNumber ?? "", data.sourceConnectionId ?? null, data.sourceNib ?? ""]
+    `INSERT INTO clients (name, "clientType", "regCom", cif, cnp, address, judet, city, phone, email, "ciSeries", "ciNumber", "vatPayer", "countryCode", "postalCode", "sourceConnectionId", "sourceNib")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
+    [data.name, data.clientType || "PJ", data.regCom ?? "", data.cif ?? "", data.cnp ?? "", data.address ?? "", data.judet ?? "", data.city ?? "", data.phone ?? "", data.email ?? "", data.ciSeries ?? "", data.ciNumber ?? "",
+      data.vatPayer ? 1 : 0, data.countryCode || "RO", data.postalCode ?? "", data.sourceConnectionId ?? null, data.sourceNib ?? ""]
   );
   return rows[0].id as number;
 }
@@ -196,8 +222,10 @@ export async function createClient(data: ClientInput): Promise<number> {
 export async function updateClient(id: number, data: ClientInput) {
   const pool = await ready();
   await pool.query(
-    `UPDATE clients SET name=$1, "clientType"=$2, "regCom"=$3, cif=$4, cnp=$5, address=$6, judet=$7, city=$8, phone=$9, email=$10, "ciSeries"=$11, "ciNumber"=$12 WHERE id=$13`,
-    [data.name, data.clientType || "PJ", data.regCom ?? "", data.cif ?? "", data.cnp ?? "", data.address ?? "", data.judet ?? "", data.city ?? "", data.phone ?? "", data.email ?? "", data.ciSeries ?? "", data.ciNumber ?? "", id]
+    `UPDATE clients SET name=$1, "clientType"=$2, "regCom"=$3, cif=$4, cnp=$5, address=$6, judet=$7, city=$8, phone=$9, email=$10, "ciSeries"=$11, "ciNumber"=$12,
+     "vatPayer"=$13, "countryCode"=$14, "postalCode"=$15 WHERE id=$16`,
+    [data.name, data.clientType || "PJ", data.regCom ?? "", data.cif ?? "", data.cnp ?? "", data.address ?? "", data.judet ?? "", data.city ?? "", data.phone ?? "", data.email ?? "", data.ciSeries ?? "", data.ciNumber ?? "",
+      data.vatPayer ? 1 : 0, data.countryCode || "RO", data.postalCode ?? "", id]
   );
 }
 
@@ -232,6 +260,7 @@ export async function syncClientFromConnection(data: {
     name: data.name || `Beneficiar ${data.nib}`, clientType, regCom: "", cif, cnp,
     address: data.address, judet: data.judet, city: data.city, phone: data.phone,
     email: "", ciSeries: data.ciSeries, ciNumber: data.ciNumber,
+    vatPayer: 0, countryCode: "RO", postalCode: "",
     sourceConnectionId: data.connectionId, sourceNib: data.nib,
   });
 }
@@ -272,6 +301,7 @@ export async function syncClientFromOffer(data: {
     name: data.name || `Beneficiar ofertă ${data.offerId.slice(0, 6)}`, clientType,
     regCom: "", cif, cnp, address: data.address, judet: "", city: "",
     phone, email, ciSeries: "", ciNumber: "",
+    vatPayer: 0, countryCode: "RO", postalCode: "",
   });
 }
 
@@ -295,20 +325,24 @@ export async function listProducts(): Promise<Product[]> {
 export async function createProduct(data: Omit<Product, "id">): Promise<number> {
   const pool = await ready();
   const { rows } = await pool.query(
-    `INSERT INTO products (name, um, price, cost, "vatRate") VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-    [data.name, data.um, data.price, data.cost, data.vatRate]
+    `INSERT INTO products (name, um, price, cost, "vatRate", "unitCode", "vatCategoryCode", "taxExemptionReasonCode", "taxExemptionReason") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [data.name, data.um, data.price, data.cost, data.vatRate, data.unitCode || "H87", data.vatCategoryCode || "S", data.taxExemptionReasonCode || "", data.taxExemptionReason || ""]
   );
   return rows[0].id as number;
 }
 
 export async function updateProduct(id: number, data: Omit<Product, "id">) {
   const pool = await ready();
-  await pool.query(`UPDATE products SET name=$1, um=$2, price=$3, cost=$4, "vatRate"=$5 WHERE id=$6`, [
+  await pool.query(`UPDATE products SET name=$1, um=$2, price=$3, cost=$4, "vatRate"=$5, "unitCode"=$6, "vatCategoryCode"=$7, "taxExemptionReasonCode"=$8, "taxExemptionReason"=$9 WHERE id=$10`, [
     data.name,
     data.um,
     data.price,
     data.cost,
     data.vatRate,
+    data.unitCode || "H87",
+    data.vatCategoryCode || "S",
+    data.taxExemptionReasonCode || "",
+    data.taxExemptionReason || "",
     id,
   ]);
 }
@@ -391,6 +425,13 @@ export async function createInvoice(input: {
   originalInvoiceId?: number | null;
   stornoReason?: string;
   initialStatus?: Invoice["status"];
+  invoiceTypeCode?: string;
+  paymentMeansCode?: string;
+  paymentTerms?: string;
+  taxPointDate?: string;
+  buyerReference?: string;
+  sellerSnapshot?: Company;
+  clientSnapshot?: Client;
 }): Promise<number> {
   const pool = await ready();
   const series = input.series.trim().toUpperCase();
@@ -399,6 +440,9 @@ export async function createInvoice(input: {
   const discountPercent = input.discountPercent ?? 0;
   const { computed, subtotal, vatTotal } = computeTotals(input.items, discountPercent);
   const total = round2(subtotal + vatTotal);
+  const clientResult = await pool.query(`SELECT * FROM clients WHERE id=$1`, [input.clientId]);
+  const companyResult = await pool.query(`SELECT * FROM company WHERE id=1`);
+  if (!clientResult.rows[0]) throw new Error("Clientul selectat nu există.");
 
   const { rows } = await pool.query(
     `INSERT INTO invoices
@@ -430,14 +474,19 @@ export async function createInvoice(input: {
 
   const invoiceId = rows[0].id as number;
   await pool.query(
-    `UPDATE invoices SET "invoiceType"=$1, "originalInvoiceId"=$2, "stornoReason"=$3, status=$4 WHERE id=$5`,
-    [input.invoiceType ?? "STANDARD", input.originalInvoiceId ?? null, input.stornoReason ?? "", input.initialStatus ?? "issued", invoiceId]
+    `UPDATE invoices SET "invoiceType"=$1, "originalInvoiceId"=$2, "stornoReason"=$3, status=$4,
+     "invoiceTypeCode"=$5, "paymentMeansCode"=$6, "paymentTerms"=$7, "taxPointDate"=$8, "buyerReference"=$9,
+     "sellerSnapshot"=$10::jsonb, "clientSnapshot"=$11::jsonb WHERE id=$12`,
+    [input.invoiceType ?? "STANDARD", input.originalInvoiceId ?? null, input.stornoReason ?? "", input.initialStatus ?? "issued",
+      input.invoiceTypeCode || (input.invoiceType === "STORNO" ? "381" : "380"), input.paymentMeansCode || "30", input.paymentTerms ?? "",
+      input.taxPointDate || input.issueDate, input.buyerReference ?? "", JSON.stringify(input.sellerSnapshot || companyResult.rows[0] || {}), JSON.stringify(input.clientSnapshot || clientResult.rows[0]), invoiceId]
   );
   for (const it of computed) {
     await pool.query(
-      `INSERT INTO invoice_items ("invoiceId", "productId", description, um, qty, "unitPrice", "vatRate", valoare, "vatValue")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [invoiceId, it.productId ?? null, it.description, it.um, it.qty, it.unitPrice, it.vatRate, it.valoare, it.vatValue]
+      `INSERT INTO invoice_items ("invoiceId", "productId", description, um, qty, "unitPrice", "vatRate", valoare, "vatValue", "unitCode", "vatCategoryCode", "taxExemptionReasonCode", "taxExemptionReason")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [invoiceId, it.productId ?? null, it.description, it.um, it.qty, it.unitPrice, it.vatRate, it.valoare, it.vatValue,
+        it.unitCode || "H87", it.vatCategoryCode || (it.vatRate === 0 ? "Z" : "S"), it.taxExemptionReasonCode || "", it.taxExemptionReason || ""]
     );
   }
   return invoiceId;
@@ -475,6 +524,13 @@ export async function createStornoInvoice(input: {
     invoiceType: "STORNO",
     originalInvoiceId: original.invoice.id,
     stornoReason: input.reason,
+    invoiceTypeCode: "381",
+    paymentMeansCode: original.invoice.paymentMeansCode,
+    paymentTerms: original.invoice.paymentTerms,
+    taxPointDate: input.issueDate,
+    buyerReference: original.invoice.buyerReference,
+    sellerSnapshot: original.company,
+    clientSnapshot: original.client,
     initialStatus: "storno",
     items: original.items.map((item) => ({
       productId: item.productId,
@@ -483,6 +539,10 @@ export async function createStornoInvoice(input: {
       qty: Math.abs(item.qty),
       unitPrice: -Math.abs(item.unitPrice),
       vatRate: item.vatRate,
+      unitCode: item.unitCode,
+      vatCategoryCode: item.vatCategoryCode,
+      taxExemptionReasonCode: item.taxExemptionReasonCode,
+      taxExemptionReason: item.taxExemptionReason,
     })),
   });
   await pool.query(`UPDATE invoices SET status='stornoed' WHERE id=$1`, [original.invoice.id]);
@@ -515,8 +575,10 @@ export async function getInvoiceFull(id: number) {
   const invoice = await getInvoice(id);
   if (!invoice) return undefined;
   const items = await getInvoiceItems(id);
-  const client = await getClient(invoice.clientId);
-  const company = await getCompany();
+  const liveClient = await getClient(invoice.clientId);
+  const liveCompany = await getCompany();
+  const client = Object.keys(invoice.clientSnapshot || {}).length ? invoice.clientSnapshot as Client : liveClient;
+  const company = Object.keys(invoice.sellerSnapshot || {}).length ? invoice.sellerSnapshot as Company : liveCompany;
   const receipts = await listReceiptsForInvoice(id);
   const payments = await listPaymentsForInvoice(id);
   const user = invoice.userId ? await getUser(invoice.userId) : undefined;

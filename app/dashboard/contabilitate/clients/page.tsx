@@ -6,6 +6,7 @@ import { Plus, Download, AlertTriangle, Cable, RefreshCw } from "lucide-react";
 type Client = {
   id: number; name: string; clientType: "PF" | "PJ"; regCom: string; cif: string; cnp: string;
   address: string; judet: string; city: string; phone: string; email: string;
+  vatPayer: number; countryCode: string; postalCode: string;
   ciSeries: string; ciNumber: string; sourceConnectionId: string | null; sourceNib: string; flagged: number;
 };
 type ConnectionBeneficiary = {
@@ -14,7 +15,7 @@ type ConnectionBeneficiary = {
 };
 const emptyForm = {
   name: "", clientType: "PJ" as "PF" | "PJ", regCom: "", cif: "", cnp: "", address: "",
-  judet: "", city: "", phone: "", email: "", ciSeries: "", ciNumber: "",
+  judet: "", city: "", phone: "", email: "", vatPayer: 0, countryCode: "RO", postalCode: "", ciSeries: "", ciNumber: "",
 };
 
 export default function ClientsPage() {
@@ -63,6 +64,7 @@ export default function ClientsPage() {
     setForm({
       name: c.name, clientType: c.clientType || "PJ", regCom: c.regCom, cif: c.cif, cnp: c.cnp,
       address: c.address, judet: c.judet, city: c.city, phone: c.phone, email: c.email,
+      vatPayer: c.vatPayer || 0, countryCode: c.countryCode || "RO", postalCode: c.postalCode || "",
       ciSeries: c.ciSeries, ciNumber: c.ciNumber,
     });
     setEditingId(c.id); setShowForm(true);
@@ -131,6 +133,9 @@ export default function ClientsPage() {
           <div className="col-span-2"><label className="field-label">Adresă completă</label><input className="input" value={form.address} onChange={(e)=>setForm({...form,address:e.target.value})}/></div>
           <div><label className="field-label">Județ</label><input className="input" value={form.judet} onChange={(e)=>setForm({...form,judet:e.target.value})}/></div>
           <div><label className="field-label">Localitate</label><input className="input" value={form.city} onChange={(e)=>setForm({...form,city:e.target.value})}/></div>
+          <div><label className="field-label">Țară (cod ISO)</label><input className="input" maxLength={2} value={form.countryCode} onChange={(e)=>setForm({...form,countryCode:e.target.value.toUpperCase()})}/></div>
+          <div><label className="field-label">Cod poștal</label><input className="input" value={form.postalCode} onChange={(e)=>setForm({...form,postalCode:e.target.value})}/></div>
+          {form.clientType === "PJ" && <label className="col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" checked={!!form.vatPayer} onChange={(e)=>setForm({...form,vatPayer:e.target.checked?1:0})}/> Client înregistrat în scopuri de TVA</label>}
           <div><label className="field-label">Telefon</label><input className="input" value={form.phone} onChange={(e)=>setForm({...form,phone:e.target.value})}/></div>
           <div><label className="field-label">E-mail</label><input type="email" className="input" value={form.email} onChange={(e)=>setForm({...form,email:e.target.value})}/></div>
           <div className="col-span-2"><button onClick={submit} className="btn-primary">{editingId ? "Salvează modificările" : "Adaugă client"}</button></div>

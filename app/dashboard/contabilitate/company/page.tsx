@@ -14,6 +14,11 @@ type Company = {
   phone: string;
   email: string;
   vatIncasare: number;
+  vatPayer: number;
+  countryCode: string;
+  county: string;
+  city: string;
+  postalCode: string;
 };
 
 const empty: Company = {
@@ -28,6 +33,11 @@ const empty: Company = {
   phone: "",
   email: "",
   vatIncasare: 1,
+  vatPayer: 1,
+  countryCode: "RO",
+  county: "Salaj",
+  city: "Zalau",
+  postalCode: "",
 };
 
 export default function CompanyPage() {
@@ -55,7 +65,7 @@ export default function CompanyPage() {
   }
 
   return (
-    <div style={{ maxWidth: 620 }}>
+    <div style={{ maxWidth: 820 }}>
       <div className="page-head">
         <div>
           <div className="eyebrow">Setari</div>
@@ -82,6 +92,12 @@ export default function CompanyPage() {
         <div>
           <label className="field-label">Adresa</label>
           <textarea className="input" rows={2} value={data.address} onChange={(e) => set("address", e.target.value)} />
+        </div>
+        <div className="grid grid-cols-4 gap-4">
+          <div><label className="field-label">Țară (cod ISO)</label><input className="input" maxLength={2} value={data.countryCode || "RO"} onChange={(e) => set("countryCode", e.target.value.toUpperCase())} /></div>
+          <div><label className="field-label">Județ</label><input className="input" value={data.county || ""} onChange={(e) => set("county", e.target.value)} /></div>
+          <div><label className="field-label">Localitate</label><input className="input" value={data.city || ""} onChange={(e) => set("city", e.target.value)} /></div>
+          <div><label className="field-label">Cod poștal</label><input className="input" value={data.postalCode || ""} onChange={(e) => set("postalCode", e.target.value)} /></div>
         </div>
         <div>
           <label className="field-label">Banca</label>
@@ -111,6 +127,10 @@ export default function CompanyPage() {
             <input className="input" value={data.email} onChange={(e) => set("email", e.target.value)} />
           </div>
         </div>
+        <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-dim)" }}>
+          <input type="checkbox" checked={!!data.vatPayer} onChange={(e) => set("vatPayer", e.target.checked ? 1 : 0)} />
+          Firmă înregistrată în scopuri de TVA
+        </label>
         <label className="flex items-center gap-2 text-sm" style={{ color: "var(--text-dim)" }}>
           <input
             type="checkbox"

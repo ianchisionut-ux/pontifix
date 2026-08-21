@@ -161,12 +161,35 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "ciNumber" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE company ADD COLUMN IF NOT EXISTS "iban2" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE company ADD COLUMN IF NOT EXISTS "iban3" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE company ADD COLUMN IF NOT EXISTS "vatPayer" INTEGER NOT NULL DEFAULT 1;`);
+  await pool.query(`ALTER TABLE company ADD COLUMN IF NOT EXISTS "countryCode" TEXT NOT NULL DEFAULT 'RO';`);
+  await pool.query(`ALTER TABLE company ADD COLUMN IF NOT EXISTS county TEXT NOT NULL DEFAULT 'Salaj';`);
+  await pool.query(`ALTER TABLE company ADD COLUMN IF NOT EXISTS city TEXT NOT NULL DEFAULT 'Zalau';`);
+  await pool.query(`ALTER TABLE company ADD COLUMN IF NOT EXISTS "postalCode" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "vatPayer" INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "countryCode" TEXT NOT NULL DEFAULT 'RO';`);
+  await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "postalCode" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "sourceConnectionId" TEXT;`);
   await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "sourceNib" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "clients_sourceConnectionId_key" ON clients ("sourceConnectionId") WHERE "sourceConnectionId" IS NOT NULL;`);
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "invoiceType" TEXT NOT NULL DEFAULT 'STANDARD';`);
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "originalInvoiceId" INTEGER REFERENCES invoices(id);`);
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "stornoReason" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "unitCode" TEXT NOT NULL DEFAULT 'H87';`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "vatCategoryCode" TEXT NOT NULL DEFAULT 'S';`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "taxExemptionReasonCode" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "taxExemptionReason" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "unitCode" TEXT NOT NULL DEFAULT 'H87';`);
+  await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "vatCategoryCode" TEXT NOT NULL DEFAULT 'S';`);
+  await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "taxExemptionReasonCode" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "taxExemptionReason" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "invoiceTypeCode" TEXT NOT NULL DEFAULT '380';`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "paymentMeansCode" TEXT NOT NULL DEFAULT '30';`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "paymentTerms" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "taxPointDate" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "buyerReference" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "sellerSnapshot" JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "clientSnapshot" JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_one_storno_per_original" ON invoices ("originalInvoiceId") WHERE "invoiceType"='STORNO';`);
 }
 
