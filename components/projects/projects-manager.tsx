@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { upload } from '@vercel/blob/client'
+import { uploadPresigned } from '@vercel/blob/client'
 import { BarChart3, Building2, CheckCircle2, ChevronDown, ChevronUp, Download, Eye, FileText, LayoutGrid, Link2, List, LoaderCircle, MessageCircle, Pencil, Plus, Printer, Save, Search, Trash2, UploadCloud } from 'lucide-react'
 import { ProjectProgressList } from '@/components/projects/project-progress-list'
 import { useRouter } from 'next/navigation'
@@ -57,7 +57,7 @@ export function ProjectsManager({ initialProjects, canManage, canSendWhatsApp }:
     return response
   }
   async function attachCertificate(projectId:string,file:File){
-    const blob=await upload('projects/'+projectId+'/certificate/'+file.name,file,{access:'private',handleUploadUrl:'/api/projects/upload'})
+    const blob=await uploadPresigned(`projects/${projectId}/certificate/${crypto.randomUUID()}/${file.name}`,file,{access:'private',handleUploadUrl:'/api/projects/upload'})
     await api('/api/projects/'+projectId,'PATCH',{documentUrl:blob.pathname,documentName:file.name})
   }
   async function createProject(form:FormData){
@@ -90,10 +90,17 @@ export function ProjectsManager({ initialProjects, canManage, canSendWhatsApp }:
   async function addApproval(projectId:string,form:FormData){ try{await api(`/api/projects/${projectId}/approvals`,'POST',Object.fromEntries(form));router.refresh()}catch(error){alert((error as Error).message)} }
   async function patchApproval(projectId:string,approvalId:string,data:unknown){ try{await api(`/api/projects/${projectId}/approvals/${approvalId}`,'PATCH',data);router.refresh()}catch(error){alert((error as Error).message)} }
   async function deleteApproval(projectId:string,approvalId:string){ if(!confirm('Ștergi acest aviz?'))return;await api(`/api/projects/${projectId}/approvals/${approvalId}`,'DELETE');router.refresh() }
-  async function attachApproval(projectId:string,approvalId:string,file:File){ try{const blob=await upload(`projects/${projectId}/approvals/${file.name}`,file,{access:'private',handleUploadUrl:'/api/projects/upload'});await patchApproval(projectId,approvalId,{documentUrl:blob.pathname,documentName:file.name})}catch{alert('Avizul scanat nu a putut fi încărcat.')} }
+  async function attachApproval(projectId:string,approvalId:string,file:File){
+    if(file.type!=='application/pdf')return alert('Avizul trebuie să fie un fișier PDF.')
+    if(file.size>20*1024*1024)return alert('Avizul poate avea maximum 20 MB.')
+    try{
+      const blob=await uploadPresigned(`projects/${projectId}/approvals/${approvalId}/${crypto.randomUUID()}/${file.name}`,file,{access:'private',handleUploadUrl:'/api/projects/upload'})
+      await patchApproval(projectId,approvalId,{documentUrl:blob.pathname,documentName:file.name})
+    }catch(error){alert(error instanceof Error?error.message:'Avizul scanat nu a putut fi încărcat.')}
+  }
   async function attachAuthorization(projectId:string,file:File){
     try{
-      const blob=await upload(`projects/${projectId}/authorization/${file.name}`,file,{access:'private',handleUploadUrl:'/api/projects/upload'})
+      const blob=await uploadPresigned(`projects/${projectId}/authorization/${crypto.randomUUID()}/${file.name}`,file,{access:'private',handleUploadUrl:'/api/projects/upload'})
       await api(`/api/projects/${projectId}`,'PATCH',{authorizationDocumentUrl:blob.pathname,authorizationDocumentName:file.name})
       router.refresh()
     }catch(error){alert(error instanceof Error?error.message:'Autorizația de Construire nu a putut fi încărcată.')}
@@ -165,7 +172,7 @@ function ProjectCard({project,compact,editing,canSendWhatsApp,open,toggle,patchP
     </div>
     {open&&<div className="border-t bg-slate-50/60 p-4">
       <p className="text-xs font-bold tracking-wider text-slate-500 mb-3">{editing?'AVIZELE PROIECTULUI · CLICK PE CULOARE PENTRU SCHIMBAREA STĂRII':'STADIUL AVIZELOR PROIECTULUI'}</p>
-      <div className="flex flex-wrap gap-3">{project.approvals.map((approval:Approval)=><div key={approval.id} className="border border-slate-200 rounded-xl bg-white p-1.5 flex items-center gap-2"><button disabled={!editing} onClick={()=>editing&&patchApproval(project.id,approval.id,{status:nextStage(approval.status)})} className={`min-h-10 rounded-lg border px-3 text-left ${editing?'cursor-pointer':'cursor-default'} ${STAGE_CLASSES[approval.status]}`}><span className="block text-sm font-extrabold">{approval.name}</span><span className="block text-[10px] uppercase tracking-wide opacity-80">{STAGE_LABELS[approval.status]}</span></button>{approval.documentUrl?<a href={`/api/projects/${project.id}/approvals/${approval.id}/document`} target="_blank" className="round-action text-blue-700" title="Deschide avizul"><Link2 size={14}/></a>:editing?<label className="round-action text-blue-700 cursor-pointer" title="Încarcă avizul scanat"><UploadCloud size={14}/><input type="file" accept="application/pdf" className="hidden" onChange={event=>event.target.files?.[0]&&attachApproval(project.id,approval.id,event.target.files[0])}/></label>:null}{editing&&approval.name.trim().toUpperCase()!=='MEDIU'&&<button className="text-rose-500 p-1" onClick={()=>deleteApproval(project.id,approval.id)} title="Șterge avizul"><Trash2 size={14}/></button>}</div>)}</div>
+      <div className="flex flex-wrap gap-3">{project.approvals.map((approval:Approval)=><div key={approval.id} className="border border-slate-200 rounded-xl bg-white p-1.5 flex items-center gap-2"><button disabled={!editing} onClick={()=>editing&&patchApproval(project.id,approval.id,{status:nextStage(approval.status)})} className={`min-h-10 rounded-lg border px-3 text-left ${editing?'cursor-pointer':'cursor-default'} ${STAGE_CLASSES[approval.status]}`}><span className="block text-sm font-extrabold">{approval.name}</span><span className="block text-[10px] uppercase tracking-wide opacity-80">{STAGE_LABELS[approval.status]}</span></button>{approval.documentUrl&&<a href={`/api/projects/${project.id}/approvals/${approval.id}/document`} target="_blank" className="round-action text-blue-700" title="Deschide avizul"><Link2 size={14}/></a>}{editing&&<label className="round-action text-blue-700 cursor-pointer" title={approval.documentUrl?'Înlocuiește avizul PDF':'Încarcă avizul scanat'}><UploadCloud size={14}/><input type="file" accept="application/pdf,.pdf" className="hidden" onChange={event=>{const file=event.target.files?.[0];event.currentTarget.value='';if(file)attachApproval(project.id,approval.id,file)}}/></label>}{editing&&approval.name.trim().toUpperCase()!=='MEDIU'&&<button className="text-rose-500 p-1" onClick={()=>deleteApproval(project.id,approval.id)} title="Șterge avizul"><Trash2 size={14}/></button>}</div>)}</div>
       {editing&&<form action={(form)=>addApproval(project.id,form)} className="flex flex-wrap gap-2 mt-4"><input name="name" className="input-field flex-1 min-w-56" placeholder="Alt aviz necesar" required/><input name="institution" className="input-field flex-1 min-w-48" placeholder="Instituție (opțional)"/><button className="btn-secondary inline-flex gap-2 items-center"><Plus size={15}/> Adaugă aviz</button></form>}
       <div className="mt-6 border-t border-slate-200 pt-5">
         <button disabled={!editing||!allObtained} onClick={()=>{if(!editing||!allObtained)return;const next=nextStage(project.constructionAuthorizationStatus as ApprovalStatus);patchProject(project.id,{constructionAuthorizationStatus:next,...(next==='OBTAINED'?{status:'COMPLETED'}:project.status==='COMPLETED'?{status:'ACTIVE'}:{})})}} className={`w-full min-h-20 rounded-2xl border-2 px-5 text-center transition ${editing&&allObtained?'cursor-pointer':'cursor-default'} ${authorizationClass}`}>
