@@ -1,3 +1,10 @@
+self.addEventListener('install',(event)=>{
+  self.skipWaiting()
+})
+self.addEventListener('activate',(event)=>{
+  event.waitUntil(clients.claim())
+})
+self.addEventListener('fetch',()=>{})
 self.addEventListener('notificationclick',(event)=>{
   event.notification.close()
   const target=event.notification.data&&event.notification.data.url?event.notification.data.url:'/dashboard/chat-intern'
