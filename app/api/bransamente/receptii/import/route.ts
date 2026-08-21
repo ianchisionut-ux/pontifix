@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
 
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(await file.arrayBuffer() as unknown as Parameters<typeof workbook.xlsx.load>[0])
-  const sheet = workbook.worksheets[0]
+  const sheet = workbook.getWorksheet('Sheet1') || workbook.worksheets.find((item) => item.rowCount > 0)
   if (!sheet) return NextResponse.json({ error: 'Fișierul nu conține nicio foaie.' }, { status: 400 })
 
   let currentYear = 2022
@@ -34,9 +34,10 @@ export async function POST(request: NextRequest) {
   sheet.eachRow((row, rowNumber) => {
     if (rowNumber === 1) return
     const first = cellText(row.getCell(1).value)
-    const detectedYear = Number.parseInt(first, 10)
-    const populated = [1, 2, 3, 4, 5, 6, 7, 8].some((column) => cellText(row.getCell(column).value))
-    if (/^20\d{2}$/.test(first) && !cellText(row.getCell(2).value)) {
+    const yearMarker = cellText(row.getCell(3).value)
+    const detectedYear = Number.parseInt(yearMarker, 10)
+    const populated = [2, 3, 4, 5, 6, 7, 8].some((column) => cellText(row.getCell(column).value))
+    if (/^20\d{2}$/.test(yearMarker) && !first && !cellText(row.getCell(2).value)) {
       currentYear = detectedYear
       return
     }
