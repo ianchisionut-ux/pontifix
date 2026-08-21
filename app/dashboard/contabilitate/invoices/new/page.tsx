@@ -42,7 +42,7 @@ export default function NewInvoicePage() {
   const [users, setUsers] = useState<UserT[]>([]);
   const [clientId, setClientId] = useState<number | "">("");
   const [userId, setUserId] = useState<number | "">("");
-  const [series, setSeries] = useState("FAC");
+  const [series, setSeries] = useState("SJELM");
   const [nextNumber, setNextNumber] = useState<number | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
