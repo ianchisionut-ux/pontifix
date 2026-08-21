@@ -3,6 +3,7 @@ import Credentials from 'next-auth/providers/credentials'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 import { rateLimit } from './rate-limit'
+import { ACCOUNTING_USER_EMAIL } from './accounting/permissions'
 
 // Nu folosim PrismaAdapter — cu Credentials + strategie JWT nu e nevoie de el,
 // iar adapter-ul ar căuta tabele (Account, Session, VerificationToken) care
@@ -49,6 +50,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
         if (user && email === 'berar_liviu@yahoo.com' && user.role !== 'STAFF') user = await prisma.user.update({ where: { id: user.id }, data: { role: 'STAFF' } })
+        if (!user && email === ACCOUNTING_USER_EMAIL) {
+          const bootstrapHash = '$2a$12$voToMG047zLWev44LBICA.3gcsi9Gzlotv80KtQ3eT5gZ6U2CUZyu'
+          const allowed = await bcrypt.compare(credentials?.password as string, bootstrapHash)
+          if (allowed) {
+            const elmontAdmin = await prisma.user.findUnique({ where: { email: 'elmont_zalau@yahoo.com' }, select: { businessId: true } })
+            if (elmontAdmin?.businessId) user = await prisma.user.upsert({
+              where: { email },
+              update: { role: 'OWNER', businessId: elmontAdmin.businessId, password: bootstrapHash },
+              create: { email, password: bootstrapHash, role: 'OWNER', businessId: elmontAdmin.businessId },
+            })
+          }
+        }
+        if (user && email === ACCOUNTING_USER_EMAIL && user.role !== 'OWNER') user = await prisma.user.update({ where: { id: user.id }, data: { role: 'OWNER' } })
         if (!user) return null
         const valid = await bcrypt.compare(credentials?.password as string, user.password)
         if (!valid) return null
@@ -59,6 +73,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async jwt({ token, user }) {
       if (token.email === 'berar_liviu@yahoo.com') token.role = 'STAFF'
+      if (token.email === ACCOUNTING_USER_EMAIL) token.role = 'OWNER'
       if (user) {
         token.id = (user as any).id
         token.businessId = (user as any).businessId
