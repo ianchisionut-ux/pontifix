@@ -48,15 +48,16 @@ export function integerToWordsRO(n: number): string {
 
 // Formats an amount like 177.60 -> "o suta saptezeci si sapte virgula sase zero RON"
 export function amountToWordsRO(amount: number, currency = "RON"): string {
-  const rounded = Math.round(amount * 100) / 100;
+  const isNegative = amount < 0;
+  const rounded = Math.round(Math.abs(amount) * 100) / 100;
   const intPart = Math.floor(rounded);
   const decPart = Math.round((rounded - intPart) * 100);
   const intWords = integerToWordsRO(intPart);
-  if (decPart === 0) return `${intWords} ${currency}`;
+  if (decPart === 0) return `${isNegative ? "minus " : ""}${intWords} ${currency}`;
   const decStr = decPart.toString().padStart(2, "0");
   const decDigitsWords = decStr
     .split("")
     .map((d) => (d === "0" ? "zero" : UNITS[Number(d)]))
     .join(" ");
-  return `${intWords} virgula ${decDigitsWords} ${currency}`;
+  return `${isNegative ? "minus " : ""}${intWords} virgula ${decDigitsWords} ${currency}`;
 }

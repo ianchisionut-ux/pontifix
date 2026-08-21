@@ -3,7 +3,7 @@
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import { StatusBadge } from "@/components/accounting/StatusBadge";
-import { Download, Trash2, Receipt as ReceiptIcon } from "lucide-react";
+import { Download, Trash2, Receipt as ReceiptIcon, RotateCcw } from "lucide-react";
 
 type FullInvoice = {
   invoice: {
@@ -16,6 +16,9 @@ type FullInvoice = {
     subtotal: number;
     vatTotal: number;
     paidAmount: number;
+    invoiceType: "STANDARD" | "STORNO";
+    originalInvoiceId: number | null;
+    stornoReason: string;
   };
   items: { id: number; description: string; um: string; qty: number; unitPrice: number; vatRate: number; valoare: number; vatValue: number }[];
   client: { id: number; name: string; cif: string };
@@ -76,6 +79,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   if (!data) return <div style={{ color: "var(--text-faint)" }}>Se incarca...</div>;
   const { invoice, items, client, user, receipts, payments } = data;
   const rest = invoice.total - invoice.paidAmount;
+  const financialLocked = invoice.invoiceType === "STORNO" || ["storno", "stornoed", "canceled"].includes(invoice.status);
+  const canStorno = invoice.invoiceType !== "STORNO" && !financialLocked;
 
   return (
     <div>
@@ -99,9 +104,12 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         <a href={`/api/accounting/invoices/${id}/pdf`} target="_blank" className="btn-primary">
           <Download size={15} /> Descarca factura (PDF)
         </a>
-        <button onClick={removeInvoice} className="btn-danger">
+        {canStorno && <a href={`/dashboard/contabilitate/invoices/storno?invoice=${id}`} className="btn-secondary">
+          <RotateCcw size={14} /> Stornează factura
+        </a>}
+        {!financialLocked && <button onClick={removeInvoice} className="btn-danger">
           <Trash2 size={14} /> Sterge factura
-        </button>
+        </button>}
       </div>
 
       <div className="card-table mb-6">
@@ -156,12 +164,13 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div className="flex justify-between font-semibold" style={{ color: "var(--amber)" }}>
             <span>Rest de plata</span>
-            <span className="num">{fmt(rest)} RON</span>
+            <span className="num">{financialLocked ? "—" : `${fmt(Math.max(0, rest))} RON`}</span>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-6">
+      {financialLocked && <div className="card mb-6"><div className="section-label">Document fără încasare</div><p className="text-sm text-slate-500">{invoice.invoiceType === "STORNO" ? `Aceasta este factura storno pentru documentul inițial. ${invoice.stornoReason || ""}` : "Factura a fost stornată; încasările și chitanțele sunt blocate."}</p></div>}
+      {!financialLocked && <div className="grid grid-cols-2 gap-6">
         <div className="card">
           <div className="section-label">Inregistreaza o plata</div>
           <div className="space-y-2">
@@ -227,7 +236,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
             ))}
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

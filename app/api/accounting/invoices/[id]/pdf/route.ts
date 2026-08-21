@@ -20,10 +20,11 @@ async function GETHandler(_req: NextRequest, { params }: { params: Promise<{ id:
   const buffer = await renderToBuffer(element as any);
 
   const numStr = String(full.invoice.number).padStart(4, "0");
+  const filePrefix = full.invoice.invoiceType === "STORNO" ? "Factura_Storno" : "Factura";
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="Factura_${full.invoice.series}${numStr}.pdf"`,
+      "Content-Disposition": `inline; filename="${filePrefix}_${full.invoice.series}${numStr}.pdf"`,
     },
   });
 }

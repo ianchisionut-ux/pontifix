@@ -3,10 +3,16 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CURRENT_USER_KEY } from "@/components/accounting/CurrentUserBox";
-import { Plus, X, Cable, RefreshCw } from "lucide-react";
+import { Plus, X, Cable, RefreshCw, FileText } from "lucide-react";
 
 type Client = { id: number; name: string; clientType: "PF" | "PJ"; cif: string; cnp: string; address: string; phone: string; sourceNib: string };
 type ConnectionBeneficiary = { id: string; nib: string; beneficiary: string; identifier: string; address: string; phone: string };
+type AccountingOffer = {
+  id: string; offerNumber: string; customerName: string; customerPhone: string; customerEmail: string;
+  workLocation: string; serviceType: string; connectionType: "MONOFAZAT" | "TRIFAZAT" | "NESPECIFICAT";
+  executionNet: number; projectNet: number; panelIncluded: boolean; panelDescription: string;
+  panelNet: number; vatRate: number; hasExecution: boolean; hasProject: boolean; hasPanel: boolean;
+};
 type Product = { id: number; name: string; um: string; price: number; vatRate: number };
 type UserT = { id: number; name: string; ci: string; cnp: string };
 
@@ -55,10 +61,15 @@ export default function NewInvoicePage() {
   const [connections, setConnections] = useState<ConnectionBeneficiary[]>([]);
   const [connectionId, setConnectionId] = useState("");
   const [importing, setImporting] = useState(false);
+  const [offers, setOffers] = useState<AccountingOffer[]>([]);
+  const [offerId, setOfferId] = useState("");
+  const [offerImporting, setOfferImporting] = useState(false);
+  const [offerParts, setOfferParts] = useState({ execution: true, project: true, panel: true });
 
   useEffect(() => {
     fetch("/api/accounting/clients").then((r) => r.json()).then(setClients);
     fetch("/api/accounting/connection-beneficiaries").then((r) => r.json()).then(setConnections);
+    fetch("/api/accounting/offer-invoice-data").then((r) => r.json()).then(setOffers);
     fetch("/api/accounting/products").then((r) => r.json()).then(setProducts);
     fetch("/api/accounting/users").then((r) => r.json()).then((list: UserT[]) => {
       setUsers(list);
@@ -90,6 +101,60 @@ export default function NewInvoicePage() {
     setClients(updated);
     setClientId(data.clientId);
     setImporting(false);
+  }
+
+  function chooseOffer(id: string) {
+    setOfferId(id);
+    const offer = offers.find((item) => item.id === id);
+    setOfferParts({
+      execution: Boolean(offer?.hasExecution),
+      project: Boolean(offer?.hasProject),
+      panel: Boolean(offer?.hasPanel),
+    });
+  }
+
+  async function importOfferItems() {
+    const selected = offers.find((item) => item.id === offerId);
+    if (!selected) return;
+    const selectedValues = [
+      offerParts.execution && selected.executionNet > 0,
+      offerParts.project && selected.projectNet > 0,
+      offerParts.panel && selected.panelIncluded && selected.panelNet > 0,
+    ];
+    if (!selectedValues.some(Boolean)) return alert("Selectează cel puțin o poziție cu valoare din ofertă.");
+    setOfferImporting(true);
+    const response = await fetch("/api/accounting/offer-invoice-data", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ offerId }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      setOfferImporting(false);
+      return alert(data.error || "Oferta nu a putut fi preluată.");
+    }
+    const updated = await fetch("/api/accounting/clients").then((r) => r.json()) as Client[];
+    setClients(updated);
+    setClientId(data.clientId);
+    const typeLabel = selected.connectionType === "NESPECIFICAT" ? "" : ` · branșament ${selected.connectionType.toLowerCase()}`;
+    const serviceLabel = selected.serviceType ? ` · ${selected.serviceType}` : "";
+    const imported: Item[] = [];
+    if (offerParts.execution && selected.executionNet > 0) imported.push({
+      ...newItem(), description: `Execuție branșament${typeLabel}${serviceLabel}`, um: "lucrare",
+      unitPrice: selected.executionNet, vatRate: selected.vatRate,
+    });
+    if (offerParts.project && selected.projectNet > 0) imported.push({
+      ...newItem(), description: `Proiect / documentație${typeLabel}${serviceLabel}`, um: "serv.",
+      unitPrice: selected.projectNet, vatRate: selected.vatRate,
+    });
+    if (offerParts.panel && selected.panelIncluded && selected.panelNet > 0) imported.push({
+      ...newItem(), description: `${selected.panelDescription || "Tablou electric"}${typeLabel}`, um: "buc",
+      unitPrice: selected.panelNet, vatRate: selected.vatRate,
+    });
+    setItems((current) => current.length === 1 && !current[0].description && current[0].unitPrice === 0 ? imported : [...current, ...imported]);
+    setNotes((current) => current.includes(selected.offerNumber) ? current : [current, `Poziții preluate din oferta ${selected.offerNumber}.`].filter(Boolean).join("\n"));
+    setCurrency("RON");
+    setExchangeRate(1);
+    setOfferImporting(false);
   }
 
   function applyUser(u: UserT) {
@@ -129,6 +194,7 @@ export default function NewInvoicePage() {
   const total = subtotal + vatTotal;
   const discountAmount = rawSubtotal - subtotal;
   const selectedClient = clients.find((client) => client.id === clientId);
+  const selectedOffer = offers.find((offer) => offer.id === offerId);
 
   async function submit() {
     if (!clientId) {
@@ -197,6 +263,37 @@ export default function NewInvoicePage() {
             <RefreshCw size={14}/>{importing ? "Se preia..." : "Preia beneficiarul"}
           </button>
         </div>
+      </div>
+
+      <div className="card mb-4" style={{ background: "linear-gradient(135deg,#f0f7ff,#fff)" }}>
+        <div className="flex items-center gap-3 mb-3">
+          <span className="settings-icon"><FileText size={18}/></span>
+          <div><div className="font-bold">Poziții din Oferte</div><p className="page-subtitle">Selectează oferta și exact serviciile care trebuie facturate.</p></div>
+        </div>
+        <div className="flex gap-3">
+          <select className="input" value={offerId} onChange={(e) => chooseOffer(e.target.value)}>
+            <option value="">— selectează oferta —</option>
+            {offers.map((offer) => <option key={offer.id} value={offer.id}>{offer.offerNumber} · {offer.customerName || "Beneficiar necompletat"} · {offer.connectionType.toLowerCase()}</option>)}
+          </select>
+          <button type="button" className="btn-secondary" onClick={importOfferItems} disabled={!offerId || offerImporting}>
+            <RefreshCw size={14}/>{offerImporting ? "Se preia..." : "Preia în factură"}
+          </button>
+        </div>
+        {selectedOffer && (
+          <div className="mt-3 grid grid-cols-3 gap-3">
+            {[
+              { key: "execution" as const, label: "Execuție branșament", value: selectedOffer.executionNet, available: selectedOffer.hasExecution },
+              { key: "project" as const, label: "Proiect / documentație", value: selectedOffer.projectNet, available: selectedOffer.hasProject },
+              { key: "panel" as const, label: "Tablou electric (opțional)", value: selectedOffer.panelNet, available: selectedOffer.hasPanel },
+            ].map((part) => (
+              <label key={part.key} className="rounded-xl border border-[#cfe2ed] bg-white px-3 py-3 flex items-center gap-3 cursor-pointer">
+                <input type="checkbox" checked={offerParts[part.key] && part.available} disabled={!part.available}
+                  onChange={(e) => setOfferParts((current) => ({ ...current, [part.key]: e.target.checked }))}/>
+                <span className="flex-1"><span className="block font-semibold text-sm">{part.label}</span><span className="text-xs text-slate-500">{part.available ? `${fmt(part.value)} lei + TVA` : "Fără valoare în ofertă"}</span></span>
+              </label>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="card mb-4" style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 16 }}>

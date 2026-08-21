@@ -8,6 +8,8 @@ type Company = {
   cif: string;
   address: string;
   iban: string;
+  iban2: string;
+  iban3: string;
   bank: string;
   phone: string;
   email: string;
@@ -20,6 +22,8 @@ const empty: Company = {
   cif: "",
   address: "",
   iban: "",
+  iban2: "",
+  iban3: "",
   bank: "",
   phone: "",
   email: "",
@@ -79,14 +83,22 @@ export default function CompanyPage() {
           <label className="field-label">Adresa</label>
           <textarea className="input" rows={2} value={data.address} onChange={(e) => set("address", e.target.value)} />
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="field-label">Banca</label>
+          <input className="input" value={data.bank} onChange={(e) => set("bank", e.target.value)} />
+        </div>
+        <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="field-label">IBAN</label>
-            <input className="input" value={data.iban} onChange={(e) => set("iban", e.target.value)} />
+            <label className="field-label">IBAN 1</label>
+            <input className="input" value={data.iban || ""} onChange={(e) => set("iban", e.target.value)} />
           </div>
           <div>
-            <label className="field-label">Banca</label>
-            <input className="input" value={data.bank} onChange={(e) => set("bank", e.target.value)} />
+            <label className="field-label">IBAN 2</label>
+            <input className="input" value={data.iban2 || ""} onChange={(e) => set("iban2", e.target.value)} />
+          </div>
+          <div>
+            <label className="field-label">IBAN 3</label>
+            <input className="input" value={data.iban3 || ""} onChange={(e) => set("iban3", e.target.value)} />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-4">

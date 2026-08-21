@@ -17,6 +17,8 @@ export type Company = {
   cif: string;
   address: string;
   iban: string;
+  iban2: string;
+  iban3: string;
   bank: string;
   phone: string;
   email: string;
@@ -82,7 +84,10 @@ export type Invoice = {
   userId: number | null;
   issueDate: string;
   dueDate: string | null;
-  status: "issued" | "paid" | "partial" | "canceled";
+  status: "issued" | "paid" | "partial" | "canceled" | "storno" | "stornoed";
+  invoiceType: "STANDARD" | "STORNO";
+  originalInvoiceId: number | null;
+  stornoReason: string;
   paidAmount: number;
   subtotal: number;
   vatTotal: number;
@@ -114,8 +119,8 @@ export async function getCompany(): Promise<Company> {
 export async function updateCompany(data: Omit<Company, "id">) {
   const pool = await ready();
   await pool.query(
-    `UPDATE company SET name=$1, "regCom"=$2, cif=$3, address=$4, iban=$5, bank=$6, phone=$7, email=$8, "vatIncasare"=$9 WHERE id=1`,
-    [data.name, data.regCom, data.cif, data.address, data.iban, data.bank, data.phone, data.email, data.vatIncasare]
+    `UPDATE company SET name=$1, "regCom"=$2, cif=$3, address=$4, iban=$5, "iban2"=$6, "iban3"=$7, bank=$8, phone=$9, email=$10, "vatIncasare"=$11 WHERE id=1`,
+    [data.name, data.regCom, data.cif, data.address, data.iban, data.iban2, data.iban3, data.bank, data.phone, data.email, data.vatIncasare]
   );
 }
 
@@ -231,6 +236,45 @@ export async function syncClientFromConnection(data: {
   });
 }
 
+export async function syncClientFromOffer(data: {
+  offerId: string; name: string; identifier: string; address: string;
+  phone: string; email: string;
+}): Promise<number> {
+  const pool = await ready();
+  const digits = data.identifier.replace(/\D/g, "");
+  const companyName = /\b(SRL|S\.R\.L\.?|SA|S\.A\.?|PFA|II|IF)\b/i.test(data.name);
+  const clientType: "PF" | "PJ" = digits.length === 13 ? "PF" : (digits.length > 0 || companyName ? "PJ" : "PF");
+  const cnp = clientType === "PF" ? digits : "";
+  const cif = clientType === "PJ" ? data.identifier.trim() : "";
+  const phone = data.phone.trim();
+  const email = data.email.trim().toLowerCase();
+  const existing = await pool.query(
+    `SELECT id FROM clients
+     WHERE ($1<>'' AND cnp=$1) OR ($2<>'' AND cif=$2)
+        OR ($3<>'' AND lower(email)=$3) OR ($4<>'' AND phone=$4)
+        OR lower(name)=lower($5)
+     ORDER BY (($1<>'' AND cnp=$1) OR ($2<>'' AND cif=$2)) DESC, id ASC LIMIT 1`,
+    [cnp, cif, email, phone, data.name.trim()]
+  );
+  if (existing.rows[0]) {
+    const id = Number(existing.rows[0].id);
+    await pool.query(
+      `UPDATE clients SET name=COALESCE(NULLIF($1,''),name), "clientType"=$2,
+       cif=CASE WHEN $2='PJ' THEN COALESCE(NULLIF($3,''),cif) ELSE cif END,
+       cnp=CASE WHEN $2='PF' THEN COALESCE(NULLIF($4,''),cnp) ELSE cnp END,
+       address=COALESCE(NULLIF($5,''),address), phone=COALESCE(NULLIF($6,''),phone),
+       email=COALESCE(NULLIF($7,''),email) WHERE id=$8`,
+      [data.name, clientType, cif, cnp, data.address, phone, email, id]
+    );
+    return id;
+  }
+  return createClient({
+    name: data.name || `Beneficiar ofertă ${data.offerId.slice(0, 6)}`, clientType,
+    regCom: "", cif, cnp, address: data.address, judet: "", city: "",
+    phone, email, ciSeries: "", ciNumber: "",
+  });
+}
+
 export async function setClientFlagged(id: number, flagged: boolean) {
   const pool = await ready();
   await pool.query(`UPDATE clients SET flagged=$1 WHERE id=$2`, [flagged ? 1 : 0, id]);
@@ -325,6 +369,10 @@ export async function createInvoice(input: {
   currency?: string;
   exchangeRate?: number;
   items: InvoiceItemInput[];
+  invoiceType?: "STANDARD" | "STORNO";
+  originalInvoiceId?: number | null;
+  stornoReason?: string;
+  initialStatus?: Invoice["status"];
 }): Promise<number> {
   const pool = await ready();
   const number = await takeNextNumber(input.series);
@@ -361,6 +409,10 @@ export async function createInvoice(input: {
   );
 
   const invoiceId = rows[0].id as number;
+  await pool.query(
+    `UPDATE invoices SET "invoiceType"=$1, "originalInvoiceId"=$2, "stornoReason"=$3, status=$4 WHERE id=$5`,
+    [input.invoiceType ?? "STANDARD", input.originalInvoiceId ?? null, input.stornoReason ?? "", input.initialStatus ?? "issued", invoiceId]
+  );
   for (const it of computed) {
     await pool.query(
       `INSERT INTO invoice_items ("invoiceId", "productId", description, um, qty, "unitPrice", "vatRate", valoare, "vatValue")
@@ -371,6 +423,51 @@ export async function createInvoice(input: {
   return invoiceId;
 }
 
+export async function createStornoInvoice(input: {
+  originalInvoiceId: number;
+  series?: string;
+  issueDate: string;
+  reason: string;
+}): Promise<number> {
+  const original = await getInvoiceFull(input.originalInvoiceId);
+  if (!original?.client) throw new Error("Factura selectată nu există.");
+  if (original.invoice.invoiceType === "STORNO" || ["storno", "stornoed", "canceled"].includes(original.invoice.status)) {
+    throw new Error("Factura selectată nu poate fi stornată.");
+  }
+  const pool = await ready();
+  const duplicate = await pool.query(`SELECT id FROM invoices WHERE "originalInvoiceId"=$1 AND "invoiceType"='STORNO' LIMIT 1`, [input.originalInvoiceId]);
+  if (duplicate.rows[0]) throw new Error("Factura selectată are deja o factură storno.");
+
+  const reference = `${original.invoice.series} ${String(original.invoice.number).padStart(4, "0")}`;
+  const id = await createInvoice({
+    series: (input.series || "STO").toUpperCase(),
+    clientId: original.invoice.clientId,
+    userId: original.invoice.userId,
+    issueDate: input.issueDate,
+    dueDate: input.issueDate,
+    currency: original.invoice.currency,
+    exchangeRate: original.invoice.exchangeRate,
+    notes: `Storno pentru factura ${reference}. Motiv: ${input.reason}`,
+    delegateName: original.invoice.delegateName,
+    delegateCI: original.invoice.delegateCI,
+    delegateCNP: original.invoice.delegateCNP,
+    discountPercent: original.invoice.discountPercent,
+    invoiceType: "STORNO",
+    originalInvoiceId: original.invoice.id,
+    stornoReason: input.reason,
+    initialStatus: "storno",
+    items: original.items.map((item) => ({
+      productId: item.productId,
+      description: `STORNO - ${item.description}`,
+      um: item.um,
+      qty: Math.abs(item.qty),
+      unitPrice: -Math.abs(item.unitPrice),
+      vatRate: item.vatRate,
+    })),
+  });
+  await pool.query(`UPDATE invoices SET status='stornoed' WHERE id=$1`, [original.invoice.id]);
+  return id;
+}
 export async function listInvoices(): Promise<(Invoice & { clientName: string; userName: string | null })[]> {
   const pool = await ready();
   const { rows } = await pool.query(
@@ -419,6 +516,11 @@ export async function deleteInvoice(id: number) {
 // ---------- Payments ----------
 export async function addPayment(invoiceId: number, amount: number, date: string, method: string, notes?: string) {
   const pool = await ready();
+  const invoice = await getInvoice(invoiceId);
+  if (!invoice || invoice.invoiceType === "STORNO" || ["storno", "stornoed", "canceled"].includes(invoice.status)) {
+    throw new Error("Factura selectată nu acceptă încasări.");
+  }
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Suma încasată trebuie să fie pozitivă.");
   await pool.query(`INSERT INTO payments ("invoiceId", amount, date, method, notes) VALUES ($1,$2,$3,$4,$5)`, [
     invoiceId,
     amount,
@@ -430,7 +532,6 @@ export async function addPayment(invoiceId: number, amount: number, date: string
     `SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE "invoiceId"=$1`,
     [invoiceId]
   );
-  const invoice = (await getInvoice(invoiceId))!;
   const paid = round2(Number(sumRows[0].s));
   let status: Invoice["status"] = "issued";
   if (paid <= 0) status = "issued";
@@ -453,6 +554,11 @@ export async function createReceipt(
   cashier?: string
 ): Promise<number> {
   const pool = await ready();
+  const invoice = await getInvoice(invoiceId);
+  if (!invoice || invoice.invoiceType === "STORNO" || ["storno", "stornoed", "canceled"].includes(invoice.status)) {
+    throw new Error("Pentru această factură nu se poate emite chitanță.");
+  }
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Valoarea chitanței trebuie să fie pozitivă.");
   const number = await takeNextNumber("CH1");
   const { rows } = await pool.query(
     `INSERT INTO receipts (series, number, "invoiceId", "issueDate", amount, cashier) VALUES ('CH1',$1,$2,$3,$4,$5) RETURNING id`,
@@ -490,7 +596,7 @@ export async function getDashboardStats() {
   const totalOutstanding = round2(
     Number(
       (
-        await pool.query(`SELECT COALESCE(SUM(total - "paidAmount"),0) as s FROM invoices WHERE status != 'canceled'`)
+        await pool.query(`SELECT COALESCE(SUM(total - "paidAmount"),0) as s FROM invoices WHERE status IN ('issued','partial')`)
       ).rows[0].s
     )
   );

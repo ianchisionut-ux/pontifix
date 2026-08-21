@@ -31,6 +31,8 @@ async function ensureSchema(pool: Pool) {
       cif TEXT NOT NULL DEFAULT '',
       address TEXT NOT NULL DEFAULT '',
       iban TEXT NOT NULL DEFAULT '',
+      "iban2" TEXT NOT NULL DEFAULT '',
+      "iban3" TEXT NOT NULL DEFAULT '',
       bank TEXT NOT NULL DEFAULT '',
       phone TEXT NOT NULL DEFAULT '',
       email TEXT NOT NULL DEFAULT '',
@@ -157,9 +159,15 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS city TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "ciSeries" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "ciNumber" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE company ADD COLUMN IF NOT EXISTS "iban2" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE company ADD COLUMN IF NOT EXISTS "iban3" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "sourceConnectionId" TEXT;`);
   await pool.query(`ALTER TABLE clients ADD COLUMN IF NOT EXISTS "sourceNib" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "clients_sourceConnectionId_key" ON clients ("sourceConnectionId") WHERE "sourceConnectionId" IS NOT NULL;`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "invoiceType" TEXT NOT NULL DEFAULT 'STANDARD';`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "originalInvoiceId" INTEGER REFERENCES invoices(id);`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "stornoReason" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_one_storno_per_original" ON invoices ("originalInvoiceId") WHERE "invoiceType"='STORNO';`);
 }
 
 export function getPool(): Pool {

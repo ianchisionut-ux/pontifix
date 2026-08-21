@@ -2,7 +2,7 @@ import React from "react";
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import type { Company, Client, Invoice } from "@/lib/accounting/repo";
 import { amountToWordsRO } from "@/lib/accounting/numberToWords";
-import { formatDate } from "./InvoicePdf";
+import { formatDate, pdfText } from "./InvoicePdf";
 import { ACCOUNTING_LOGO_DATA_URI } from "@/lib/accounting/logo";
 
 const NAVY="#082b4d", BLUE="#197fb5", SKY="#eaf5fb", LINE="#cfe2ed", MUTED="#6b8296";
@@ -19,16 +19,19 @@ const styles=StyleSheet.create({
  amountLabel:{fontSize:8,color:"#b9dcef"},amountValue:{fontFamily:"Helvetica-Bold",fontSize:17},words:{marginTop:10,backgroundColor:SKY,borderRadius:7,padding:11,fontSize:8,lineHeight:1.5},
  footer:{position:"absolute",left:38,right:38,bottom:35,borderTopWidth:1,borderTopColor:LINE,paddingTop:12,flexDirection:"row",justifyContent:"space-between"},footerText:{fontSize:7,color:MUTED,lineHeight:1.5},cashier:{fontFamily:"Helvetica-Bold",fontSize:8,color:NAVY},
 });
-function idLine(client:Client){return client.clientType==="PF" ? `CNP: ${client.cnp || "—"}` : `CIF/CUI: ${client.cif || "—"}`;}
+function idLine(client:Client){return client.clientType==="PF" ? `CNP: ${client.cnp || "-"}` : `CIF/CUI: ${client.cif || "-"}`;}
 function fmt(n:number){return n.toLocaleString("ro-RO",{minimumFractionDigits:2,maximumFractionDigits:2});}
 
 export function ReceiptPdf({receipt,invoice,client,company}:{receipt:{series:string;number:number;issueDate:string;amount:number;cashier:string};invoice:Invoice;client:Client;company:Company}){
- const num=String(receipt.number).padStart(4,"0");
+ const safeCompany={...company,name:pdfText(company.name),address:pdfText(company.address),bank:pdfText(company.bank),phone:pdfText(company.phone),email:pdfText(company.email)};
+ const safeClient={...client,name:pdfText(client.name),address:pdfText(client.address),city:pdfText(client.city),judet:pdfText(client.judet),regCom:pdfText(client.regCom)};
+ const safeReceipt={...receipt,cashier:pdfText(receipt.cashier)};
+ const num=String(safeReceipt.number).padStart(4,"0");
  return <Document><Page size="A4" style={styles.page}><View style={styles.line}/>
-  <View style={styles.header}><View style={styles.brand}><Image src={LOGO} style={styles.logo}/><View><Text style={styles.company}>{company.name}</Text><Text style={styles.tag}>Proiectare si executie instalatii electrice</Text></View></View><View style={styles.doc}><Text style={styles.docLabel}>CHITANTA</Text><Text style={styles.docNo}>{receipt.series} {num}</Text><Text style={styles.docDate}>Data: {formatDate(receipt.issueDate)}</Text></View></View>
-  <View style={styles.parties}><View style={styles.card}><Text style={styles.kicker}>EMITENT</Text><Text style={styles.name}>{company.name}</Text><Text style={styles.detail}>CIF: {company.cif}</Text><Text style={styles.detail}>Reg. com.: {company.regCom}</Text><Text style={styles.detail}>{company.address}</Text></View>
-  <View style={styles.client}><Text style={styles.kicker}>PLATITOR · {client.clientType==="PF"?"PERSOANA FIZICA":"PERSOANA JURIDICA"}</Text><Text style={styles.name}>{client.name}</Text><Text style={styles.detail}>{idLine(client)}</Text>{client.regCom&&<Text style={styles.detail}>Reg. com.: {client.regCom}</Text>}<Text style={styles.detail}>{client.address}</Text><Text style={styles.detail}>{[client.city,client.judet].filter(Boolean).join(", ")}</Text></View></View>
-  <View style={styles.body}><Text style={styles.bodyTitle}>INCASARE</Text><View style={styles.bodyContent}><Text>Am primit de la {client.name} suma mentionata mai jos, reprezentand contravaloarea facturii {invoice.series} {String(invoice.number).padStart(4,"0")} din {formatDate(invoice.issueDate)}.</Text><View style={styles.amount}><View><Text style={styles.amountLabel}>SUMA INCASATA</Text><Text style={styles.amountValue}>{fmt(receipt.amount)} RON</Text></View><Text style={{fontSize:8}}>Numerar</Text></View><View style={styles.words}><Text style={{fontFamily:"Helvetica-Bold",color:BLUE,marginBottom:3}}>SUMA IN LITERE</Text><Text>{amountToWordsRO(receipt.amount,"RON")}</Text></View></View></View>
-  <View style={styles.footer}><View><Text style={styles.cashier}>Casier</Text><Text style={styles.footerText}>{receipt.cashier||"________________________"}</Text></View><View><Text style={styles.cashier}>Date contact</Text><Text style={styles.footerText}>{company.phone}{"\n"}{company.email}</Text></View><View><Text style={styles.cashier}>Semnatura platitor</Text><Text style={styles.footerText}>{"\n"}________________________</Text></View></View>
+  <View style={styles.header}><View style={styles.brand}><Image src={LOGO} style={styles.logo}/><View><Text style={styles.company}>{safeCompany.name}</Text><Text style={styles.tag}>Proiectare si executie instalatii electrice</Text></View></View><View style={styles.doc}><Text style={styles.docLabel}>CHITANTA</Text><Text style={styles.docNo}>{safeReceipt.series} {num}</Text><Text style={styles.docDate}>Data: {formatDate(safeReceipt.issueDate)}</Text></View></View>
+  <View style={styles.parties}><View style={styles.card}><Text style={styles.kicker}>EMITENT</Text><Text style={styles.name}>{safeCompany.name}</Text><Text style={styles.detail}>CIF: {safeCompany.cif}</Text><Text style={styles.detail}>Reg. com.: {safeCompany.regCom}</Text><Text style={styles.detail}>{safeCompany.address}</Text></View>
+  <View style={styles.client}><Text style={styles.kicker}>PLATITOR - {safeClient.clientType==="PF"?"PERSOANA FIZICA":"PERSOANA JURIDICA"}</Text><Text style={styles.name}>{safeClient.name}</Text><Text style={styles.detail}>{idLine(safeClient)}</Text>{safeClient.regCom&&<Text style={styles.detail}>Reg. com.: {safeClient.regCom}</Text>}<Text style={styles.detail}>{safeClient.address}</Text><Text style={styles.detail}>{[safeClient.city,safeClient.judet].filter(Boolean).join(", ")}</Text></View></View>
+  <View style={styles.body}><Text style={styles.bodyTitle}>INCASARE</Text><View style={styles.bodyContent}><Text>Am primit de la {safeClient.name} suma mentionata mai jos, reprezentand contravaloarea facturii {invoice.series} {String(invoice.number).padStart(4,"0")} din {formatDate(invoice.issueDate)}.</Text><View style={styles.amount}><View><Text style={styles.amountLabel}>SUMA INCASATA</Text><Text style={styles.amountValue}>{fmt(safeReceipt.amount)} RON</Text></View><Text style={{fontSize:8}}>Numerar</Text></View><View style={styles.words}><Text style={{fontFamily:"Helvetica-Bold",color:BLUE,marginBottom:3}}>SUMA IN LITERE</Text><Text>{amountToWordsRO(safeReceipt.amount,"RON")}</Text></View></View></View>
+  <View style={styles.footer}><View><Text style={styles.cashier}>Casier</Text><Text style={styles.footerText}>{safeReceipt.cashier||"________________________"}</Text></View><View><Text style={styles.cashier}>Date contact</Text><Text style={styles.footerText}>{safeCompany.phone}{"\n"}{safeCompany.email}</Text></View><View><Text style={styles.cashier}>Semnatura platitor</Text><Text style={styles.footerText}>{"\n"}________________________</Text></View></View>
  </Page></Document>;
 }

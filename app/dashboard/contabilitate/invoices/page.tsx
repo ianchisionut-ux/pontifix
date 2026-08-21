@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/accounting/StatusBadge";
-import { Plus, Download } from "lucide-react";
+import { Plus, Download, RotateCcw } from "lucide-react";
 
 type InvoiceRow = {
   id: number;
@@ -15,6 +15,8 @@ type InvoiceRow = {
   total: number;
   paidAmount: number;
   status: string;
+  invoiceType: "STANDARD" | "STORNO";
+  originalInvoiceId: number | null;
 };
 
 function fmt(n: number) {
@@ -41,9 +43,14 @@ export default function InvoicesPage() {
           <h1 className="page-title">Facturi</h1>
           <p className="page-subtitle">{invoices.length} facturi emise in total.</p>
         </div>
-        <Link href="/dashboard/contabilitate/invoices/new" className="btn-primary">
-          <Plus size={15} /> Factura noua
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/dashboard/contabilitate/invoices/storno" className="btn-secondary">
+            <RotateCcw size={15} /> Factură storno
+          </Link>
+          <Link href="/dashboard/contabilitate/invoices/new" className="btn-primary">
+            <Plus size={15} /> Factura noua
+          </Link>
+        </div>
       </div>
 
       <div className="flex gap-2 mb-4" style={{ justifyContent: "space-between" }}>
@@ -53,6 +60,8 @@ export default function InvoicesPage() {
             { k: "issued", label: "Neincasate" },
             { k: "partial", label: "Partial" },
             { k: "paid", label: "Achitate" },
+            { k: "stornoed", label: "Stornate" },
+            { k: "storno", label: "Storno" },
           ].map((f) => (
             <button key={f.k} onClick={() => setFilter(f.k)} className={`pill ${filter === f.k ? "active" : ""}`}>
               {f.label}
@@ -96,7 +105,7 @@ export default function InvoicesPage() {
                 <td className="text-neutral-400">{inv.userName ?? "—"}</td>
                 <td className="num">{new Date(inv.issueDate).toLocaleDateString("ro-RO")}</td>
                 <td className="text-right num">{fmt(inv.total)} RON</td>
-                <td className="text-right num">{fmt(inv.total - inv.paidAmount)} RON</td>
+                <td className="text-right num">{inv.invoiceType === "STORNO" || inv.status === "stornoed" ? "—" : `${fmt(Math.max(0, inv.total - inv.paidAmount))} RON`}</td>
                 <td>
                   <StatusBadge status={inv.status} />
                 </td>
