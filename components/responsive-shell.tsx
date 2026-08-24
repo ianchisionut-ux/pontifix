@@ -116,10 +116,11 @@ export function ResponsiveShell({
         // eșec silențios — reîncercăm la următorul interval
       }
     }
-    poll()
+    const firstPoll = setTimeout(poll, 1800)
     const timer = setInterval(poll, 20000)
     return () => {
       cancelled = true
+      clearTimeout(firstPoll)
       clearInterval(timer)
     }
   }, [enableLiveBadges])

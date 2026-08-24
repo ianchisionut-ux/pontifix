@@ -2,8 +2,9 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { StatusBadge } from "@/components/accounting/StatusBadge";
-import { Download, Trash2, Receipt as ReceiptIcon, RotateCcw } from "lucide-react";
+import { ArrowLeft, Download, Trash2, Receipt as ReceiptIcon, RotateCcw } from "lucide-react";
 
 type FullInvoice = {
   invoice: {
@@ -90,6 +91,9 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
   return (
     <div>
+      <Link href="/dashboard/contabilitate/invoices" className="btn-secondary mb-4 inline-flex items-center gap-2">
+        <ArrowLeft size={16} /> Înapoi la facturi
+      </Link>
       <div className="page-head">
         <div>
           <div className="eyebrow">Factura</div>
@@ -107,7 +111,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       <div className="flex gap-3 mb-6">
-        <a href={`/api/accounting/invoices/${id}/pdf`} target="_blank" className="btn-primary">
+        <a href={`/api/accounting/invoices/${id}/pdf`} download className="btn-primary">
           <Download size={15} /> Descarca factura (PDF)
         </a>
         {canStorno && <a href={`/dashboard/contabilitate/invoices/storno?invoice=${id}`} className="btn-secondary">
@@ -235,7 +239,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   {r.series} {String(r.number).padStart(4, "0")}
                 </span>
                 <span className="num">{fmt(r.amount)} RON</span>
-                <a href={`/api/accounting/receipts/${r.id}/pdf`} target="_blank" className="link-action">
+                <a href={`/api/accounting/receipts/${r.id}/pdf`} download className="link-action">
                   descarca PDF
                 </a>
               </div>

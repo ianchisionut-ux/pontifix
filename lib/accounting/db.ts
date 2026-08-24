@@ -1,5 +1,7 @@
 import { Pool } from "pg";
 
+const ACCOUNTING_SCHEMA_VERSION = 2;
+
 declare global {
   // eslint-disable-next-line no-var
   var __facturarePool: Pool | undefined;
@@ -193,12 +195,29 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_one_storno_per_original" ON invoices ("originalInvoiceId") WHERE "invoiceType"='STORNO';`);
 }
 
+async function ensureSchemaVersion(pool: Pool) {
+  try {
+    const { rows } = await pool.query(`SELECT version FROM accounting_schema_meta WHERE id=1`);
+    if (Number(rows[0]?.version || 0) >= ACCOUNTING_SCHEMA_VERSION) return;
+  } catch (error) {
+    if ((error as { code?: string }).code !== "42P01") throw error;
+  }
+
+  await ensureSchema(pool);
+  await pool.query(`CREATE TABLE IF NOT EXISTS accounting_schema_meta (id INTEGER PRIMARY KEY, version INTEGER NOT NULL);`);
+  await pool.query(
+    `INSERT INTO accounting_schema_meta (id, version) VALUES (1, $1)
+     ON CONFLICT (id) DO UPDATE SET version=EXCLUDED.version`,
+    [ACCOUNTING_SCHEMA_VERSION]
+  );
+}
+
 export function getPool(): Pool {
   if (!global.__facturarePool) {
     global.__facturarePool = createPool();
   }
   if (!global.__facturareSchemaReady) {
-    global.__facturareSchemaReady = ensureSchema(global.__facturarePool).catch((err) => {
+    global.__facturareSchemaReady = ensureSchemaVersion(global.__facturarePool).catch((err) => {
       // Don't leave a permanently-rejected promise cached: if this attempt
       // failed (e.g. a transient network hiccup reaching Neon), clear it so
       // the *next* request tries ensureSchema again instead of the whole

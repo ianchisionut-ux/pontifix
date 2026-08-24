@@ -24,7 +24,7 @@ async function GETHandler(_req: NextRequest, { params }: { params: Promise<{ id:
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="Chitanta_${receipt.series}${numStr}.pdf"`,
+      "Content-Disposition": `attachment; filename="Chitanta_${receipt.series}${numStr}.pdf"`,
     },
   });
 }

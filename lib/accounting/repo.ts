@@ -574,14 +574,16 @@ export async function getInvoiceItems(invoiceId: number): Promise<InvoiceItem[]>
 export async function getInvoiceFull(id: number) {
   const invoice = await getInvoice(id);
   if (!invoice) return undefined;
-  const items = await getInvoiceItems(id);
-  const liveClient = await getClient(invoice.clientId);
-  const liveCompany = await getCompany();
+  const [items, liveClient, liveCompany, receipts, payments, user] = await Promise.all([
+    getInvoiceItems(id),
+    getClient(invoice.clientId),
+    getCompany(),
+    listReceiptsForInvoice(id),
+    listPaymentsForInvoice(id),
+    invoice.userId ? getUser(invoice.userId) : Promise.resolve(undefined),
+  ]);
   const client = Object.keys(invoice.clientSnapshot || {}).length ? invoice.clientSnapshot as Client : liveClient;
   const company = Object.keys(invoice.sellerSnapshot || {}).length ? invoice.sellerSnapshot as Company : liveCompany;
-  const receipts = await listReceiptsForInvoice(id);
-  const payments = await listPaymentsForInvoice(id);
-  const user = invoice.userId ? await getUser(invoice.userId) : undefined;
   return { invoice, items, client, company, receipts, payments, user };
 }
 
