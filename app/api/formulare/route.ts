@@ -8,7 +8,7 @@ import { ensureFormStorage } from '@/lib/ensure-form-storage'
 
 const schema = z.object({
   title: z.string().trim().min(2).max(180),
-  category: z.enum(['FORMULAR', 'CERERE']).default('FORMULAR'),
+  category: z.enum(['FORMULAR', 'CERERE', 'SEMNARE']).default('FORMULAR'),
   documentPathname: z.string().trim().min(2).max(1000),
   documentName: z.string().trim().min(1).max(255),
 })

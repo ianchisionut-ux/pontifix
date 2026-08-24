@@ -14,6 +14,11 @@ export type FormField = {
   binding?: string; defaultValue?: string
 }
 
+export type StampPlacement = {
+  id: string; stampKey: string; page: number; x: number; y: number
+  width: number; height: number; rotation: number
+}
+
 const ZALAU_REQUEST_FIELDS: FormField[] = [
   { id: 'obiect', label: 'Obiectul lucrării', page: 1, x: .197, y: .271, width: .69, height: .025, fontSize: 12, binding: 'connection.object' },
   { id: 'ocupare', label: 'Suprafață / tip zonă ocupată', page: 1, x: .342, y: .357, width: .28, height: .024, fontSize: 12, defaultValue: 'spații verzi' },
@@ -52,6 +57,7 @@ async function ensureTable() {
       CONSTRAINT "FormTemplate_pkey" PRIMARY KEY ("id")
     )`).then(async () => {
       await prisma.$executeRawUnsafe(`ALTER TABLE "FormTemplate" ADD COLUMN IF NOT EXISTS "fieldSchema" JSONB NOT NULL DEFAULT '[]'::jsonb`)
+      await prisma.$executeRawUnsafe(`ALTER TABLE "FormTemplate" ADD COLUMN IF NOT EXISTS "stampSchema" JSONB NOT NULL DEFAULT '[]'::jsonb`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FormTemplate_businessId_category_sortOrder_idx" ON "FormTemplate"("businessId", "category", "sortOrder")`)
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "FormSubmission" (
         "id" TEXT NOT NULL, "businessId" TEXT NOT NULL, "formTemplateId" TEXT NOT NULL,
@@ -86,9 +92,9 @@ export async function ensureFormStorage(businessId: string) {
 }
 
 export type FormTemplateDto = {
-  id: string; title: string; category: 'FORMULAR' | 'CERERE'
+  id: string; title: string; category: 'FORMULAR' | 'CERERE' | 'SEMNARE'
   documentPathname: string; documentName: string; sortOrder: number
-  fieldSchema: FormField[]; updatedAt: string
+  fieldSchema: FormField[]; stampSchema: StampPlacement[]; updatedAt: string
 }
 export type FormSubmissionDto = {
   id: string; formTemplateId: string; title: string; sourceType: string | null; sourceId: string | null

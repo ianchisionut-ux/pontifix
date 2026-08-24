@@ -11,11 +11,17 @@ const fieldSchema = z.array(z.object({
   height: z.number().min(.01).max(1), fontSize: z.number().min(6).max(40), multiline: z.boolean().optional(),
   binding: z.string().max(150).optional(), defaultValue: z.string().max(4000).optional(),
 })).max(250)
+const stampSchema = z.array(z.object({
+  id: z.string().min(1).max(100), stampKey: z.string().min(1).max(80), page: z.number().int().min(1).max(100),
+  x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().min(.01).max(1),
+  height: z.number().min(.01).max(1), rotation: z.number().min(-360).max(360),
+})).max(250)
 const schema = z.object({
   documentPathname: z.string().trim().min(2).max(1000).optional(),
   documentName: z.string().trim().min(1).max(255).optional(),
   fieldSchema: fieldSchema.optional(),
-}).refine((data) => data.fieldSchema !== undefined || (!!data.documentPathname && !!data.documentName))
+  stampSchema: stampSchema.optional(),
+}).refine((data) => data.fieldSchema !== undefined || data.stampSchema !== undefined || (!!data.documentPathname && !!data.documentName))
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -33,6 +39,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   }
   if (parsed.data.fieldSchema) {
     await prisma.$executeRaw`UPDATE "FormTemplate" SET "fieldSchema"=${JSON.stringify(parsed.data.fieldSchema)}::jsonb, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${businessId}`
+  }
+  if (parsed.data.stampSchema) {
+    await prisma.$executeRaw`UPDATE "FormTemplate" SET "stampSchema"=${JSON.stringify(parsed.data.stampSchema)}::jsonb, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${businessId}`
   }
   revalidatePath('/dashboard/formulare')
   return NextResponse.json({ success: true })

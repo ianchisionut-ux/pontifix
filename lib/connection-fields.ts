@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const CONNECTION_FIELD_GROUPS = [
   { title: 'Identificare', fields: ['Beneficiar', 'CnpCif', 'Telefon', 'Entitate'] },
   { title: 'Adresă', fields: ['Judet', 'Oras', 'Sat', 'Strada', 'Nr', 'Nrloc', 'Bloc', 'Ap'] },
-  { title: 'Amplasament', fields: ['Amplasament', 'AmplasamentA3'] },
+  { title: 'Amplasament', fields: ['Amplasament', 'AmplasamentA3', 'NrCad'] },
   { title: 'ATR / Branșament', fields: ['ATR', 'TipBransament', 'PTA', 'Solutia'] },
   { title: 'Puteri', fields: ['KW', 'KW2', 'KVA'] },
   { title: 'Contract / Altele', fields: ['SumaFaraTVA', 'NrContract', 'DATA', 'NrSX', 'DataSX', 'DataExpirareSX'] },
@@ -13,7 +13,7 @@ export const CONNECTION_FIELD_LABELS: Record<string, string> = {
   Beneficiar: 'Beneficiar', CnpCif: 'CNP / CIF', Telefon: 'Telefon', Entitate: 'Entitate / UAT',
   Judet: 'Județ', Oras: 'Oraș', Sat: 'Localitate / sat', Strada: 'Strada', Nr: 'Număr',
   Nrloc: 'Număr loc consum', Bloc: 'Bloc', Ap: 'Apartament', Amplasament: 'Amplasament complet',
-  AmplasamentA3: 'Amplasament dosar A3', ATR: 'Număr / dată ATR', TipBransament: 'Tip branșament',
+  AmplasamentA3: 'Amplasament dosar A3', NrCad: 'NR. CAD', ATR: 'Număr / dată ATR', TipBransament: 'Tip branșament',
   PTA: 'PTA / sursa de alimentare', Solutia: 'Soluția tehnică', KW: 'Putere (kW)', KW2: 'Putere A3 (kW)',
   KVA: 'Putere (kVA)', SumaFaraTVA: 'Sumă fără TVA', NrContract: 'Număr contract',
   DATA: 'Data contractului', NrSX: 'Număr SX', DataSX: 'Data SX', DataExpirareSX: 'Data expirare SX',
@@ -29,7 +29,7 @@ export type ConnectionFields = Record<(typeof CONNECTION_FIELDS)[number], string
 export function defaultConnectionFields(): ConnectionFields {
   return {
     Beneficiar: '', CnpCif: '', Telefon: '', Entitate: 'Mun. Zalău', Judet: 'Sălaj', Oras: 'Zalău', Sat: '',
-    Strada: '', Nr: '', Nrloc: '', Bloc: '', Ap: '', Amplasament: '', AmplasamentA3: 'Jud. Sălaj, ',
+    Strada: '', Nr: '', Nrloc: '', Bloc: '', Ap: '', Amplasament: '', AmplasamentA3: 'Jud. Sălaj, ', NrCad: '',
     ATR: '', PTA: '', Solutia: '', SumaFaraTVA: '', NrContract: '',
     DATA: new Date().toLocaleDateString('ro-RO'), KW: '05.00 KW', KW2: '05.00', KVA: '05.56 kVA',
     TipBransament: 'BRANȘAMENT ELECTRIC TRIFAZAT', NrSX: '', DataSX: '', DataExpirareSX: '',
