@@ -45,6 +45,7 @@ const styles = StyleSheet.create({
   totalsMuted: { color: MUTED },
   totalFinal: { flexDirection: "row", justifyContent: "space-between", backgroundColor: BLUE, color: "#fff", borderRadius: 6, padding: 9, marginTop: 4, fontFamily: "Helvetica-Bold", fontSize: 10 },
   notes: { marginTop: 11, padding: 8, borderLeftWidth: 3, borderLeftColor: BLUE, backgroundColor: "#f8fbfd", fontSize: 7.5, lineHeight: 1.5 },
+  legalNote: { position: "absolute", left: 30, right: 30, bottom: 78, color: MUTED, fontSize: 6.5, textAlign: "center" },
   footer: { position: "absolute", left: 30, right: 30, bottom: 26, borderTopWidth: 1, borderTopColor: LINE, paddingTop: 9, flexDirection: "row", justifyContent: "space-between" },
   footerCol: { width: "32%" }, footerTitle: { fontFamily: "Helvetica-Bold", color: NAVY, fontSize: 7.5, marginBottom: 3 },
   footerText: { color: MUTED, fontSize: 7, lineHeight: 1.4 },
@@ -99,6 +100,7 @@ export function InvoicePdf({ invoice, items, client, company }: { invoice: Invoi
     </View>
     {invoicePdf.notes && <View style={styles.notes}><Text style={{fontFamily:"Helvetica-Bold",marginBottom:2}}>Observatii</Text><Text>{invoicePdf.notes}</Text></View>}
 
+    <Text style={styles.legalNote}>Factura circula fara semnatura si stampila conform art. 319 alin. (29) din Legea nr. 227/2015 privind Codul fiscal.</Text>
     <View style={styles.footer}><View style={styles.footerCol}><Text style={styles.footerTitle}>Intocmit de</Text><Text style={styles.footerText}>{invoicePdf.delegateName || companyPdf.name}</Text><Text style={styles.footerText}>{invoicePdf.delegateCI ? `CI ${invoicePdf.delegateCI}` : ""}</Text></View><View style={styles.footerCol}><Text style={styles.footerTitle}>Expeditie</Text><Text style={styles.footerText}>{invoicePdf.vehiclePlate ? `Auto ${invoicePdf.vehiclePlate}` : "-"}</Text><Text style={styles.footerText}>{invoicePdf.deliveryDate ? formatDate(invoicePdf.deliveryDate) : ""} {invoicePdf.deliveryTime}</Text></View><View style={styles.footerCol}><Text style={styles.footerTitle}>Semnatura beneficiar</Text><Text style={styles.footerText}>{"\n"}________________________</Text></View></View>
   </Page></Document>;
 }
