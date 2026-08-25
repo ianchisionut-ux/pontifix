@@ -7,6 +7,7 @@ import { z } from 'zod'
 const schema = z.object({
   name: z.string().trim().min(2).max(200), certificateNumber: z.string().trim().optional(), certificateDate: z.string().optional(),
   beneficiary: z.string().trim().optional(), beneficiaryPhone: z.string().trim().optional(), address: z.string().trim().optional(), description: z.string().trim().optional(),
+  isTender: z.boolean().optional(),
   documentUrl: z.string().trim().optional(), documentName: z.string().trim().optional(),
   approvals: z.array(z.object({ name: z.string().trim().min(2), institution: z.string().trim().optional() })).default([]),
 })
