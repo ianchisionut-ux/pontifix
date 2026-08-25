@@ -355,7 +355,7 @@ export async function deleteProduct(id: number) {
 // ---------- Counters / numbering ----------
 export async function peekNextNumber(series: string): Promise<number> {
   const pool = await ready();
-  const normalized = series.trim().toUpperCase() || "FAC";
+  const normalized = series.trim().toUpperCase() || "ELM";
   const { rows } = await pool.query(`SELECT "lastNumber" FROM counters WHERE series=$1`, [normalized]);
   return (rows[0]?.lastNumber ?? 0) + 1;
 }

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { peekNextNumber } from "@/lib/accounting/repo";
 
 async function GETHandler(req: NextRequest) {
-  const series = req.nextUrl.searchParams.get("series") ?? "FAC";
+  const series = req.nextUrl.searchParams.get("series") ?? "ELM";
   return NextResponse.json({ number: await peekNextNumber(series) });
 }
 
