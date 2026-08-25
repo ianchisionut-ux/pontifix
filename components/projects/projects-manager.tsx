@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { uploadPresigned } from '@vercel/blob/client'
-import { CheckCircle2, ChevronDown, ChevronUp, Download, Eye, LayoutGrid, Link2, List, LoaderCircle, MessageCircle, Pencil, Plus, Printer, Save, Search, Trash2, UploadCloud } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronUp, Download, Eye, Link2, LoaderCircle, MessageCircle, Pencil, Plus, Printer, Save, Search, Trash2, UploadCloud } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 type ApprovalStatus = 'REQUIRED' | 'SUBMITTED' | 'OBTAINED' | 'NOT_REQUIRED'
@@ -43,7 +43,6 @@ export function ProjectsManager({ initialProjects, canManage, canSendWhatsApp }:
   const [certificateFile,setCertificateFile] = useState<File|null>(null)
   const [busy,setBusy] = useState(false)
   const [editing,setEditing] = useState(false)
-  const [viewMode,setViewMode] = useState<'grid'|'list'>('list')
   const [sendingProjectId,setSendingProjectId] = useState<string|null>(null)
 
   const visible = useMemo(() => initialProjects.filter(project => (filter === 'ALL' || project.status === filter) && (!query || [project.name,project.beneficiary,project.beneficiaryPhone,project.address].some(value => value?.toLowerCase().includes(query.toLowerCase())))), [initialProjects,filter,query])
@@ -111,13 +110,13 @@ export function ProjectsManager({ initialProjects, canManage, canSendWhatsApp }:
       <div className="grid xl:grid-cols-2 gap-3">{visible.map(project=><article key={project.id} className="border border-slate-300 rounded-xl p-4 break-inside-avoid"><div className="flex justify-between gap-4"><div><h2 className="font-bold">{project.name}</h2><p className="text-xs text-slate-600">{project.beneficiary||'Beneficiar nespecificat'}{project.beneficiaryPhone?' · '+project.beneficiaryPhone:''}{project.address?' · '+project.address:''}</p></div><strong>{projectProgress(project)}%</strong></div><div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">{project.approvals.map(approval=><div key={approval.id} className="flex justify-between border-b border-slate-200 py-1"><span>{approval.name}</span><b>{STAGE_LABELS[approval.status]}</b></div>)}</div><p className="mt-3 text-xs font-bold">Autorizația de construire: {STAGE_LABELS[project.constructionAuthorizationStatus]}</p></article>)}</div>
     </section>
     <div className="screen-only">
-    <div className="flex flex-wrap gap-2 mb-4"><div className="calendar-search !ml-0"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Caută proiect, beneficiar…"/></div>{(['ALL','ACTIVE','ON_HOLD','COMPLETED','ARCHIVED'] as const).map(value=><button key={value} onClick={()=>setFilter(value)} className={filter===value?'btn-primary':'btn-secondary'}>{value==='ALL'?'Toate':PROJECT_LABELS[value]}</button>)}<div className="ml-auto inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label="Mod de vizualizare"><button type="button" onClick={()=>setViewMode('grid')} className={`rounded-lg p-2 ${viewMode==='grid'?'bg-[#0d5d8b] text-white':'text-slate-500 hover:bg-slate-50'}`} title="Vizualizare grilă"><LayoutGrid size={17}/></button><button type="button" onClick={()=>setViewMode('list')} className={`rounded-lg p-2 ${viewMode==='list'?'bg-[#0d5d8b] text-white':'text-slate-500 hover:bg-slate-50'}`} title="Vizualizare listă"><List size={17}/></button></div></div>
-    <div className={`grid gap-3 ${viewMode==='grid'?'xl:grid-cols-2':'grid-cols-1'}`}>
+    <div className="flex flex-wrap gap-2 mb-4"><div className="calendar-search !ml-0"><Search size={15}/><input value={query} onChange={event=>setQuery(event.target.value)} placeholder="Caută proiect, beneficiar…"/></div>{(['ALL','ACTIVE','ON_HOLD','COMPLETED','ARCHIVED'] as const).map(value=><button key={value} onClick={()=>setFilter(value)} className={filter===value?'btn-primary':'btn-secondary'}>{value==='ALL'?'Toate':PROJECT_LABELS[value]}</button>)}</div>
+    <div className="grid grid-cols-1 gap-3">
       {visible.map(project => (
         <ProjectCard
           key={project.id}
           project={project}
-          compact={viewMode === 'list'}
+          compact
           editing={canManage && editing}
           canSendWhatsApp={canSendWhatsApp}
           open={expanded === project.id}
