@@ -5,8 +5,10 @@ export async function getOfferAccess() {
   const session = await auth()
   const businessId = (session as any)?.businessId as string | undefined
   const role = (session as any)?.role as string | undefined
+  const email = session?.user?.email?.toLowerCase().trim()
   if (!businessId) return null
   const business = await prisma.business.findUnique({ where: { id: businessId }, select: { name: true } })
   if (role !== 'SUPER_ADMIN' && !business?.name.toLocaleUpperCase('ro-RO').includes('ELMONT')) return null
-  return { session, businessId, role, canManage: role !== 'STAFF' }
+  const canManage = role !== 'STAFF' || email === 'berar_liviu@yahoo.com'
+  return { session, businessId, role, canManage }
 }

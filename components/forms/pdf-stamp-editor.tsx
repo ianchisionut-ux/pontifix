@@ -65,6 +65,8 @@ export function PdfStampEditor({ template, canManage, onClose }: { template: For
   const [activePage, setActivePage] = useState(1)
   const [placements, setPlacements] = useState<StampPlacement[]>(template.stampSchema || [])
   const [images, setImages] = useState<Record<string, string>>({})
+  const [stampAspects, setStampAspects] = useState<Record<string, number>>({})
+  const [pageAspects, setPageAspects] = useState<Record<number, number>>({})
   const [selectedId, setSelectedId] = useState('')
   const [busy, setBusy] = useState('')
   const [version, setVersion] = useState(0)
@@ -74,8 +76,19 @@ export function PdfStampEditor({ template, canManage, onClose }: { template: For
   const selected = placements.find((item) => item.id === selectedId)
 
   useEffect(() => {
-    Promise.all(STAMPS.map(async (stamp) => [stamp.key, await transparentImage(stamp.src)] as const))
-      .then((entries) => setImages(Object.fromEntries(entries))).catch((cause) => setError(cause.message))
+    Promise.all(STAMPS.map(async (stamp) => {
+      const source = await transparentImage(stamp.src)
+      const aspect = await new Promise<number>((resolve, reject) => {
+        const image = new Image()
+        image.onload = () => resolve(image.naturalWidth / image.naturalHeight)
+        image.onerror = () => reject(new Error('Dimensiunile ștampilei nu au putut fi citite.'))
+        image.src = source
+      })
+      return [stamp.key, source, aspect] as const
+    })).then((entries) => {
+      setImages(Object.fromEntries(entries.map(([key, source]) => [key, source])))
+      setStampAspects(Object.fromEntries(entries.map(([key, , aspect]) => [key, aspect])))
+    }).catch((cause) => setError(cause.message))
   }, [])
 
   useEffect(() => {
@@ -88,7 +101,12 @@ export function PdfStampEditor({ template, canManage, onClose }: { template: For
         const response = await fetch(documentUrl)
         if (!response.ok) throw new Error('PDF-ul nu a putut fi deschis.')
         const loaded = await pdfjs.getDocument({ data: await response.arrayBuffer() }).promise
-        if (!cancelled) { setPdf(loaded); setPageCount(loaded.numPages); setActivePage((page) => Math.min(page, loaded.numPages)) }
+        const metrics = await Promise.all(Array.from({ length: loaded.numPages }, async (_, index) => {
+          const page = await loaded.getPage(index + 1)
+          const viewport = page.getViewport({ scale: 1 })
+          return [index + 1, viewport.width / viewport.height] as const
+        }))
+        if (!cancelled) { setPdf(loaded); setPageCount(loaded.numPages); setPageAspects(Object.fromEntries(metrics)); setActivePage((page) => Math.min(page, loaded.numPages)) }
       } catch (cause) { if (!cancelled) setError(cause instanceof Error ? cause.message : 'PDF indisponibil.') }
     })()
     return () => { cancelled = true }
@@ -102,7 +120,17 @@ export function PdfStampEditor({ template, canManage, onClose }: { template: For
       const dy = (event.clientY - current.startY) / current.box.height
       setPlacements((all) => all.map((item) => {
         if (item.id !== current.id) return item
-        if (current.kind === 'resize') return { ...item, width: Math.max(.035, Math.min(1 - item.x, current.item.width + dx)), height: Math.max(.025, Math.min(1 - item.y, current.item.height + dy)) }
+        if (current.kind === 'resize') {
+          const widthPx = current.item.width * current.box.width
+          const heightPx = current.item.height * current.box.height
+          const deltaX = event.clientX - current.startX
+          const deltaY = event.clientY - current.startY
+          const projectedScale = 1 + (widthPx * deltaX + heightPx * deltaY) / (widthPx * widthPx + heightPx * heightPx)
+          const minScale = Math.max(.035 / current.item.width, .025 / current.item.height)
+          const maxScale = Math.min((1 - current.item.x) / current.item.width, (1 - current.item.y) / current.item.height)
+          const scale = Math.max(minScale, Math.min(maxScale, projectedScale))
+          return { ...item, width: current.item.width * scale, height: current.item.height * scale }
+        }
         return { ...item, x: Math.max(0, Math.min(1 - item.width, current.item.x + dx)), y: Math.max(0, Math.min(1 - item.height, current.item.y + dy)) }
       }))
     }
@@ -111,14 +139,28 @@ export function PdfStampEditor({ template, canManage, onClose }: { template: For
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
   }, [])
 
+  useEffect(() => {
+    if (!Object.keys(stampAspects).length || !Object.keys(pageAspects).length) return
+    setPlacements((all) => all.map((item) => {
+      const stampAspect = stampAspects[item.stampKey]
+      const pageAspect = pageAspects[item.page]
+      if (!stampAspect || !pageAspect) return item
+      let width = item.width
+      let height = width * pageAspect / stampAspect
+      if (height > 1 - item.y) {
+        const scale = (1 - item.y) / height
+        width *= scale; height *= scale
+      }
+      return Math.abs(item.width - width) < .000001 && Math.abs(item.height - height) < .000001 ? item : { ...item, width, height }
+    }))
+  }, [stampAspects, pageAspects])
+
   function addStamp(stampKey: string) {
     if (!canManage) return
-    const catalog = STAMPS.find((stamp) => stamp.key === stampKey)!
-    const source = images[stampKey]
-    const preview = new Image(); preview.src = source || catalog.src
-    const ratio = preview.naturalWidth && preview.naturalHeight ? preview.naturalHeight / preview.naturalWidth : .7
     const width = stampKey.includes('signature') ? .16 : .18
-    const height = Math.min(.24, width * ratio)
+    const stampAspect = stampAspects[stampKey] || 1
+    const pageAspect = pageAspects[activePage] || (1 / Math.sqrt(2))
+    const height = width * pageAspect / stampAspect
     const item: StampPlacement = { id: crypto.randomUUID(), stampKey, page: activePage, x: .5 - width / 2, y: .5 - height / 2, width, height, rotation: 0 }
     setPlacements((all) => [...all, item]); setSelectedId(item.id)
   }
@@ -133,6 +175,14 @@ export function PdfStampEditor({ template, canManage, onClose }: { template: For
 
   function updateSelected(patch: Partial<StampPlacement>) {
     setPlacements((all) => all.map((item) => item.id === selectedId ? { ...item, ...patch } : item))
+  }
+
+  function scaleSelected(factor: number) {
+    if (!selected) return
+    const minScale = Math.max(.035 / selected.width, .025 / selected.height)
+    const maxScale = Math.min((1 - selected.x) / selected.width, (1 - selected.y) / selected.height)
+    const scale = Math.max(minScale, Math.min(maxScale, factor))
+    updateSelected({ width: selected.width * scale, height: selected.height * scale })
   }
 
   async function saveTemplate() {
@@ -204,23 +254,23 @@ export function PdfStampEditor({ template, canManage, onClose }: { template: For
       <aside className="w-[230px] shrink-0 overflow-y-auto border-r border-slate-200 bg-white p-4">
         <p className="mb-3 text-xs font-black uppercase tracking-[.12em] text-[#0d5d8b]">Ștampile și semnături</p>
         <div className="space-y-2">{STAMPS.map((stamp) => <button key={stamp.key} disabled={!canManage} onClick={() => addStamp(stamp.key)} className="flex w-full items-center gap-3 rounded-xl border border-slate-200 p-2 text-left hover:border-[#78bfe1] hover:bg-[#f4fbfe] disabled:cursor-default"><span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-[linear-gradient(45deg,#edf2f7_25%,transparent_25%,transparent_75%,#edf2f7_75%),linear-gradient(45deg,#edf2f7_25%,white_25%,white_75%,#edf2f7_75%)] bg-[length:12px_12px]"><img src={images[stamp.key] || stamp.src} alt="" className="max-h-12 max-w-12 object-contain"/></span><span className="text-xs font-bold text-[#082b4d]">{stamp.label}</span></button>)}</div>
-        <p className="mt-4 text-[11px] leading-5 text-slate-500">Selectează pagina, apoi apasă o ștampilă. Trage pentru poziționare și folosește colțul albastru pentru redimensionare.</p>
+        <p className="mt-4 text-[11px] leading-5 text-slate-500">Selectează pagina, apoi apasă o ștampilă. Trage pentru poziționare și folosește colțul albastru pentru redimensionare proporțională, fără deformare.</p>
       </aside>
       <main className="min-w-0 flex-1 overflow-auto p-6">
         {!pdf && !error && <div className="flex h-full items-center justify-center text-[#197fb5]"><Loader2 className="animate-spin" size={30}/></div>}
         <div className="mx-auto max-w-[900px] space-y-7">{pdf && Array.from({ length: pageCount }, (_, index) => {
           const pageNumber = index + 1
-          return <div key={pageNumber} data-stamp-page onMouseDown={() => setActivePage(pageNumber)} className={`relative overflow-hidden bg-white shadow-xl ring-2 ${activePage === pageNumber ? 'ring-[#2a91c2]' : 'ring-transparent'}`}>
+          return <div key={pageNumber} data-stamp-page={pageNumber} onMouseDown={() => setActivePage(pageNumber)} className={`relative overflow-hidden bg-white shadow-xl ring-2 ${activePage === pageNumber ? 'ring-[#2a91c2]' : 'ring-transparent'}`}>
             <PdfPage pdf={pdf} pageNumber={pageNumber}/><div className="absolute inset-0">
               {placements.filter((item) => item.page === pageNumber).map((item) => <div key={item.id} onMouseDown={() => setSelectedId(item.id)} className={`group absolute ${selectedId === item.id ? 'z-20 ring-2 ring-[#1685bc]' : 'z-10'}`} style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%`, transform: `rotate(${item.rotation}deg)` }}>
-                <img src={images[item.stampKey] || STAMPS.find((stamp) => stamp.key === item.stampKey)?.src} alt="Ștampilă" className="h-full w-full select-none object-fill" draggable={false}/>
+                <img src={images[item.stampKey] || STAMPS.find((stamp) => stamp.key === item.stampKey)?.src} alt="Ștampilă" className="h-full w-full select-none object-contain" draggable={false}/>
                 {canManage && <><button onPointerDown={(event) => startDrag(event, item, 'move')} className="absolute -left-3 -top-3 flex h-7 w-7 cursor-move items-center justify-center rounded-full bg-[#0d5d8b] text-white shadow"><Grip size={13}/></button><button onPointerDown={(event) => startDrag(event, item, 'resize')} className="absolute -bottom-2 -right-2 h-5 w-5 cursor-nwse-resize rounded bg-[#1685bc] shadow"/></>}
               </div>)}
             </div><span className="absolute bottom-2 right-2 rounded-md bg-slate-950/55 px-2 py-1 text-[10px] font-bold text-white">Pagina {pageNumber}</span>
           </div>
         })}</div>
       </main>
-      {selected && canManage && <aside className="w-[220px] shrink-0 border-l border-slate-200 bg-white p-4"><p className="text-xs font-black uppercase tracking-[.1em] text-[#0d5d8b]">Element selectat</p><p className="mt-2 text-sm font-bold text-[#082b4d]">{selectedCatalog?.label}</p><div className="mt-4 flex items-center gap-2"><button className="round-action" title="Rotire stânga" onClick={() => updateSelected({ rotation: selected.rotation - 5 })}><RotateCcw size={16}/></button><span className="min-w-12 text-center text-xs font-bold">{selected.rotation}°</span><button className="round-action" title="Rotire dreapta" onClick={() => updateSelected({ rotation: selected.rotation + 5 })}><RotateCw size={16}/></button></div><div className="mt-3 flex items-center gap-2"><button className="round-action" title="Micșorează" onClick={() => updateSelected({ width: Math.max(.03, selected.width * .92), height: Math.max(.02, selected.height * .92) })}><Minus size={16}/></button><button className="round-action" title="Mărește" onClick={() => updateSelected({ width: Math.min(1 - selected.x, selected.width * 1.08), height: Math.min(1 - selected.y, selected.height * 1.08) })}><Plus size={16}/></button></div><button className="btn-secondary mt-4 inline-flex w-full items-center justify-center gap-2 !text-rose-600" onClick={() => { setPlacements((all) => all.filter((item) => item.id !== selected.id)); setSelectedId('') }}><Trash2 size={15}/> Elimină</button><div className="mt-5 rounded-xl bg-[#edf7fc] p-3 text-xs leading-5 text-slate-600"><Stamp size={16} className="mb-1 text-[#197fb5]"/>Fundalul alb este eliminat automat la afișare și la exportul PDF.</div></aside>}
+      {selected && canManage && <aside className="w-[220px] shrink-0 border-l border-slate-200 bg-white p-4"><p className="text-xs font-black uppercase tracking-[.1em] text-[#0d5d8b]">Element selectat</p><p className="mt-2 text-sm font-bold text-[#082b4d]">{selectedCatalog?.label}</p><div className="mt-4 flex items-center gap-2"><button className="round-action" title="Rotire stânga" onClick={() => updateSelected({ rotation: selected.rotation - 5 })}><RotateCcw size={16}/></button><span className="min-w-12 text-center text-xs font-bold">{selected.rotation}°</span><button className="round-action" title="Rotire dreapta" onClick={() => updateSelected({ rotation: selected.rotation + 5 })}><RotateCw size={16}/></button></div><div className="mt-3 flex items-center gap-2"><button className="round-action" title="Micșorează" onClick={() => scaleSelected(.92)}><Minus size={16}/></button><button className="round-action" title="Mărește" onClick={() => scaleSelected(1.08)}><Plus size={16}/></button></div><button className="btn-secondary mt-4 inline-flex w-full items-center justify-center gap-2 !text-rose-600" onClick={() => { setPlacements((all) => all.filter((item) => item.id !== selected.id)); setSelectedId('') }}><Trash2 size={15}/> Elimină</button><div className="mt-5 rounded-xl bg-[#edf7fc] p-3 text-xs leading-5 text-slate-600"><Stamp size={16} className="mb-1 text-[#197fb5]"/>Fundalul alb este eliminat automat la afișare și la exportul PDF.</div></aside>}
     </div>
   </div>
 }
