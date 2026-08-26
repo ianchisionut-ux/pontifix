@@ -27,6 +27,7 @@ export default function ClientsPage() {
   const [connectionId, setConnectionId] = useState("");
   const [importing, setImporting] = useState(false);
   const [anafLoading, setAnafLoading] = useState(false);
+  const [clientSearch, setClientSearch] = useState("");
   const [anafNotice, setAnafNotice] = useState<{ ok: boolean; text: string } | null>(null);
 
   async function lookupAnaf() {
@@ -107,6 +108,11 @@ export default function ClientsPage() {
     load();
   }
 
+  const normalizedClientSearch = clientSearch.trim().toLocaleLowerCase("ro-RO");
+  const visibleClients = normalizedClientSearch
+    ? clients.filter((client) => `${client.name} ${client.cif} ${client.cnp} ${client.regCom}`.toLocaleLowerCase("ro-RO").includes(normalizedClientSearch))
+    : clients;
+
   return (
     <div>
       <div className="page-head">
@@ -166,9 +172,11 @@ export default function ClientsPage() {
         </div>
       )}
 
+      <div className="card mb-4"><label className="field-label">Caută client după nume, CUI sau CNP</label><div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{color:"var(--text-faint)"}}/><input className="input pl-9" value={clientSearch} onChange={(event)=>setClientSearch(event.target.value)} placeholder="Ex. beneficiar, 9710508 sau CNP"/></div></div>
+
       <div className="card-table"><table><thead><tr><th>Beneficiar</th><th>Identificare</th><th>Adresă</th><th>Contact</th><th>Status</th><th></th></tr></thead>
-        <tbody>{clients.length===0&&<tr><td colSpan={6} className="empty-row">Niciun client înregistrat încă.</td></tr>}
-          {clients.map((c)=><tr key={c.id}>
+        <tbody>{visibleClients.length===0&&<tr><td colSpan={6} className="empty-row">Niciun client înregistrat încă.</td></tr>}
+          {visibleClients.map((c)=><tr key={c.id}>
             <td><strong>{c.name}</strong>{c.sourceNib&&<div className="text-xs mt-1" style={{color:"var(--cyan-strong)"}}>din {c.sourceNib}</div>}</td>
             <td><span className="doc-chip">{c.clientType || "PJ"}</span><div className="num mt-1">{c.clientType==="PF" ? c.cnp : c.cif}</div>{c.regCom&&<div className="text-xs">{c.regCom}</div>}</td>
             <td>{c.address || "—"}{(c.city||c.judet)&&<div className="text-xs mt-1" style={{color:"var(--text-faint)"}}>{[c.city,c.judet].filter(Boolean).join(", ")}</div>}</td>

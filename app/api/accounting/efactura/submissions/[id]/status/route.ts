@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server";import { accountingApi } from "@/lib/accounting/access";import { checkSubmission } from "@/lib/accounting/efactura";
+async function POSTHandler(_r:Request,{params}:{params:Promise<{id:string}>}){try{const{id}=await params;return NextResponse.json(await checkSubmission(Number(id)));}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Statusul nu a putut fi verificat."},{status:400});}}export const POST=accountingApi(POSTHandler);

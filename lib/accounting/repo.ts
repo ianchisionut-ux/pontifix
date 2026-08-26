@@ -1,4 +1,5 @@
 import { ready } from "./db";
+import { createRefIncomeForPayment } from "./ref";
 
 export type User = {
   id: number;
@@ -636,30 +637,43 @@ export async function deleteInvoice(id: number) {
 // ---------- Payments ----------
 export async function addPayment(invoiceId: number, amount: number, date: string, method: string, notes?: string) {
   const pool = await ready();
-  const invoice = await getInvoice(invoiceId);
-  if (!invoice || invoice.invoiceType === "STORNO" || ["storno", "stornoed", "canceled"].includes(invoice.status)) {
-    throw new Error("Factura selectată nu acceptă încasări.");
-  }
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error("Suma încasată trebuie să fie pozitivă.");
-  await pool.query(`INSERT INTO payments ("invoiceId", amount, date, method, notes) VALUES ($1,$2,$3,$4,$5)`, [
-    invoiceId,
-    amount,
-    date,
-    method,
-    notes ?? "",
-  ]);
-  const { rows: sumRows } = await pool.query(
-    `SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE "invoiceId"=$1`,
-    [invoiceId]
-  );
-  const paid = round2(Number(sumRows[0].s));
-  let status: Invoice["status"] = "issued";
-  if (paid <= 0) status = "issued";
-  else if (paid >= invoice.total) status = "paid";
-  else status = "partial";
-  await pool.query(`UPDATE invoices SET "paidAmount"=$1, status=$2 WHERE id=$3`, [paid, status, invoiceId]);
-}
+  const connection = await pool.connect();
+  try {
+    await connection.query("BEGIN");
+    const { rows: invoiceRows } = await connection.query(`SELECT * FROM invoices WHERE id=$1 FOR UPDATE`, [invoiceId]);
+    const invoice = invoiceRows[0] as Invoice | undefined;
+    if (!invoice || invoice.invoiceType === "STORNO" || ["storno", "stornoed", "canceled"].includes(invoice.status)) {
+      throw new Error("Factura selectată nu acceptă încasări.");
+    }
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Suma încasată trebuie să fie pozitivă.");
 
+    const { rows: paymentRows } = await connection.query(
+      `INSERT INTO payments ("invoiceId", amount, date, method, notes) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [invoiceId, amount, date, method, notes ?? ""]
+    );
+    const { rows: clientRows } = await connection.query(`SELECT * FROM clients WHERE id=$1`, [invoice.clientId]);
+    const snapshotClient = Object.keys(invoice.clientSnapshot || {}).length ? invoice.clientSnapshot as Client : undefined;
+    const client = snapshotClient || clientRows[0] as Client | undefined;
+    await createRefIncomeForPayment({
+      paymentId: Number(paymentRows[0].id), invoiceId, date, amount,
+      invoiceTotal: Number(invoice.total), invoiceSubtotal: Number(invoice.subtotal),
+      series: invoice.series, number: invoice.number, clientName: client?.name || "Client",
+    }, connection);
+
+    const { rows: sumRows } = await connection.query(
+      `SELECT COALESCE(SUM(amount),0) as s FROM payments WHERE "invoiceId"=$1`, [invoiceId]
+    );
+    const paid = round2(Number(sumRows[0].s));
+    const status: Invoice["status"] = paid <= 0 ? "issued" : paid >= invoice.total ? "paid" : "partial";
+    await connection.query(`UPDATE invoices SET "paidAmount"=$1, status=$2 WHERE id=$3`, [paid, status, invoiceId]);
+    await connection.query("COMMIT");
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
 export async function listPaymentsForInvoice(invoiceId: number) {
   const pool = await ready();
   const { rows } = await pool.query(`SELECT * FROM payments WHERE "invoiceId"=$1 ORDER BY date`, [invoiceId]);

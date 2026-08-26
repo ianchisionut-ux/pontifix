@@ -4,6 +4,7 @@ import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/accounting/StatusBadge";
+import { EFacturaPanel } from "@/components/accounting/EFacturaPanel";
 import { ArrowLeft, Download, Trash2, Receipt as ReceiptIcon, RotateCcw } from "lucide-react";
 
 type FullInvoice = {
@@ -121,6 +122,8 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           <Trash2 size={14} /> Sterge factura
         </button>
       </div>
+
+      <EFacturaPanel invoiceId={Number(id)} />
 
       <div className="card-table mb-6">
         <table>

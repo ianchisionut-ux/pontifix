@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server"; import { accountingApi } from "@/lib/accounting/access"; import { listAnafMessages } from "@/lib/accounting/efactura";
+async function GETHandler(){return NextResponse.json(await listAnafMessages());}export const GET=accountingApi(GETHandler);

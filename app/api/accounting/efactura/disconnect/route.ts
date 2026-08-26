@@ -1,0 +1,2 @@
+import { NextResponse } from "next/server"; import { accountingApi } from "@/lib/accounting/access"; import { disconnectAnaf } from "@/lib/accounting/efactura";
+async function POSTHandler(){await disconnectAnaf();return NextResponse.json({ok:true});}export const POST=accountingApi(POSTHandler);

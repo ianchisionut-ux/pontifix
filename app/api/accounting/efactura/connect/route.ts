@@ -1,0 +1,2 @@
+import crypto from "crypto"; import { NextResponse } from "next/server"; import { accountingApi } from "@/lib/accounting/access"; import { getAnafAuthorizeUrl } from "@/lib/accounting/efactura";
+async function GETHandler(){const state=crypto.randomBytes(24).toString("hex"); const response=NextResponse.redirect(getAnafAuthorizeUrl(state)); response.cookies.set("anaf_oauth_state",state,{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",maxAge:600}); return response;} export const GET=accountingApi(GETHandler);

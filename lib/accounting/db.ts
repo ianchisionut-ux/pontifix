@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 
-const ACCOUNTING_SCHEMA_VERSION = 2;
+const ACCOUNTING_SCHEMA_VERSION = 4;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -193,6 +193,88 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "sellerSnapshot" JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "clientSnapshot" JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_one_storno_per_original" ON invoices ("originalInvoiceId") WHERE "invoiceType"='STORNO';`);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS ref_transactions (
+      id SERIAL PRIMARY KEY,
+      type TEXT NOT NULL CHECK (type IN ('INCOME', 'EXPENSE')),
+      date DATE NOT NULL,
+      "documentType" TEXT NOT NULL,
+      "documentNumber" TEXT NOT NULL DEFAULT '',
+      explanation TEXT NOT NULL,
+      "grossAmount" NUMERIC(14,2) NOT NULL DEFAULT 0,
+      "vatAmount" NUMERIC(14,2) NOT NULL DEFAULT 0,
+      "netAmount" NUMERIC(14,2) NOT NULL DEFAULT 0,
+      "fiscalCategory" TEXT NOT NULL,
+      "deductibilityPercent" NUMERIC(5,2) NOT NULL DEFAULT 100,
+      "fiscalAmount" NUMERIC(14,2) NOT NULL DEFAULT 0,
+      "invoiceId" INTEGER REFERENCES invoices(id) ON DELETE SET NULL,
+      "paymentId" INTEGER REFERENCES payments(id) ON DELETE CASCADE,
+      source TEXT NOT NULL DEFAULT 'MANUAL',
+      notes TEXT NOT NULL DEFAULT '',
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS "ref_transactions_paymentId_key"
+      ON ref_transactions ("paymentId") WHERE "paymentId" IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS "ref_transactions_date_idx" ON ref_transactions (date);
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS anaf_connections (
+      id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id=1),
+      "accessToken" TEXT NOT NULL,
+      "refreshToken" TEXT NOT NULL DEFAULT '',
+      "expiresAt" TIMESTAMPTZ NOT NULL,
+      scope TEXT NOT NULL DEFAULT '',
+      "connectedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS efactura_submissions (
+      id SERIAL PRIMARY KEY,
+      "invoiceId" INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+      "uploadId" TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'DRAFT',
+      message TEXT NOT NULL DEFAULT '',
+      "downloadId" TEXT NOT NULL DEFAULT '',
+      "xmlSnapshot" TEXT NOT NULL,
+      "submittedAt" TIMESTAMPTZ,
+      "checkedAt" TIMESTAMPTZ,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS "efactura_submissions_invoice_idx" ON efactura_submissions ("invoiceId", id DESC);
+    CREATE TABLE IF NOT EXISTS efactura_messages (
+      id SERIAL PRIMARY KEY,
+      "messageId" TEXT NOT NULL UNIQUE,
+      direction TEXT NOT NULL CHECK (direction IN ('RECEIVED','SENT')),
+      cif TEXT NOT NULL DEFAULT '',
+      details TEXT NOT NULL DEFAULT '',
+      "documentDate" TEXT NOT NULL DEFAULT '',
+      "downloadId" TEXT NOT NULL DEFAULT '',
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  // Populam idempotent registrul cu incasarile deja existente in Facturare.
+  await pool.query(`
+    INSERT INTO ref_transactions
+      (type, date, "documentType", "documentNumber", explanation, "grossAmount", "vatAmount", "netAmount",
+       "fiscalCategory", "deductibilityPercent", "fiscalAmount", "invoiceId", "paymentId", source)
+    SELECT 'INCOME', p.date::date, 'FACTURA', i.series || ' ' || i.number::text,
+           'Incasare factura - ' || COALESCE(NULLIF(c.name,''), 'Client'),
+           ROUND(p.amount::numeric, 2),
+           CASE WHEN COALESCE(co."vatPayer",0)=1 AND i.total<>0
+                THEN ROUND((p.amount - p.amount * i.subtotal / i.total)::numeric, 2) ELSE 0 END,
+           CASE WHEN COALESCE(co."vatPayer",0)=1 AND i.total<>0
+                THEN ROUND((p.amount * i.subtotal / i.total)::numeric, 2) ELSE ROUND(p.amount::numeric, 2) END,
+           'TAXABLE_INCOME', 100,
+           CASE WHEN COALESCE(co."vatPayer",0)=1 AND i.total<>0
+                THEN ROUND((p.amount * i.subtotal / i.total)::numeric, 2) ELSE ROUND(p.amount::numeric, 2) END,
+           i.id, p.id, 'AUTO_PAYMENT'
+    FROM payments p
+    JOIN invoices i ON i.id=p."invoiceId"
+    LEFT JOIN clients c ON c.id=i."clientId"
+    CROSS JOIN company co
+    ON CONFLICT ("paymentId") WHERE "paymentId" IS NOT NULL DO NOTHING;
+  `);
 }
 
 async function ensureSchemaVersion(pool: Pool) {
