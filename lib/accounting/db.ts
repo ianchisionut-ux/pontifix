@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 
-const ACCOUNTING_SCHEMA_VERSION = 4;
+const ACCOUNTING_SCHEMA_VERSION = 5;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -192,6 +192,7 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "buyerReference" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "sellerSnapshot" JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "clientSnapshot" JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "autoEfactura" INTEGER NOT NULL DEFAULT 0;`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_one_storno_per_original" ON invoices ("originalInvoiceId") WHERE "invoiceType"='STORNO';`);
 
   await pool.query(`

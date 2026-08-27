@@ -1,5 +1,6 @@
 import { ready } from "./db";
 import { createRefIncomeForPayment } from "./ref";
+import type { PoolClient } from "pg";
 
 export type User = {
   id: number;
@@ -361,8 +362,8 @@ export async function peekNextNumber(series: string): Promise<number> {
   return (rows[0]?.lastNumber ?? 0) + 1;
 }
 
-async function takeNextNumber(series: string): Promise<number> {
-  const pool = await ready();
+async function takeNextNumber(series: string, client?: PoolClient): Promise<number> {
+  const pool = client || await ready();
   // Atomic upsert-and-increment so two concurrent requests never collide.
   const { rows } = await pool.query(
     `INSERT INTO counters (series, "lastNumber") VALUES ($1, 1)
@@ -373,12 +374,12 @@ async function takeNextNumber(series: string): Promise<number> {
   return rows[0].lastNumber as number;
 }
 
-async function takeInvoiceNumber(series: string, requested?: number): Promise<number> {
-  if (requested === undefined) return takeNextNumber(series);
+async function takeInvoiceNumber(series: string, requested?: number, client?: PoolClient): Promise<number> {
+  if (requested === undefined) return takeNextNumber(series, client);
   if (!Number.isInteger(requested) || requested <= 0) {
     throw new Error("Numărul facturii trebuie să fie un număr întreg pozitiv.");
   }
-  const pool = await ready();
+  const pool = client || await ready();
   const duplicate = await pool.query(`SELECT id FROM invoices WHERE series=$1 AND number=$2 LIMIT 1`, [series, requested]);
   if (duplicate.rows[0]) throw new Error(`Factura ${series} ${requested} există deja.`);
   await pool.query(
@@ -388,7 +389,6 @@ async function takeInvoiceNumber(series: string, requested?: number): Promise<nu
   );
   return requested;
 }
-
 // ---------- Invoices ----------
 function computeTotals(items: InvoiceItemInput[], discountPercent = 0) {
   let subtotal = 0;
@@ -433,66 +433,99 @@ export async function createInvoice(input: {
   buyerReference?: string;
   sellerSnapshot?: Company;
   clientSnapshot?: Client;
+  paidOnSpot?: boolean;
+  cashier?: string;
 }): Promise<number> {
   const pool = await ready();
   const series = input.series.trim().toUpperCase();
   if (!series) throw new Error("Completează seria facturii.");
-  const number = await takeInvoiceNumber(series, input.number);
   const discountPercent = input.discountPercent ?? 0;
   const { computed, subtotal, vatTotal } = computeTotals(input.items, discountPercent);
   const total = round2(subtotal + vatTotal);
-  const clientResult = await pool.query(`SELECT * FROM clients WHERE id=$1`, [input.clientId]);
-  const companyResult = await pool.query(`SELECT * FROM company WHERE id=1`);
-  if (!clientResult.rows[0]) throw new Error("Clientul selectat nu există.");
-
-  const { rows } = await pool.query(
-    `INSERT INTO invoices
-      (series, number, "clientId", "userId", "issueDate", "dueDate", status, "paidAmount", subtotal, "vatTotal", total, "discountPercent", currency, "exchangeRate", notes, "delegateName", "delegateCI", "delegateCNP", "vehiclePlate", "deliveryDate", "deliveryTime")
-     VALUES ($1,$2,$3,$4,$5,$6,'issued',0,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-     RETURNING id`,
-    [
-      series,
-      number,
-      input.clientId,
-      input.userId ?? null,
-      input.issueDate,
-      input.dueDate ?? null,
-      subtotal,
-      vatTotal,
-      total,
-      discountPercent,
-      input.currency ?? "RON",
-      input.exchangeRate ?? 1,
-      input.notes ?? "",
-      input.delegateName ?? "",
-      input.delegateCI ?? "",
-      input.delegateCNP ?? "",
-      input.vehiclePlate ?? "",
-      input.deliveryDate ?? "",
-      input.deliveryTime ?? "",
-    ]
-  );
-
-  const invoiceId = rows[0].id as number;
-  await pool.query(
-    `UPDATE invoices SET "invoiceType"=$1, "originalInvoiceId"=$2, "stornoReason"=$3, status=$4,
-     "invoiceTypeCode"=$5, "paymentMeansCode"=$6, "paymentTerms"=$7, "taxPointDate"=$8, "buyerReference"=$9,
-     "sellerSnapshot"=$10::jsonb, "clientSnapshot"=$11::jsonb WHERE id=$12`,
-    [input.invoiceType ?? "STANDARD", input.originalInvoiceId ?? null, input.stornoReason ?? "", input.initialStatus ?? "issued",
-      input.invoiceTypeCode || (input.invoiceType === "STORNO" ? "381" : "380"), input.paymentMeansCode || "30", input.paymentTerms ?? "",
-      input.taxPointDate || input.issueDate, input.buyerReference ?? "", JSON.stringify(input.sellerSnapshot || companyResult.rows[0] || {}), JSON.stringify(input.clientSnapshot || clientResult.rows[0]), invoiceId]
-  );
-  for (const it of computed) {
-    await pool.query(
-      `INSERT INTO invoice_items ("invoiceId", "productId", description, um, qty, "unitPrice", "vatRate", valoare, "vatValue", "unitCode", "vatCategoryCode", "taxExemptionReasonCode", "taxExemptionReason")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
-      [invoiceId, it.productId ?? null, it.description, it.um, it.qty, it.unitPrice, it.vatRate, it.valoare, it.vatValue,
-        it.unitCode || "H87", it.vatCategoryCode || (it.vatRate === 0 ? "Z" : "S"), it.taxExemptionReasonCode || "", it.taxExemptionReason || ""]
-    );
+  if (input.paidOnSpot && (input.invoiceType ?? "STANDARD") !== "STANDARD") {
+    throw new Error("Chitanța automată este disponibilă doar pentru facturi normale.");
   }
-  return invoiceId;
-}
+  if (input.paidOnSpot && (input.currency ?? "RON") !== "RON") {
+    throw new Error("Chitanța automată poate fi emisă doar pentru facturi în RON.");
+  }
+  if (input.paidOnSpot && total <= 0) {
+    throw new Error("Totalul facturii trebuie să fie pozitiv pentru încasarea pe loc.");
+  }
 
+  const connection = await pool.connect();
+  try {
+    await connection.query("BEGIN");
+    const number = await takeInvoiceNumber(series, input.number, connection);
+    const clientResult = await connection.query(`SELECT * FROM clients WHERE id=$1`, [input.clientId]);
+    const companyResult = await connection.query(`SELECT * FROM company WHERE id=1`);
+    if (!clientResult.rows[0]) throw new Error("Clientul selectat nu există.");
+
+    const { rows } = await connection.query(
+      `INSERT INTO invoices
+        (series, number, "clientId", "userId", "issueDate", "dueDate", status, "paidAmount", subtotal, "vatTotal", total, "discountPercent", currency, "exchangeRate", notes, "delegateName", "delegateCI", "delegateCNP", "vehiclePlate", "deliveryDate", "deliveryTime")
+       VALUES ($1,$2,$3,$4,$5,$6,'issued',0,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       RETURNING id`,
+      [
+        series, number, input.clientId, input.userId ?? null, input.issueDate, input.dueDate ?? null,
+        subtotal, vatTotal, total, discountPercent, input.currency ?? "RON", input.exchangeRate ?? 1,
+        input.notes ?? "", input.delegateName ?? "", input.delegateCI ?? "", input.delegateCNP ?? "",
+        input.vehiclePlate ?? "", input.deliveryDate ?? "", input.deliveryTime ?? "",
+      ]
+    );
+
+    const invoiceId = rows[0].id as number;
+    await connection.query(
+      `UPDATE invoices SET "invoiceType"=$1, "originalInvoiceId"=$2, "stornoReason"=$3, status=$4,
+       "invoiceTypeCode"=$5, "paymentMeansCode"=$6, "paymentTerms"=$7, "taxPointDate"=$8, "buyerReference"=$9,
+       "sellerSnapshot"=$10::jsonb, "clientSnapshot"=$11::jsonb, "autoEfactura"=$12 WHERE id=$13`,
+      [
+        input.invoiceType ?? "STANDARD", input.originalInvoiceId ?? null, input.stornoReason ?? "", input.initialStatus ?? "issued",
+        input.invoiceTypeCode || (input.invoiceType === "STORNO" ? "381" : "380"), input.paidOnSpot ? "10" : (input.paymentMeansCode || "30"),
+        input.paymentTerms ?? "", input.taxPointDate || input.issueDate, input.buyerReference ?? "",
+        JSON.stringify(input.sellerSnapshot || companyResult.rows[0] || {}), JSON.stringify(input.clientSnapshot || clientResult.rows[0]),
+        1, invoiceId,
+      ]
+    );
+
+    for (const item of computed) {
+      await connection.query(
+        `INSERT INTO invoice_items ("invoiceId", "productId", description, um, qty, "unitPrice", "vatRate", valoare, "vatValue", "unitCode", "vatCategoryCode", "taxExemptionReasonCode", "taxExemptionReason")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        [
+          invoiceId, item.productId ?? null, item.description, item.um, item.qty, item.unitPrice, item.vatRate,
+          item.valoare, item.vatValue, item.unitCode || "H87", item.vatCategoryCode || (item.vatRate === 0 ? "Z" : "S"),
+          item.taxExemptionReasonCode || "", item.taxExemptionReason || "",
+        ]
+      );
+    }
+
+    if (input.paidOnSpot) {
+      const { rows: paymentRows } = await connection.query(
+        `INSERT INTO payments ("invoiceId", amount, date, method, notes) VALUES ($1,$2,$3,'numerar',$4) RETURNING id`,
+        [invoiceId, total, input.issueDate, "Achitată integral la emitere."]
+      );
+      await createRefIncomeForPayment({
+        paymentId: Number(paymentRows[0].id), invoiceId, date: input.issueDate, amount: total,
+        invoiceTotal: total, invoiceSubtotal: subtotal, series, number,
+        clientName: String(clientResult.rows[0].name || "Client"),
+      }, connection);
+      const receiptNumber = await takeNextNumber("CH1", connection);
+      await connection.query(
+        `INSERT INTO receipts (series, number, "invoiceId", "issueDate", amount, cashier) VALUES ('CH1',$1,$2,$3,$4,$5)`,
+        [receiptNumber, invoiceId, input.issueDate, total, input.cashier ?? input.delegateName ?? ""]
+      );
+      await connection.query(`UPDATE invoices SET "paidAmount"=$1, status='paid' WHERE id=$2`, [total, invoiceId]);
+    }
+
+    await connection.query("COMMIT");
+    return invoiceId;
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
 export async function createStornoInvoice(input: {
   originalInvoiceId: number;
   series?: string;
@@ -549,17 +582,22 @@ export async function createStornoInvoice(input: {
   await pool.query(`UPDATE invoices SET status='stornoed' WHERE id=$1`, [original.invoice.id]);
   return id;
 }
-export async function listInvoices(): Promise<(Invoice & { clientName: string; userName: string | null })[]> {
+export async function listInvoices(): Promise<(Invoice & { clientName: string; userName: string | null; eFacturaStatus: string | null; eFacturaMessage: string | null })[]> {
   const pool = await ready();
   const { rows } = await pool.query(
-    `SELECT i.*, c.name as "clientName", u.name as "userName" FROM invoices i
+    `SELECT i.*, c.name as "clientName", u.name as "userName",
+       ef.status as "eFacturaStatus", ef.message as "eFacturaMessage"
+     FROM invoices i
      JOIN clients c ON c.id = i."clientId"
      LEFT JOIN users u ON u.id = i."userId"
+     LEFT JOIN LATERAL (
+       SELECT status, message FROM efactura_submissions
+       WHERE "invoiceId"=i.id ORDER BY id DESC LIMIT 1
+     ) ef ON true
      ORDER BY i."issueDate" DESC, i.id DESC`
   );
-  return rows as (Invoice & { clientName: string; userName: string | null })[];
+  return rows as (Invoice & { clientName: string; userName: string | null; eFacturaStatus: string | null; eFacturaMessage: string | null })[];
 }
-
 export async function getInvoice(id: number): Promise<Invoice | undefined> {
   const pool = await ready();
   const { rows } = await pool.query(`SELECT * FROM invoices WHERE id=$1`, [id]);

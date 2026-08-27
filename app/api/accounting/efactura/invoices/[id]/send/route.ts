@@ -1,2 +1,14 @@
-import { NextResponse } from "next/server";import { accountingApi } from "@/lib/accounting/access";import { getInvoiceFull } from "@/lib/accounting/repo";import { generateEFacturaXml,submitEFactura } from "@/lib/accounting/efactura";
-async function POSTHandler(_r:Request,{params}:{params:Promise<{id:string}>}){const{id}=await params;try{const full=await getInvoiceFull(Number(id));if(!full||!full.client)throw new Error("Factura nu există.");const xml=generateEFacturaXml({...full,client:full.client});const cif=full.company.cif;if(!cif)throw new Error("CIF emitent lipsă.");return NextResponse.json(await submitEFactura(Number(id),xml,cif));}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Transmiterea a eșuat."},{status:400});}}export const POST=accountingApi(POSTHandler);
+import { NextResponse } from "next/server";
+import { accountingApi } from "@/lib/accounting/access";
+import { sendInvoiceToAnaf } from "@/lib/accounting/efactura";
+
+async function POSTHandler(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  try {
+    return NextResponse.json(await sendInvoiceToAnaf(Number(id)));
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Transmiterea a eșuat." }, { status: 400 });
+  }
+}
+
+export const POST = accountingApi(POSTHandler);
