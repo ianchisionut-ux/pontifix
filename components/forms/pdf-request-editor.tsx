@@ -91,6 +91,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
   const [layoutMode, setLayoutMode] = useState(false)
   const [selectedId, setSelectedId] = useState('')
   const [activePage, setActivePage] = useState(1)
+  const [printPage, setPrintPage] = useState(1)
   const [busy, setBusy] = useState('')
   const [documentVersion, setDocumentVersion] = useState(0)
   const [error, setError] = useState('')
@@ -214,11 +215,12 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
     finally { setBusy('') }
   }
 
-  async function generatePdf() {
+  async function generatePdf(onlyPage?: number) {
     if (!pdf) throw new Error('PDF-ul se încarcă încă.')
     const { PDFDocument } = await import('pdf-lib')
     const output = await PDFDocument.create()
-    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber++) {
+    const pages = onlyPage ? [onlyPage] : Array.from({ length: pageCount }, (_, index) => index + 1)
+    for (const pageNumber of pages) {
       const page = await pdf.getPage(pageNumber)
       const viewport = page.getViewport({ scale: 2.5 })
       const canvas = document.createElement('canvas')
@@ -251,14 +253,28 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
   async function downloadOrPrint(print: boolean) {
     setBusy(print ? 'print' : 'download'); setError('')
     try {
-      const bytes = await generatePdf()
+      const bytes = await generatePdf(print && printPage > 0 ? printPage : undefined)
       const blob = new Blob([bytes as BlobPart], { type: 'application/pdf' })
       const url = URL.createObjectURL(blob)
       if (print) {
         const frame = document.createElement('iframe')
         frame.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;right:0;bottom:0'
         frame.src = url
-        frame.onload = () => { frame.contentWindow?.focus(); frame.contentWindow?.print(); setTimeout(() => { frame.remove(); URL.revokeObjectURL(url) }, 5000) }
+        frame.onload = () => {
+          const printWindow = frame.contentWindow
+          if (!printWindow) return
+          let cleaned = false
+          const cleanup = () => {
+            if (cleaned) return
+            cleaned = true
+            frame.remove()
+            URL.revokeObjectURL(url)
+          }
+          printWindow.addEventListener('afterprint', cleanup, { once: true })
+          printWindow.focus()
+          printWindow.print()
+          setTimeout(cleanup, 10 * 60 * 1000)
+        }
         document.body.appendChild(frame)
       } else {
         const link = document.createElement('a'); link.href = url; link.download = `${title.replace(/[^a-z0-9ăâîșț -]/gi, '').replace(/\s+/g, '-') || 'cerere'}.pdf`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 2000)
@@ -286,6 +302,10 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addField}><Plus size={16}/> {tr('Câmp')}</button>}
       <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy} onClick={saveSubmission}>{busy === 'save' ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} {tr('Salvează')}</button>
       <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf} onClick={() => downloadOrPrint(false)}><Download size={16}/> PDF</button>
+      <select className="input-field !w-auto !py-2" aria-label={tr('Pagina pentru print')} value={printPage} onChange={(event) => setPrintPage(Number(event.target.value))}>
+        {Array.from({ length: pageCount }, (_, index) => <option key={index + 1} value={index + 1}>{tr('Pagina')} {index + 1}</option>)}
+        {pageCount > 1 && <option value={0}>{tr('Toate paginile')}</option>}
+      </select>
       <button className="btn-primary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf} onClick={() => downloadOrPrint(true)}>{busy === 'print' ? <Loader2 className="animate-spin" size={16}/> : <Printer size={16}/>} {tr('Printează')}</button>
     </header>
     {error && <div className="bg-red-50 px-5 py-2 text-sm font-semibold text-red-700">{error}</div>}
@@ -295,7 +315,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
         <div className="mx-auto max-w-[820px] space-y-6">
           {pdf && Array.from({ length: pageCount }, (_, index) => {
             const pageNumber = index + 1
-            return <div key={pageNumber} data-pdf-page onMouseDown={() => setActivePage(pageNumber)} className="relative overflow-hidden bg-white shadow-xl">
+            return <div key={pageNumber} data-pdf-page onMouseDown={() => { setActivePage(pageNumber); setPrintPage(pageNumber) }} className="relative overflow-hidden bg-white shadow-xl">
               <PdfCanvas pdf={pdf} pageNumber={pageNumber}/>
               <div className="absolute inset-0">
                 {fields.filter((field) => field.page === pageNumber).map((field) => <div key={field.id} onClick={() => setSelectedId(field.id)} className={`absolute group ${selectedId === field.id ? 'z-20' : 'z-10'}`} style={{ left: `${field.x * 100}%`, top: `${field.y * 100}%`, width: `${field.width * 100}%`, height: `${field.height * 100}%` }}>
