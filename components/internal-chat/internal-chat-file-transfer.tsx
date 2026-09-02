@@ -32,8 +32,10 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
   const queuedIce = useRef(new Map<string, RTCIceCandidateInit[]>())
   const seenSignals = useRef(new Set<string>())
   const urls = useRef(new Set<string>())
+  const dragDepth = useRef(0)
   const [transfers, setTransfers] = useState<TransferItem[]>([])
   const [incomingId, setIncomingId] = useState<string | null>(null)
+  const [dragging, setDragging] = useState(false)
 
   function userName(id: string) {
     return users.find((user) => user.id === id)?.displayName || 'coleg'
@@ -149,6 +151,16 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
     }
   }
 
+  useEffect(() => {
+    function hasFiles(event: DragEvent) { return Array.from(event.dataTransfer?.types || []).includes('Files') }
+    function enter(event: DragEvent) { if (!hasFiles(event)) return; event.preventDefault(); dragDepth.current += 1; setDragging(true) }
+    function over(event: DragEvent) { if (!hasFiles(event)) return; event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy' }
+    function leave(event: DragEvent) { if (!hasFiles(event)) return; event.preventDefault(); dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDragging(false) }
+    function drop(event: DragEvent) { if (!hasFiles(event)) return; event.preventDefault(); dragDepth.current = 0; setDragging(false); const file = event.dataTransfer?.files?.[0]; if (file) void start(file) }
+    window.addEventListener('dragenter', enter); window.addEventListener('dragover', over); window.addEventListener('dragleave', leave); window.addEventListener('drop', drop)
+    return () => { window.removeEventListener('dragenter', enter); window.removeEventListener('dragover', over); window.removeEventListener('dragleave', leave); window.removeEventListener('drop', drop) }
+  }, [selectedUserId])
+
   async function accept(transferId: string) {
     const offer = offers.current.get(transferId)
     if (!offer) return
@@ -228,6 +240,7 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
   }
 
   return <>
+    {dragging && <div className="pointer-events-none fixed inset-3 z-[105] flex items-center justify-center rounded-[30px] border-4 border-dashed border-[#197fb5] bg-[#e8f6fc]/95 shadow-2xl"><div className="text-center text-[#082b4d]"><FileUp size={54} className="mx-auto text-[#197fb5]"/><strong className="mt-4 block text-xl">Trimite fișierul către {selectedUserId ? userName(selectedUserId) : 'un coleg'}</strong><span className="mt-1 block text-sm text-slate-600">Eliberează aici · transfer direct, fără stocare pe server</span></div></div>}
     <div className="border-t border-slate-100 bg-white px-3 py-2">
       <div className="flex items-center gap-2">
         <input ref={inputRef} type="file" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) start(file); event.currentTarget.value = '' }}/>

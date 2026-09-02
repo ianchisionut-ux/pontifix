@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { uploadPresigned } from '@vercel/blob/client'
 import { Archive, ClipboardList, CreditCard, Download, Eye, FileText, FileUp, LayoutGrid, List, Loader2, MessageCircle, Plus, Save, Search, ShieldCheck, Trash2, WandSparkles, X } from 'lucide-react'
 import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, defaultConnectionFields, type ConnectionCaseDto, type ConnectionFields } from '@/lib/connection-fields'
@@ -30,6 +30,13 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
   const [messageConnectionId, setMessageConnectionId] = useState(initialCases[0]?.id || '')
   const [messageTemplate, setMessageTemplate] = useState<ConnectionWhatsAppTemplateKey>('PROGRAMMED')
   const [messageText, setMessageText] = useState('')
+
+  useEffect(() => {
+    setItems(initialCases)
+    const next = initialCases.find((item) => item.id === selectedId) || initialCases[0]
+    setSelectedId(next?.id || '')
+    setDraft(next ? { ...defaultConnectionFields(), ...next.fields } : defaultConnectionFields())
+  }, [initialCases])
 
   const visible = useMemo(() => items.filter((item) => {
     const haystack = `${item.nib} ${item.sequenceNumber} ${item.fields.Beneficiar} ${item.fields.Telefon} ${item.fields.ATR} ${item.fields.Amplasament}`.toLocaleLowerCase('ro-RO')

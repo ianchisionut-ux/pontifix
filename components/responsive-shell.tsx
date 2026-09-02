@@ -173,6 +173,7 @@ export function ResponsiveShell({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className="shrink-0 px-3.5 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition flex items-center gap-1.5"
                 style={
                   active
@@ -224,6 +225,7 @@ export function ResponsiveShell({
             <Link
               key={item.href}
               href={item.href}
+              prefetch={false}
               className={`relative rounded-xl py-2.5 text-sm font-medium transition flex items-center border-l-[3px] ${sidebarCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3'}`}
               style={
                 active
