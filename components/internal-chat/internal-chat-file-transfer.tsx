@@ -32,6 +32,7 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
   const queuedIce = useRef(new Map<string, RTCIceCandidateInit[]>())
   const seenSignals = useRef(new Set<string>())
   const urls = useRef(new Set<string>())
+  const cancelledTransfers = useRef(new Set<string>())
   const dragDepth = useRef(0)
   const [transfers, setTransfers] = useState<TransferItem[]>([])
   const [incomingId, setIncomingId] = useState<string | null>(null)
@@ -62,7 +63,7 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
       if (event.candidate) signal(otherUserId, transferId, 'ice', { candidate: event.candidate.toJSON() }).catch(() => update(transferId, { status: 'failed', error: 'Semnalizarea conexiunii a eșuat.' }))
     }
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') update(transferId, { status: 'failed', error: 'Conexiunea directă s-a întrerupt.' })
+      if (pc.connectionState === 'failed' && !cancelledTransfers.current.has(transferId)) update(transferId, { status: 'failed', error: 'Conexiunea directă s-a întrerupt.' })
     }
     return state
   }
@@ -103,7 +104,9 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
   function setupSender(transferId: string, channel: RTCDataChannel) {
     const state = peers.current.get(transferId)
     if (state) state.channel = channel
-    channel.onopen = () => sendFile(transferId, channel).catch((error) => update(transferId, { status: 'failed', error: error instanceof Error ? error.message : 'Transfer eșuat.' }))
+    channel.onopen = () => sendFile(transferId, channel).catch((error) => {
+      if (!cancelledTransfers.current.has(transferId)) update(transferId, { status: 'failed', error: error instanceof Error ? error.message : 'Transfer eșuat.' })
+    })
     channel.onerror = () => update(transferId, { status: 'failed', error: 'Canalul de transfer a întâmpinat o eroare.' })
   }
 
@@ -189,6 +192,26 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
     if (offer) await signal(offer.senderId, transferId, 'reject').catch(() => undefined)
   }
 
+  async function cancelOrDismiss(item: TransferItem) {
+    const active = item.status === 'incoming' || item.status === 'waiting' || item.status === 'connecting' || item.status === 'transferring'
+    if (active) {
+      cancelledTransfers.current.add(item.id)
+      setIncomingId((current) => current === item.id ? null : current)
+      const state = peers.current.get(item.id)
+      state?.channel?.close()
+      state?.pc.close()
+      peers.current.delete(item.id)
+      await signal(item.otherUserId, item.id, 'cancel').catch(() => undefined)
+    }
+    if (item.downloadUrl) {
+      URL.revokeObjectURL(item.downloadUrl)
+      urls.current.delete(item.downloadUrl)
+    }
+    offers.current.delete(item.id)
+    queuedIce.current.delete(item.id)
+    setTransfers((current) => current.filter((transfer) => transfer.id !== item.id))
+  }
+
   useEffect(() => {
     let stopped = false
     async function poll() {
@@ -220,6 +243,8 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
             update(item.transferId, { status: 'rejected', error: 'Destinatarul a refuzat transferul.' })
             peers.current.get(item.transferId)?.pc.close()
           } else if (item.type === 'cancel') {
+            cancelledTransfers.current.add(item.transferId)
+            setIncomingId((current) => current === item.transferId ? null : current)
             update(item.transferId, { status: 'cancelled' })
             peers.current.get(item.transferId)?.pc.close()
           }
@@ -253,7 +278,7 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
         <span className="hidden items-center gap-1 text-[10px] font-semibold text-emerald-700 sm:inline-flex"><ShieldCheck size={13}/> Direct între dispozitive · max. 250 MB</span>
       </div>
       {!!transfers.length && <div className="mt-2 flex gap-2 overflow-x-auto pb-1">{transfers.slice(0, 4).map((item) => <div key={item.id} className="min-w-[230px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-        <div className="flex items-center gap-2"><FileUp size={14} className="shrink-0 text-[#197fb5]"/><strong className="min-w-0 flex-1 truncate text-xs text-[#082b4d]" title={item.meta.name}>{item.meta.name}</strong>{item.status === 'completed' ? <CheckCircle2 size={15} className="text-emerald-600"/> : item.status === 'failed' || item.status === 'rejected' ? <XCircle size={15} className="text-rose-500"/> : <Loader2 size={14} className="animate-spin text-[#197fb5]"/>}</div>
+        <div className="flex items-center gap-2"><FileUp size={14} className="shrink-0 text-[#197fb5]"/><strong className="min-w-0 flex-1 truncate text-xs text-[#082b4d]" title={item.meta.name}>{item.meta.name}</strong>{item.status === 'completed' ? <CheckCircle2 size={15} className="text-emerald-600"/> : item.status === 'failed' || item.status === 'rejected' || item.status === 'cancelled' ? <XCircle size={15} className="text-rose-500"/> : <Loader2 size={14} className="animate-spin text-[#197fb5]"/>}<button type="button" onClick={() => void cancelOrDismiss(item)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600" title={item.status === 'incoming' || item.status === 'waiting' || item.status === 'connecting' || item.status === 'transferring' ? 'Anulează transferul' : 'Elimină din listă'} aria-label={item.status === 'incoming' || item.status === 'waiting' || item.status === 'connecting' || item.status === 'transferring' ? 'Anulează transferul' : 'Elimină din listă'}><X size={14}/></button></div>
         <div className="mt-1 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>{item.direction === 'send' ? `Către ${userName(item.otherUserId)}` : `De la ${userName(item.otherUserId)}`}</span><span>{statusLabel[item.status]} {item.progress ? `${item.progress}%` : ''}</span></div>
         {(item.status === 'transferring' || item.status === 'connecting') && <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-200"><div className="h-full bg-[#197fb5]" style={{ width: `${Math.max(item.progress, 4)}%` }}/></div>}
         {item.downloadUrl && <a href={item.downloadUrl} download={item.meta.name} className="mt-2 inline-flex items-center gap-1 text-[10px] font-black text-emerald-700"><Download size={12}/> Descarcă fișierul</a>}
