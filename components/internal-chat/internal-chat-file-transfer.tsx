@@ -7,7 +7,7 @@ import { playInternalChatSound } from '@/lib/internal-chat-browser'
 
 type Signal = { id: string; senderId: string; transferId: string; type: 'offer'|'answer'|'ice'|'accept'|'reject'|'cancel'; payload: Record<string, any> }
 type FileMeta = { name: string; size: number; type: string }
-type TransferStatus = 'incoming'|'connecting'|'transferring'|'completed'|'rejected'|'failed'|'cancelled'
+type TransferStatus = 'incoming'|'waiting'|'connecting'|'transferring'|'completed'|'rejected'|'failed'|'cancelled'
 type TransferItem = { id: string; otherUserId: string; direction: 'send'|'receive'; meta: FileMeta; status: TransferStatus; progress: number; downloadUrl?: string; error?: string }
 type PeerState = { pc: RTCPeerConnection; otherUserId: string; file?: File; meta: FileMeta; chunks: ArrayBuffer[]; received: number; channel?: RTCDataChannel }
 
@@ -138,7 +138,7 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
     if (!file.size) return alert('Fișierul este gol.')
     const id = crypto.randomUUID()
     const meta: FileMeta = { name: file.name, size: file.size, type: file.type }
-    setTransfers((current) => [{ id, otherUserId: selectedUserId, direction: 'send', meta, status: 'connecting', progress: 0 } as TransferItem, ...current].slice(0, 8))
+    setTransfers((current) => [{ id, otherUserId: selectedUserId, direction: 'send', meta, status: 'waiting', progress: 0 } as TransferItem, ...current].slice(0, 8))
     try {
       const state = makePeer(id, selectedUserId, meta, file)
       const channel = state.pc.createDataChannel('elmont-file', { ordered: true })
@@ -146,6 +146,7 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
       const offer = await state.pc.createOffer()
       await state.pc.setLocalDescription(offer)
       await signal(selectedUserId, id, 'offer', { sdp: state.pc.localDescription, meta })
+      void fetch('/api/internal-chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ recipientId: selectedUserId, text: `📎 Ai primit o solicitare de transfer P2P: ${file.name} (${formatBytes(file.size)}). Deschide chatul și apasă Acceptă transferul. Fișierul nu este stocat pe server.` }) })
     } catch (error) {
       update(id, { status: 'failed', error: error instanceof Error ? error.message : 'Transferul nu a putut porni.' })
     }
@@ -205,6 +206,8 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
             setTransfers((current) => current.some((transfer) => transfer.id === item.transferId) ? current : [{ id: item.transferId, otherUserId: item.senderId, direction: 'receive', meta, status: 'incoming', progress: 0 } as TransferItem, ...current].slice(0, 8))
             setIncomingId(item.transferId)
             playInternalChatSound()
+          } else if (item.type === 'accept') {
+            setTransfers((current) => current.map((transfer) => transfer.id === item.transferId && transfer.status === 'waiting' ? { ...transfer, status: 'connecting' } : transfer))
           } else if (item.type === 'answer') {
             const state = peers.current.get(item.transferId)
             if (state) {
@@ -235,7 +238,7 @@ export function InternalChatFileTransfer({ currentUserId, selectedUserId, users 
 
   const incoming = incomingId ? transfers.find((item) => item.id === incomingId) : null
   const statusLabel: Record<TransferStatus, string> = {
-    incoming: 'Așteaptă acceptul', connecting: 'Se conectează direct…', transferring: 'Se transferă…',
+    incoming: 'Așteaptă acceptul', waiting: 'Așteaptă acceptarea', connecting: 'Se conectează direct…', transferring: 'Se transferă…',
     completed: 'Finalizat', rejected: 'Refuzat', failed: 'Eșuat', cancelled: 'Anulat',
   }
 
