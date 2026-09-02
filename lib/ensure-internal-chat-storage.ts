@@ -33,9 +33,21 @@ export function ensureInternalChatStorage() {
         CONSTRAINT "InternalChatProfile_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE,
         CONSTRAINT "InternalChatProfile_businessId_fkey" FOREIGN KEY ("businessId") REFERENCES "Business"("id") ON DELETE CASCADE ON UPDATE CASCADE
       )`)
+      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "InternalChatSignal" (
+        "id" TEXT NOT NULL,
+        "businessId" TEXT NOT NULL,
+        "senderId" TEXT NOT NULL,
+        "recipientId" TEXT NOT NULL,
+        "transferId" TEXT NOT NULL,
+        "type" TEXT NOT NULL,
+        "payload" JSONB NOT NULL DEFAULT '{}'::jsonb,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "InternalChatSignal_pkey" PRIMARY KEY ("id")
+      )`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "InternalChatMessage_business_created_idx" ON "InternalChatMessage"("businessId", "createdAt")`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "InternalChatReceipt_user_read_idx" ON "InternalChatReceipt"("userId", "readAt")`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "InternalChatProfile_business_idx" ON "InternalChatProfile"("businessId")`)
+      await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "InternalChatSignal_recipient_created_idx" ON "InternalChatSignal"("recipientId", "createdAt")`)
     }).catch((error) => { ready = null; throw error })
   }
   return ready
