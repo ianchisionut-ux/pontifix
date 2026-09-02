@@ -50,6 +50,7 @@ export type ConnectionCaseDto = {
   status: import('@/lib/connection-status').ConnectionStatus
   quoteRequestId: string | null
   deerSubmittedAt: string | null
+  deerSubmission: import('@/lib/deer-submission').DeerSubmission
   fields: ConnectionFields
   atrPathname: string | null
   atrName: string | null
