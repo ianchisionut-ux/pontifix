@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { getConnectionAccess } from '@/lib/connection-access'
 import { ensureConnectionStorage } from '@/lib/ensure-connection-storage'
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const access = await getConnectionAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
   await ensureConnectionStorage()
@@ -17,5 +17,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const result = await get(item.atrPathname, { access: 'private' })
   if (!result?.stream) return NextResponse.json({ error: 'Fișier indisponibil.' }, { status: 404 })
   const filename = (item.atrName || 'ATR.pdf').replace(/["\r\n]/g, '')
-  return new Response(result.stream, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${filename}"` } })
+  return new Response(result.stream, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `${new URL(request.url).searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename="${filename}"`, 'Cache-Control': 'private, no-store' } })
 }

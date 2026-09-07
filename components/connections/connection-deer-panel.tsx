@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ClipboardCopy, ExternalLink, FileCheck2, FileText, Loader2, Save, X } from 'lucide-react'
+import { CheckCircle2, ClipboardCopy, ExternalLink, FileCheck2, Loader2, Save, X } from 'lucide-react'
 import type { ConnectionCaseDto, ConnectionFields } from '@/lib/connection-fields'
 import { DEER_ACTIONS, DEER_DOCUMENTS, DEER_STATUSES, DEER_STATUS_META, defaultDeerSubmission, type DeerSubmission } from '@/lib/deer-submission'
+import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
 const DEER_PORTAL_URL = 'https://avize.distributie-energie.ro/solicitare'
 
@@ -177,7 +178,7 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
               <button type="button" onClick={prepareAndOpen} disabled={!!busy} className="btn-primary inline-flex items-center justify-center gap-2">{busy ? <Loader2 size={16} className="animate-spin"/> : <ExternalLink size={16}/>} Deschide portalul DEER</button>
               {canEdit && <button type="button" onClick={() => save()} disabled={!!busy} className="btn-secondary inline-flex items-center justify-center gap-2">{busy ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează în registru</button>}
             </div>
-            {canEdit && item.atrPathname && <a href={`/api/bransamente/${item.id}/atr`} target="_blank" className="mt-3 flex items-center justify-center gap-2 text-xs font-black text-[#0d5d8b]"><FileText size={14}/> Deschide ATR-ul salvat</a>}
+            {canEdit && item.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${item.id}/atr`} title={`ATR · ${fields.Beneficiar || item.nib}`} className="mt-3 flex w-full items-center justify-center gap-2 text-xs font-black text-[#0d5d8b]">Deschide ATR-ul salvat</SecurePdfViewerButton>}
             {notice && <p className="mt-3 rounded-xl bg-white px-3 py-2 text-xs font-bold text-emerald-700">{notice}</p>}
           </section>
         </aside>

@@ -1,9 +1,10 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, Download, FileText, Search } from 'lucide-react'
+import { ChevronDown, Download, Search } from 'lucide-react'
 import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, type ConnectionCaseDto } from '@/lib/connection-fields'
 import { CONNECTION_STATUS_META } from '@/lib/connection-status'
+import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
 export function AdminConnectionAccordion({ items, query, onQueryChange }: { items: ConnectionCaseDto[]; query: string; onQueryChange: (value: string) => void }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -26,7 +27,7 @@ export function AdminConnectionAccordion({ items, query, onQueryChange }: { item
         {expanded && <div className="border-t border-slate-100 bg-[#fbfdfe] px-4 py-5 lg:px-6">
           <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-3">
             <span className="mr-1 text-xs font-black uppercase tracking-[.08em] text-[#0d5d8b]">Documente dosar</span>
-            {item.atrPathname && <a href={`/api/bransamente/${item.id}/atr`} target="_blank" rel="noreferrer" className="btn-secondary inline-flex items-center gap-2"><FileText size={15}/> ATR</a>}
+            {item.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${item.id}/atr`} title={`ATR · ${item.fields.Beneficiar || item.nib}`}>ATR</SecurePdfViewerButton>}
             <a href={`/api/bransamente/${item.id}/document?type=contract`} className="btn-secondary inline-flex items-center gap-2"><Download size={15}/> Contract + memoriu</a>
             <a href={`/api/bransamente/${item.id}/document?type=a3`} className="btn-secondary inline-flex items-center gap-2"><Download size={15}/> Dosar A3</a>
             {!item.atrPathname && <span className="text-xs font-semibold text-slate-500">ATR neîncărcat</span>}
