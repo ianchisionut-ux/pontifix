@@ -27,6 +27,37 @@ export const DEER_STATUS_META = {
 
 export const DEER_DOCUMENTS = ['ATR', 'Cerere', 'CI / CUI', 'Act proprietate', 'Certificat de urbanism', 'Plan de încadrare', 'Plan de situație', 'Alte documente'] as const
 
+export const DEER_DOCUMENTS_BY_ACTION: Record<(typeof DEER_ACTIONS)[number][0], readonly string[]> = {
+  completareDocumentatie: DEER_DOCUMENTS,
+  cerereNotificareIncheiereContractRacordare: ['Cerere / notificare încheiere contract de racordare', 'Alte documente solicitate'],
+  alteDocumenteRacordare: ['Alte documente racordare'],
+  incarcareDIU: ['Documentație instalație de utilizare (DIU)'],
+  incarcareInstiintareBMP: ['Înștiințare pentru montarea blocului de măsură și protecție'],
+  incarcareDosarReceptie: ['Notificare terminare IR', 'PVRTL IR', 'Dosar IR', 'Dosar instalație de utilizare'],
+  incarcareDosarReceptieBMP: ['Notificare BMP', 'Dosar recepție BMP', 'Situație de lucrări', 'PVRTL BMP'],
+  incarcareDosarRestituire: ['Borderou IR', 'Factură IR', 'Dovadă plată IR', 'Proces-verbal de predare-primire', 'Document IBAN', 'Împuternicire (dacă este cazul)', 'Borderou BMP (dacă este cazul)', 'Factură BMP (dacă este cazul)', 'Cod încărcare SPV (caz NC)'],
+  incarcarePVProbe: ['Proces-verbal probe', 'Proces-verbal punere în funcțiune (PIF)'],
+  alteDocumenteCOR: ['Alte documente COR'],
+  alteDocumenteCMI: ['Alte documente CMI'],
+  instiintareMontareBlocMasura: ['Înștiințare pentru montarea blocului de măsură și protecție'],
+}
+
+export function getDeerDocumentsForAction(action: string) {
+  return DEER_DOCUMENTS_BY_ACTION[action as keyof typeof DEER_DOCUMENTS_BY_ACTION] || DEER_DOCUMENTS
+}
+
+export function extractDeerDossierNumber(value: string) {
+  const exact = value.match(/(?<!\d)\d{13}(?!\d)/)?.[0]
+  if (exact) return exact
+  const labelled = value.match(/(?:ATR|solicit(?:are|ării)?(?:\s+de\s+racordare)?)[^\d]{0,30}((?:\d[\s.-]?){13})/i)?.[1]
+  const digits = labelled?.replace(/\D/g, '') || ''
+  return /^\d{13}$/.test(digits) ? digits : ''
+}
+
+export function isValidDeerDossierNumber(value: string) {
+  return /^\d{13}$/.test(value.trim())
+}
+
 const deerActionValues = DEER_ACTIONS.map(([value]) => value) as [string, ...string[]]
 
 export const deerSubmissionSchema = z.object({

@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ClipboardCopy, ExternalLink, FileCheck2, Loader2, Save, X } from 'lucide-react'
 import type { ConnectionCaseDto, ConnectionFields } from '@/lib/connection-fields'
-import { DEER_ACTIONS, DEER_DOCUMENTS, DEER_STATUSES, DEER_STATUS_META, defaultDeerSubmission, type DeerSubmission } from '@/lib/deer-submission'
+import { DEER_ACTIONS, DEER_STATUSES, DEER_STATUS_META, defaultDeerSubmission, extractDeerDossierNumber, getDeerDocumentsForAction, isValidDeerDossierNumber, type DeerSubmission } from '@/lib/deer-submission'
 import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
 const DEER_PORTAL_URL = 'https://avize.distributie-energie.ro/solicitare'
@@ -15,26 +15,34 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
   onClose: () => void
   onSaved: (deerSubmission: DeerSubmission, deerSubmittedAt: string | null) => void
 }) {
-  const [draft, setDraft] = useState<DeerSubmission>(item.deerSubmission || defaultDeerSubmission())
+  const atrDossierNumber = useMemo(() => extractDeerDossierNumber(fields.ATR), [fields.ATR])
+  const [draft, setDraft] = useState<DeerSubmission>(() => {
+    const current = item.deerSubmission || defaultDeerSubmission()
+    return { ...current, dossierNumber: atrDossierNumber || current.dossierNumber }
+  })
   const [submittedAt, setSubmittedAt] = useState(item.deerSubmittedAt || '')
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
-    setDraft(item.deerSubmission || defaultDeerSubmission())
+    const current = item.deerSubmission || defaultDeerSubmission()
+    setDraft({ ...current, dossierNumber: atrDossierNumber || current.dossierNumber })
     setSubmittedAt(item.deerSubmittedAt || '')
     setNotice('')
-  }, [item.id, item.deerSubmission, item.deerSubmittedAt])
+  }, [item.id, item.deerSubmission, item.deerSubmittedAt, atrDossierNumber])
 
   const applicant = fields.Beneficiar.trim()
   const locality = (fields.Sat || fields.Oras).trim()
   const street = [fields.Strada, fields.Nr && `nr. ${fields.Nr}`].filter(Boolean).join(', ')
+  const dossierNumberValid = isValidDeerDossierNumber(draft.dossierNumber)
+  const recommendedDocuments = useMemo(() => getDeerDocumentsForAction(draft.action), [draft.action])
+  const visibleDocuments = useMemo(() => Array.from(new Set([...recommendedDocuments, ...draft.documents])), [recommendedDocuments, draft.documents])
   const missing = useMemo(() => [
-    !draft.dossierNumber.trim() && 'numărul dosarului DEER',
+    !dossierNumberValid && 'numărul ATR / solicitării (exact 13 cifre)',
     !applicant && 'numele solicitantului',
     !locality && 'localitatea',
     !street && 'strada / numărul',
-  ].filter(Boolean) as string[], [draft.dossierNumber, applicant, locality, street])
+  ].filter(Boolean) as string[], [dossierNumberValid, applicant, locality, street])
 
   function summary(next = draft) {
     const actionLabel = DEER_ACTIONS.find(([value]) => value === next.action)?.[1] || next.action
@@ -118,8 +126,13 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
               <span className="rounded-full px-3 py-1 text-xs font-black text-white" style={{ backgroundColor: statusMeta.color }}>{statusMeta.label}</span>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="text-xs font-bold text-slate-500">Număr dosar DEER *
-                <input disabled={!canEdit} value={draft.dossierNumber} onChange={(event) => setDraft({ ...draft, dossierNumber: event.target.value })} placeholder="Numărul comunicat de DEER" className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50"/>
+              <label className="text-xs font-bold text-slate-500">Număr dosar / ATR (13 cifre) *
+                <input disabled={!canEdit} inputMode="numeric" maxLength={13} value={draft.dossierNumber} onChange={(event) => setDraft({ ...draft, dossierNumber: event.target.value.replace(/\D/g, '').slice(0, 13) })} placeholder="0000000000000" className={`input-field mt-1.5 w-full bg-white disabled:bg-slate-50 ${draft.dossierNumber && !dossierNumberValid ? '!border-red-400' : ''}`}/>
+                {atrDossierNumber && draft.dossierNumber === atrDossierNumber
+                  ? <span className="mt-1.5 block text-[11px] font-bold text-emerald-700">Preluat automat din ATR-ul branșamentului.</span>
+                  : draft.dossierNumber && !dossierNumberValid
+                    ? <span className="mt-1.5 block text-[11px] font-bold text-red-600">Numărul trebuie să conțină exact 13 cifre.</span>
+                    : null}
               </label>
               <label className="text-xs font-bold text-slate-500">Adresă e-mail
                 <input disabled={!canEdit} type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} placeholder="E-mail pentru confirmare" className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50"/>
@@ -139,9 +152,14 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
           </section>
 
           <section className="rounded-2xl border border-slate-200 p-4">
-            <h3 className="font-black text-[#082b4d]">Documente pregătite</h3>
-            <p className="mt-1 text-xs text-slate-500">Bifele formează lista de control a depunerii. Fișierele se aleg în portalul DEER.</p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">{DEER_DOCUMENTS.map((document) => {
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="font-black text-[#082b4d]">Pasul 2 · Documente PDF</h3>
+                <p className="mt-1 text-xs text-slate-500">Lista se adaptează acțiunii alese. În portal, fiecare PDF se încarcă separat și se denumește după conținut.</p>
+              </div>
+              {canEdit && <button type="button" onClick={() => setDraft((current) => ({ ...current, documents: [...recommendedDocuments] }))} className="rounded-full border border-blue-200 px-3 py-1.5 text-[11px] font-black text-[#0d5d8b] hover:bg-blue-50">Bifează lista recomandată</button>}
+            </div>
+            <div className="mt-4 grid gap-2 sm:grid-cols-2">{visibleDocuments.map((document) => {
               const checked = draft.documents.includes(document)
               return <button key={document} type="button" disabled={!canEdit} onClick={() => toggleDocument(document)} className={`flex items-center gap-3 rounded-xl border px-3 py-3 text-left text-sm font-bold transition ${checked ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 text-slate-600 hover:bg-slate-50'} disabled:cursor-default`}>
                 <span className={`flex h-5 w-5 items-center justify-center rounded-md border ${checked ? 'border-emerald-500 bg-emerald-500 text-white' : 'border-slate-300 bg-white'}`}>{checked && <CheckCircle2 size={14}/>}</span>{document}
@@ -172,7 +190,8 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
 
           <section className="rounded-2xl border border-blue-100 bg-[#f3f9fd] p-4">
             <h3 className="font-black text-[#082b4d]">Finalizare pe portal</h3>
-            <p className="mt-1 text-xs leading-5 text-slate-600">Portalul DEER nu permite afișarea în Elmont și cere CAPTCHA. Butonul copiază sumarul, salvează pregătirea și deschide pagina oficială.</p>
+            <p className="mt-1 text-xs leading-5 text-slate-600">Pentru acțiunile din această secțiune, informarea DEER precizează că nu este necesar cont. CAPTCHA și confirmarea finală se completează manual pe pagina oficială.</p>
+            <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[11px] font-semibold leading-5 text-slate-500">Elmont pregătește și copiază datele, dar nu ocolește CAPTCHA și nu transmite automat către un portal extern fără API oficial.</p>
             <div className="mt-4 grid gap-2">
               <button type="button" onClick={() => copyData()} className="btn-secondary inline-flex items-center justify-center gap-2"><ClipboardCopy size={16}/> Copiază datele</button>
               <button type="button" onClick={prepareAndOpen} disabled={!!busy} className="btn-primary inline-flex items-center justify-center gap-2">{busy ? <Loader2 size={16} className="animate-spin"/> : <ExternalLink size={16}/>} Deschide portalul DEER</button>
