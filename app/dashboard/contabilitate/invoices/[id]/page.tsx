@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { StatusBadge } from "@/components/accounting/StatusBadge";
 import { EFacturaPanel } from "@/components/accounting/EFacturaPanel";
+import { InvoiceCorrection } from "@/components/accounting/InvoiceCorrection";
 import { ArrowLeft, Download, Trash2, Receipt as ReceiptIcon, RotateCcw } from "lucide-react";
+import { bucharestDate } from "@/lib/accounting/date";
 
 type FullInvoice = {
   invoice: {
@@ -28,6 +30,7 @@ type FullInvoice = {
   user: { id: number; name: string; role: string } | null;
   receipts: { id: number; series: string; number: number; issueDate: string; amount: number }[];
   payments: { id: number; amount: number; date: string; method: string }[];
+  eFacturaSubmission: null | { status: string; uploadId: string };
 };
 
 function fmt(n: number) {
@@ -39,8 +42,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const [data, setData] = useState<FullInvoice | null>(null);
   const [payAmount, setPayAmount] = useState<number>(0);
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payDate, setPayDate] = useState(bucharestDate());
   const [payMethod, setPayMethod] = useState("numerar");
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [receiptBusy, setReceiptBusy] = useState(false);
 
   function load() {
     fetch(`/api/accounting/invoices/${id}`)
@@ -53,23 +58,42 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   useEffect(load, [id]);
 
   async function addPayment() {
-    await fetch(`/api/accounting/invoices/${id}/payment`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: payAmount, date: payDate, method: payMethod }),
-    });
-    load();
+    setPaymentBusy(true);
+    try {
+      const response = await fetch(`/api/accounting/invoices/${id}/payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount: payAmount, date: payDate, method: payMethod }),
+      });
+      const result = await response.json();
+      if (!response.ok) return alert(result.error || "Plata nu a putut fi înregistrată.");
+      load();
+    } finally {
+      setPaymentBusy(false);
+    }
   }
 
   async function generateReceipt() {
-    const rest = data ? data.invoice.total - data.invoice.paidAmount : 0;
-    const amount = rest > 0 ? rest : data?.invoice.total ?? 0;
-    await fetch(`/api/accounting/invoices/${id}/receipt`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount }),
-    });
-    load();
+    if (!data) return;
+    const cashPaid = data.payments
+      .filter((payment) => payment.method.toLowerCase() === "numerar" || payment.method.toLowerCase() === "cash")
+      .reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const receipted = data.receipts.reduce((sum, receipt) => sum + Number(receipt.amount), 0);
+    const amount = Math.round((cashPaid - receipted) * 100) / 100;
+    if (amount <= 0) return alert("Înregistrează mai întâi o plată în numerar. Chitanța se emite numai pentru suma încasată.");
+    setReceiptBusy(true);
+    try {
+      const response = await fetch(`/api/accounting/invoices/${id}/receipt`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount, issueDate: payDate }),
+      });
+      const result = await response.json();
+      if (!response.ok) return alert(result.error || "Chitanța nu a putut fi emisă.");
+      load();
+    } finally {
+      setReceiptBusy(false);
+    }
   }
 
   async function removeInvoice() {
@@ -87,8 +111,16 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   if (!data) return <div style={{ color: "var(--text-faint)" }}>Se incarca...</div>;
   const { invoice, items, client, user, receipts, payments } = data;
   const rest = invoice.total - invoice.paidAmount;
+  const cashPaid = payments
+    .filter((payment) => payment.method.toLowerCase() === "numerar" || payment.method.toLowerCase() === "cash")
+    .reduce((sum, payment) => sum + Number(payment.amount), 0);
+  const receiptedAmount = receipts.reduce((sum, receipt) => sum + Number(receipt.amount), 0);
+  const receiptAvailable = Math.max(0, Math.round((cashPaid - receiptedAmount) * 100) / 100);
+  const paymentDisabledReason = rest <= 0 ? "Factura este achitată integral." : payAmount <= 0 ? "Introdu o sumă mai mare decât 0." : "";
+  const receiptDisabledReason = receiptAvailable <= 0 ? "Nu există o plată în numerar fără chitanță." : "";
   const financialLocked = invoice.invoiceType === "STORNO" || ["storno", "stornoed", "canceled"].includes(invoice.status);
   const canStorno = invoice.invoiceType !== "STORNO" && !financialLocked;
+  const anafLocked = Boolean(data.eFacturaSubmission && (data.eFacturaSubmission.uploadId || ["UPLOADING", "PROCESSING", "VALIDATED", "REJECTED"].includes(data.eFacturaSubmission.status)));
 
   return (
     <div>
@@ -118,12 +150,14 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         {canStorno && <a href={`/dashboard/contabilitate/invoices/storno?invoice=${id}`} className="btn-secondary">
           <RotateCcw size={14} /> Stornează factura
         </a>}
-        <button onClick={removeInvoice} className="btn-danger">
+        {!anafLocked && <button onClick={removeInvoice} className="btn-danger">
           <Trash2 size={14} /> Sterge factura
-        </button>
+        </button>}
+        {anafLocked && <span className="ef-delete-lock">Protejată ANAF · corecțiile se fac prin storno</span>}
       </div>
 
       <EFacturaPanel invoiceId={Number(id)} />
+      {!financialLocked && <InvoiceCorrection invoiceId={Number(id)} />}
 
       <div className="card-table mb-6">
         <table>
@@ -189,7 +223,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           <div className="space-y-2">
             <div>
               <label className="field-label">Suma</label>
-              <input type="number" className="input" value={payAmount} onChange={(e) => setPayAmount(Number(e.target.value))} />
+              <input type="number" min="0.01" max={Math.max(0, rest)} step="0.01" className="input" value={payAmount} onChange={(e) => setPayAmount(Number(e.target.value))} />
             </div>
             <div>
               <label className="field-label">Data</label>
@@ -203,9 +237,10 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                 <option value="transfer">Transfer bancar</option>
               </select>
             </div>
-            <button onClick={addPayment} className="btn-primary mt-2">
-              Adauga plata
+            <button title={paymentDisabledReason} onClick={addPayment} disabled={Boolean(paymentDisabledReason) || paymentBusy} className="btn-primary mt-2 disabled:cursor-not-allowed disabled:opacity-50">
+              {paymentBusy ? "Se înregistrează…" : "Adaugă plata"}
             </button>
+            {paymentDisabledReason && <p className="text-xs" style={{ color: "var(--text-faint)" }}>{paymentDisabledReason}</p>}
           </div>
           {payments.length > 0 && (
             <div className="mt-4 text-xs space-y-1">
@@ -227,9 +262,11 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
 
         <div className="card">
           <div className="section-label">Chitante</div>
-          <button onClick={generateReceipt} className="btn-primary mb-3">
-            <ReceiptIcon size={14} /> Genereaza chitanta noua
+          <button title={receiptDisabledReason} onClick={generateReceipt} disabled={Boolean(receiptDisabledReason) || receiptBusy} className="btn-primary mb-2 disabled:cursor-not-allowed disabled:opacity-50">
+            <ReceiptIcon size={14} /> {receiptBusy ? "Se generează…" : `Generează chitanță · ${fmt(receiptAvailable)} RON`}
           </button>
+          {receiptDisabledReason && <p className="mb-2 text-xs" style={{ color: "var(--text-faint)" }}>{receiptDisabledReason}</p>}
+          <p className="mb-3 text-xs" style={{ color: "var(--text-faint)" }}>Chitanța acoperă numai plățile în numerar deja înregistrate și nu poate fi emisă de două ori pentru aceeași sumă.</p>
           <div className="space-y-2">
             {receipts.length === 0 && <p className="text-xs" style={{ color: "var(--text-faint)" }}>Nicio chitanta emisa inca.</p>}
             {receipts.map((r) => (

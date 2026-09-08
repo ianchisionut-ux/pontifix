@@ -126,7 +126,7 @@ export default function ProductsPage() {
           </div>
           <div>
             <label className="field-label">Categorie TVA UBL</label>
-            <select className="input" value={form.vatCategoryCode} onChange={(e) => setForm({ ...form, vatCategoryCode: e.target.value })}>
+            <select className="input" value={form.vatCategoryCode} onChange={(e) => { const category=e.target.value; setForm({ ...form, vatCategoryCode: category, vatRate: category === "S" ? (form.vatRate > 0 ? form.vatRate : 21) : 0, taxExemptionReason: category === "O" && !form.taxExemptionReason ? "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." : form.taxExemptionReason }); }}>
               <option value="S">S · cotă standard</option><option value="Z">Z · cotă zero</option><option value="E">E · scutit</option><option value="AE">AE · taxare inversă</option><option value="O">O · în afara TVA</option>
             </select>
           </div>

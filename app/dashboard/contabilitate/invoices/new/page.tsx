@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAnafChoice } from "@/components/accounting/useAnafChoice";
 import { useRouter } from "next/navigation";
 import { CURRENT_USER_KEY } from "@/components/accounting/CurrentUserBox";
 import { Plus, X, Cable, RefreshCw, FileText } from "lucide-react";
+import { bucharestDate } from "@/lib/accounting/date";
 
 type Client = { id: number; name: string; clientType: "PF" | "PJ"; cif: string; cnp: string; address: string; judet: string; city: string; countryCode: string; postalCode: string; phone: string; sourceNib: string };
 type ConnectionBeneficiary = { id: string; nib: string; beneficiary: string; identifier: string; address: string; phone: string };
@@ -15,6 +17,7 @@ type AccountingOffer = {
 };
 type Product = { id: number; name: string; um: string; price: number; vatRate: number; unitCode: string; vatCategoryCode: string; taxExemptionReasonCode: string; taxExemptionReason: string };
 type UserT = { id: number; name: string; ci: string; cnp: string };
+type Company = { vatPayer: number };
 
 type Item = {
   key: number;
@@ -41,6 +44,7 @@ function fmt(n: number) {
 
 export default function NewInvoicePage() {
   const router = useRouter();
+  const { ask, dialog } = useAnafChoice();
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [users, setUsers] = useState<UserT[]>([]);
@@ -49,7 +53,7 @@ export default function NewInvoicePage() {
   const [series, setSeries] = useState("ELM");
   const [nextNumber, setNextNumber] = useState<number | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
+  const [issueDate, setIssueDate] = useState(bucharestDate());
   const [dueDate, setDueDate] = useState("");
   const [taxPointDate, setTaxPointDate] = useState("");
   const [paymentMeansCode, setPaymentMeansCode] = useState("30");
@@ -75,12 +79,22 @@ export default function NewInvoicePage() {
   const [offerId, setOfferId] = useState("");
   const [offerImporting, setOfferImporting] = useState(false);
   const [offerParts, setOfferParts] = useState({ execution: true, project: true, panel: true });
+  const [companyVatPayer, setCompanyVatPayer] = useState(true);
 
   useEffect(() => {
     fetch("/api/accounting/clients").then((r) => r.json()).then(setClients);
     fetch("/api/accounting/connection-beneficiaries").then((r) => r.json()).then(setConnections);
     fetch("/api/accounting/offer-invoice-data").then((r) => r.json()).then(setOffers);
     fetch("/api/accounting/products").then((r) => r.json()).then(setProducts);
+    fetch("/api/accounting/company").then((r) => r.json()).then((company: Company) => {
+      const vatPayer = Boolean(company.vatPayer);
+      setCompanyVatPayer(vatPayer);
+      if (!vatPayer) {
+        setItems((current) => current.map((item) => item.description || item.unitPrice
+          ? item
+          : { ...item, vatRate: 0, vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }));
+      }
+    });
     fetch("/api/accounting/users").then((r) => r.json()).then((list: UserT[]) => {
       setUsers(list);
       const saved = localStorage.getItem(CURRENT_USER_KEY);
@@ -150,15 +164,18 @@ export default function NewInvoicePage() {
     const imported: Item[] = [];
     if (offerParts.execution && selected.executionNet > 0) imported.push({
       ...newItem(), description: `Execuție branșament${typeLabel}${serviceLabel}`, um: "lucrare",
-      unitPrice: selected.executionNet, vatRate: selected.vatRate,
+      unitPrice: selected.executionNet, vatRate: companyVatPayer ? selected.vatRate : 0,
+      ...(companyVatPayer ? {} : { vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }),
     });
     if (offerParts.project && selected.projectNet > 0) imported.push({
       ...newItem(), description: `Proiect / documentație${typeLabel}${serviceLabel}`, um: "serv.",
-      unitPrice: selected.projectNet, vatRate: selected.vatRate,
+      unitPrice: selected.projectNet, vatRate: companyVatPayer ? selected.vatRate : 0,
+      ...(companyVatPayer ? {} : { vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }),
     });
     if (offerParts.panel && selected.panelIncluded && selected.panelNet > 0) imported.push({
       ...newItem(), description: `${selected.panelDescription || "Tablou electric"}${typeLabel}`, um: "buc",
-      unitPrice: selected.panelNet, vatRate: selected.vatRate,
+      unitPrice: selected.panelNet, vatRate: companyVatPayer ? selected.vatRate : 0,
+      ...(companyVatPayer ? {} : { vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }),
     });
     setItems((current) => current.length === 1 && !current[0].description && current[0].unitPrice === 0 ? imported : [...current, ...imported]);
     setNotes((current) => current.includes(selected.offerNumber) ? current : [current, `Poziții preluate din oferta ${selected.offerNumber}.`].filter(Boolean).join("\n"));
@@ -184,7 +201,8 @@ export default function NewInvoicePage() {
   }
 
   function addItem() {
-    setItems((its) => [...its, newItem()]);
+    const item = newItem();
+    setItems((its) => [...its, companyVatPayer ? item : { ...item, vatRate: 0, vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }]);
   }
 
   function removeItem(key: number) {
@@ -194,7 +212,7 @@ export default function NewInvoicePage() {
   function pickProduct(key: number, productId: number) {
     const p = products.find((x) => x.id === productId);
     if (!p) return;
-    updateItem(key, { productId: p.id, description: p.name, um: p.um, unitPrice: p.price, vatRate: p.vatRate, unitCode: p.unitCode || "H87", vatCategoryCode: p.vatCategoryCode || "S", taxExemptionReasonCode: p.taxExemptionReasonCode || "", taxExemptionReason: p.taxExemptionReason || "" });
+    updateItem(key, { productId: p.id, description: p.name, um: p.um, unitPrice: p.price, vatRate: companyVatPayer ? p.vatRate : 0, unitCode: p.unitCode || "H87", vatCategoryCode: companyVatPayer ? (p.vatCategoryCode || "S") : "O", taxExemptionReasonCode: companyVatPayer ? (p.taxExemptionReasonCode || "") : "", taxExemptionReason: companyVatPayer ? (p.taxExemptionReason || "") : "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." });
   }
 
   const rawSubtotal = items.reduce((s, it) => s + it.qty * it.unitPrice, 0);
@@ -224,11 +242,15 @@ export default function NewInvoicePage() {
       alert("Factura achitată pe loc și chitanța pot fi emise doar în RON.");
       return;
     }
+    const choice = await ask();
+    if (!choice) return;
     setSaving(true);
+    try {
     const res = await fetch("/api/accounting/invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        ...choice,
         series,
         number: selectedNumber,
         clientId,
@@ -270,6 +292,8 @@ export default function NewInvoicePage() {
     setSaving(false);
     if (!res.ok) return alert(data.error || "Factura nu a putut fi emisă.");
     router.push(`/dashboard/contabilitate/invoices/${data.id}`);
+    } catch { alert('Răspunsul serverului nu a putut fi citit. Verifică lista facturilor înainte de a reîncerca emiterea.'); }
+    finally { setSaving(false); }
   }
 
   return (
@@ -327,7 +351,6 @@ export default function NewInvoicePage() {
           </div>
         )}
       </div>
-
       <div className="card mb-4" style={{ display: "grid", gridTemplateColumns: "1.4fr .65fr .75fr 1fr", gap: 16 }}>
         <div>
           <label className="field-label">Client</label>
@@ -413,21 +436,20 @@ export default function NewInvoicePage() {
           <div><label className="field-label">Referință cumpărător / contract</label><input className="input" value={buyerReference} onChange={(e)=>setBuyerReference(e.target.value)} placeholder="Opțional"/></div>
           <div><label className="field-label">Condiții de plată</label><input className="input" value={paymentTerms} onChange={(e)=>setPaymentTerms(e.target.value)} placeholder="Ex.: 15 zile"/></div>
         </div>
-        <label className="mt-4 rounded-xl border border-[#b9d8e8] bg-[#f4f9fc] px-4 py-3 flex items-start gap-3 cursor-pointer">
+        <label className={`mt-4 flex items-start gap-3 rounded-xl border px-4 py-3 ${currency === "RON" ? "cursor-pointer border-emerald-200 bg-emerald-50" : "cursor-not-allowed border-slate-200 bg-slate-50 opacity-60"}`}>
           <input
             type="checkbox"
             checked={paidOnSpot}
-            onChange={(event) => {
-              setPaidOnSpot(event.target.checked);
-              if (event.target.checked) { setCurrency("RON"); setExchangeRate(1); setPaymentMeansCode("10"); }
-            }}
+            disabled={currency !== "RON"}
+            onChange={(event) => setPaidOnSpot(event.target.checked)}
+            className="mt-1"
           />
           <span>
             <span className="block font-semibold text-sm">Achitată pe loc în numerar</span>
-            <span className="block text-xs mt-1 text-slate-500">La emitere se înregistrează automat plata integrală și se generează chitanța.</span>
+            <span className="block text-xs mt-1" style={{ color: "var(--text-dim)" }}>Emite atomic factura, plata integrală și chitanța. Disponibil exclusiv pentru RON.</span>
           </span>
         </label>
-        <p className="text-xs mt-3" style={{color:"var(--text-faint)"}}>Factura normală va folosi codul UBL 380; factura storno folosește automat codul 381. După emitere, factura este trimisă automat la ANAF când conexiunea SPV este activă.</p>
+        <p className="text-xs mt-3" style={{color:"var(--text-faint)"}}>Factura normală va folosi codul UBL 380; factura storno folosește automat codul 381.</p>
       </div>
 
       <div className="card mb-6">
@@ -503,7 +525,7 @@ export default function NewInvoicePage() {
                 <td>
                   <input type="number" min={0} max={100} step={1} className="input text-right num" value={it.vatRate}
                     onChange={(e) => updateItem(it.key, { vatRate: Number(e.target.value), vatCategoryCode: Number(e.target.value) === 0 && it.vatCategoryCode === "S" ? "Z" : it.vatCategoryCode })}/>
-                  <select className="input mt-1" value={it.vatCategoryCode} onChange={(e)=>updateItem(it.key,{vatCategoryCode:e.target.value})}>
+                  <select className="input mt-1" value={it.vatCategoryCode} onChange={(e)=>{ const category=e.target.value; updateItem(it.key,{vatCategoryCode:category,vatRate:category === "S" ? (it.vatRate > 0 ? it.vatRate : 21) : 0,taxExemptionReason:category === "O" && !it.taxExemptionReason ? "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." : it.taxExemptionReason}); }}>
                     <option value="S">S · standard</option><option value="Z">Z · cotă zero</option><option value="E">E · scutit</option><option value="AE">AE · taxare inversă</option><option value="O">O · în afara TVA</option>
                   </select>
                   {it.vatCategoryCode !== "S" && <><input className="input mt-1" value={it.taxExemptionReasonCode} onChange={(e)=>updateItem(it.key,{taxExemptionReasonCode:e.target.value})} placeholder="Cod motiv"/><input className="input mt-1" value={it.taxExemptionReason} onChange={(e)=>updateItem(it.key,{taxExemptionReason:e.target.value})} placeholder="Motiv / temei legal"/></>}
@@ -601,6 +623,7 @@ export default function NewInvoicePage() {
         <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
       </div>
 
+      {dialog}
       <button onClick={submit} disabled={saving} className="btn-primary" style={{ padding: "11px 22px" }}>
         {saving ? "Se salveaza..." : "Emite factura"}
       </button>

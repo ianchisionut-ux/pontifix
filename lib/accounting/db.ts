@@ -1,6 +1,6 @@
 import { Pool } from "pg";
 
-const ACCOUNTING_SCHEMA_VERSION = 5;
+const ACCOUNTING_SCHEMA_VERSION = 12;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -143,7 +143,7 @@ async function ensureSchema(pool: Pool) {
 
   await pool.query(
     `INSERT INTO company (id, name, "regCom", cif, address, phone, email)
-     VALUES (1, 'ELMONT S.A.', 'J1997000155315', '9710508', 'Str. 22 Decembrie 1989, Nr. 113, Zalău, Sălaj', '0260-611133', 'elmont_zalau@yahoo.com')
+     VALUES (1, 'ELMONT S.A.', '', '9710508', 'Str. 22 Decembrie 1989, Nr. 113', '0260-611133', 'elmont_zalau@yahoo.com')
      ON CONFLICT (id) DO NOTHING;`
   );
 
@@ -192,7 +192,16 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "buyerReference" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "sellerSnapshot" JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "clientSnapshot" JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  // Default 0 is intentional: invoices that existed before this migration must
+  // never be picked up by the automatic sender. Only newly issued invoices are
+  // explicitly opted in inside createInvoice().
   await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "autoEfactura" INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "anafSendAfter" TIMESTAMPTZ;`);
+  // No backfill: historical test invoices require explicit approval for the target environment.
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "anafApprovedEnvironment" TEXT;`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "integrationSource" TEXT;`);
+  await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "externalId" TEXT;`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_integration_reference_key" ON invoices ("integrationSource", "externalId") WHERE "integrationSource" IS NOT NULL AND "externalId" IS NOT NULL;`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_one_storno_per_original" ON invoices ("originalInvoiceId") WHERE "invoiceType"='STORNO';`);
 
   await pool.query(`
@@ -253,7 +262,108 @@ async function ensureSchema(pool: Pool) {
       "downloadId" TEXT NOT NULL DEFAULT '',
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
     );
+    CREATE TABLE IF NOT EXISTS efactura_automation_state (
+      id INTEGER PRIMARY KEY,
+      status TEXT NOT NULL DEFAULT 'NEVER',
+      checked INTEGER NOT NULL DEFAULT 0,
+      sent INTEGER NOT NULL DEFAULT 0,
+      failed INTEGER NOT NULL DEFAULT 0,
+      message TEXT NOT NULL DEFAULT '',
+      "lastRunAt" TIMESTAMPTZ,
+      "lastSuccessAt" TIMESTAMPTZ,
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
   `);
+  await pool.query(`ALTER TABLE efactura_submissions ADD COLUMN IF NOT EXISTS retryable INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE efactura_submissions ADD COLUMN IF NOT EXISTS "attemptNumber" INTEGER NOT NULL DEFAULT 1;`);
+  await pool.query(`ALTER TABLE anaf_connections ADD COLUMN IF NOT EXISTS environment TEXT NOT NULL DEFAULT 'test';`);
+  await pool.query(`ALTER TABLE efactura_submissions ADD COLUMN IF NOT EXISTS environment TEXT NOT NULL DEFAULT 'test';`);
+  await pool.query(`ALTER TABLE efactura_messages ADD COLUMN IF NOT EXISTS environment TEXT NOT NULL DEFAULT 'test';`);
+  await pool.query(`ALTER TABLE efactura_messages DROP CONSTRAINT IF EXISTS "efactura_messages_messageId_key";`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "efactura_messages_environment_id_idx" ON efactura_messages (environment,"messageId");`);
+  // Clean up only locally-active duplicates from older code before enforcing
+  // the invariant. Validated/rejected history remains untouched.
+  await pool.query(`
+    UPDATE efactura_submissions older
+       SET status='ERROR', retryable=0,
+           message=CASE WHEN older.message='' THEN 'Înlocuită de o trimitere mai nouă.' ELSE older.message END,
+           "checkedAt"=now()
+     WHERE older.status IN ('UPLOADING','PROCESSING')
+       AND EXISTS (
+         SELECT 1 FROM efactura_submissions newer
+          WHERE newer."invoiceId"=older."invoiceId"
+            AND newer.environment=older.environment
+            AND newer.status IN ('UPLOADING','PROCESSING')
+            AND newer.id>older.id
+       );
+  `);
+  await pool.query(`
+    DROP INDEX IF EXISTS "efactura_one_active_submission_per_invoice";
+    CREATE UNIQUE INDEX "efactura_one_active_submission_per_invoice"
+      ON efactura_submissions ("invoiceId",environment)
+      WHERE status IN ('UPLOADING','PROCESSING');
+  `);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerName" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerCif" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerCountryCode" TEXT NOT NULL DEFAULT 'RO';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "vatRate" NUMERIC(5,2);`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerVatPayer" INTEGER NOT NULL DEFAULT -1;`);
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS tax_declaration_periods (
+      id SERIAL PRIMARY KEY,
+      year INTEGER NOT NULL CHECK (year BETWEEN 2000 AND 2100),
+      month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+      status TEXT NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT','REVIEW','APPROVED','FILED')),
+      notes TEXT NOT NULL DEFAULT '',
+      "receiptNumber" TEXT NOT NULL DEFAULT '',
+      "snapshot" JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(year, month)
+    );
+    CREATE INDEX IF NOT EXISTS "tax_declaration_periods_period_idx"
+      ON tax_declaration_periods (year DESC, month DESC);
+    CREATE TABLE IF NOT EXISTS tax_declaration_settings (
+      id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id=1),
+      "declarantLastName" TEXT NOT NULL DEFAULT '',
+      "declarantFirstName" TEXT NOT NULL DEFAULT '',
+      "declarantFunction" TEXT NOT NULL DEFAULT '',
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    INSERT INTO tax_declaration_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+    CREATE TABLE IF NOT EXISTS tax_declaration_classifications (
+      id SERIAL PRIMARY KEY,
+      year INTEGER NOT NULL CHECK (year BETWEEN 2000 AND 2100),
+      month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+      "declarationType" TEXT NOT NULL CHECK ("declarationType" IN ('D300','D394','D390')),
+      "sourceKey" TEXT NOT NULL,
+      "operationCode" TEXT NOT NULL DEFAULT '',
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(year,month,"declarationType","sourceKey")
+    );
+    CREATE INDEX IF NOT EXISTS "tax_declaration_classifications_period_idx"
+      ON tax_declaration_classifications (year DESC,month DESC,"declarationType");
+  `);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS caen TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "fiscalPeriodType" TEXT NOT NULL DEFAULT 'L';`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "proRata" NUMERIC(5,2) NOT NULL DEFAULT 100;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "preparerType" INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "preparerName" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "preparerCif" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "preparerCapacity" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "consultOption" INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "affiliatedTransactions" INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "priorVatPayable" NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "priorVatRefundable" NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "inspectionVatPayable" NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "inspectionVatRefundable" NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "deductibleAdjustments" NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "refundedForeignVat" NUMERIC(14,2) NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "requestRefund" INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "profileConfirmedAt" TIMESTAMPTZ;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "invoiceSeries" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "allocatedInvoiceFrom" INTEGER NOT NULL DEFAULT 0;`);
+  await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "allocatedInvoiceTo" INTEGER NOT NULL DEFAULT 0;`);
   // Populam idempotent registrul cu incasarile deja existente in Facturare.
   await pool.query(`
     INSERT INTO ref_transactions
@@ -282,6 +392,23 @@ async function ensureSchemaVersion(pool: Pool) {
   try {
     const { rows } = await pool.query(`SELECT version FROM accounting_schema_meta WHERE id=1`);
     if (Number(rows[0]?.version || 0) >= ACCOUNTING_SCHEMA_VERSION) return;
+    if (Number(rows[0]?.version) === 10) {
+      // Additive upgrade only: do not rerun historical financial backfills.
+      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "anafSendAfter" TIMESTAMPTZ;`);
+      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "anafApprovedEnvironment" TEXT;`);
+      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "integrationSource" TEXT;`);
+      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "externalId" TEXT;`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_integration_reference_key" ON invoices ("integrationSource", "externalId") WHERE "integrationSource" IS NOT NULL AND "externalId" IS NOT NULL;`);
+      await pool.query(`UPDATE accounting_schema_meta SET version=$1 WHERE id=1 AND version=10`, [ACCOUNTING_SCHEMA_VERSION]);
+      return;
+    }
+    if (Number(rows[0]?.version) === 11) {
+      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "integrationSource" TEXT;`);
+      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "externalId" TEXT;`);
+      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_integration_reference_key" ON invoices ("integrationSource", "externalId") WHERE "integrationSource" IS NOT NULL AND "externalId" IS NOT NULL;`);
+      await pool.query(`UPDATE accounting_schema_meta SET version=$1 WHERE id=1 AND version=11`, [ACCOUNTING_SCHEMA_VERSION]);
+      return;
+    }
   } catch (error) {
     if ((error as { code?: string }).code !== "42P01") throw error;
   }

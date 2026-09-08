@@ -2,7 +2,8 @@ import { getDashboardStats, listInvoices } from "@/lib/accounting/repo";
 import { requireAccountingPage } from "@/lib/accounting/access";
 import Link from "next/link";
 import { StatusBadge } from "@/components/accounting/StatusBadge";
-import { Plus } from "lucide-react";
+import { getAnafPublicConfig } from "@/lib/accounting/efactura";
+import { Plus, TriangleAlert } from "lucide-react";
 
 // This page reads live data straight from Postgres on every request; it must
 // never be statically prerendered at build time (which would freeze the
@@ -13,9 +14,23 @@ function fmt(n: number) {
   return n.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " RON";
 }
 
+function AnafCompactStatus({ status }: { status: string | null }) {
+  const meta = status === "VALIDATED"
+    ? { color: "#16a34a", label: "Validată ANAF" }
+    : ["REJECTED", "ERROR"].includes(status || "")
+      ? { color: "#dc2626", label: "Necesită atenție" }
+      : ["UPLOADING", "PROCESSING"].includes(status || "")
+        ? { color: "#eab308", label: "În procesare" }
+        : { color: "#eab308", label: "Netrimisă" };
+  return <span className="inline-flex items-center gap-2 text-xs font-semibold whitespace-nowrap"><span aria-hidden="true" style={{ width: 9, height: 9, borderRadius: "50%", background: meta.color }} />{meta.label}</span>;
+}
+
 export default async function DashboardPage() {
   const stats = await getDashboardStats();
-  const recent = (await listInvoices()).slice(0, 7);
+  const invoices = await listInvoices();
+  const recent = invoices.slice(0, 7);
+  const anaf = getAnafPublicConfig();
+  const anafProblems = invoices.filter((invoice) => ["REJECTED", "ERROR"].includes(invoice.eFacturaStatus || "")).length;
 
   const cards = [
     { label: "Facturi emise", value: stats.totalInvoices.toString(), accent: "var(--cyan)" },
@@ -37,6 +52,9 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
+      {anaf.environment === "test" && <div className="ef-safety-warning mb-4"><TriangleAlert size={17}/><span><strong>ANAF Test este activ.</strong> Trimiterile nu au efect fiscal real. Activează Producție înainte de folosirea operațională.</span></div>}
+      {anafProblems > 0 && <Link href="/dashboard/contabilitate/invoices" className="ref-error ef-dashboard-alert"><TriangleAlert size={17}/><span><strong>{anafProblems} {anafProblems === 1 ? "factură necesită" : "facturi necesită"} atenție la e-Factura.</strong> Deschide registrul pentru detalii și retransmitere.</span></Link>}
+
       <div className="stat-grid">
         {cards.map((c) => (
           <div key={c.label} className="stat-card" style={{ "--accent": c.accent } as React.CSSProperties}>
@@ -56,12 +74,13 @@ export default async function DashboardPage() {
               <th>Data</th>
               <th className="text-right">Total</th>
               <th>Status</th>
+              <th>e-Factura ANAF</th>
             </tr>
           </thead>
           <tbody>
             {recent.length === 0 && (
               <tr>
-                <td colSpan={5} className="empty-row">
+                <td colSpan={6} className="empty-row">
                   Nu ai emis inca nicio factura.
                 </td>
               </tr>
@@ -79,6 +98,7 @@ export default async function DashboardPage() {
                 <td>
                   <StatusBadge status={inv.status} />
                 </td>
+                <td><Link href={`/dashboard/contabilitate/invoices/${inv.id}#e-factura`}><AnafCompactStatus status={inv.eFacturaStatus} /></Link></td>
               </tr>
             ))}
           </tbody>

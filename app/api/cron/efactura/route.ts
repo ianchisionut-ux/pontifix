@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { processAutomaticEFactura } from "@/lib/accounting/efactura";
+import { processAutomaticEFactura, recordAutomationFailure } from "@/lib/accounting/efactura";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
 
 export async function GET(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -9,8 +10,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Neautorizat." }, { status: 401 });
   }
   try {
-    return NextResponse.json(await processAutomaticEFactura(30));
+    return NextResponse.json(await processAutomaticEFactura(50));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Procesarea automată e-Factura a eșuat." }, { status: 500 });
+    try { await recordAutomationFailure(error); } catch {}
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Procesarea automată e-Factura a eșuat." },
+      { status: 500 }
+    );
   }
 }

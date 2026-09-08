@@ -9,7 +9,9 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "test:accounting-xml": "node scripts/test-accounting-xml.cjs",
+    "test:anaf-workflow": "node scripts/test-anaf-workflow.cjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

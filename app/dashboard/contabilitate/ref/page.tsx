@@ -5,8 +5,9 @@ import { Download, Plus, Trash2 } from "lucide-react";
 
 type RefRow = {
   id: number; type: "INCOME" | "EXPENSE"; date: string; documentType: string; documentNumber: string;
-  explanation: string; grossAmount: number; vatAmount: number; netAmount: number; fiscalCategory: string;
+  explanation: string; grossAmount: number; vatAmount: number; vatRate:number|null; netAmount: number; fiscalCategory: string;
   deductibilityPercent: number; fiscalAmount: number; source: "MANUAL" | "AUTO_PAYMENT";
+  partnerName: string; partnerCif: string; partnerCountryCode: string; partnerVatPayer:number;
 };
 type Summary = { totalIncome: number; taxableIncome: number; totalExpenses: number; deductibleExpenses: number; fiscalResult: number };
 const emptySummary: Summary = { totalIncome: 0, taxableIncome: 0, totalExpenses: 0, deductibleExpenses: 0, fiscalResult: 0 };
@@ -22,7 +23,7 @@ export default function RefPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const [form, setForm] = useState({ type: "EXPENSE", date: new Date().toISOString().slice(0, 10), documentType: "FACTURA", documentNumber: "", explanation: "", grossAmount: "", vatAmount: "0", fiscalCategory: "DEDUCTIBLE_EXPENSE", deductibilityPercent: "100", notes: "" });
+  const [form, setForm] = useState({ type: "EXPENSE", date: new Date().toISOString().slice(0, 10), documentType: "FACTURA", documentNumber: "", explanation: "", grossAmount: "", vatAmount: "0", vatRate:"21", fiscalCategory: "DEDUCTIBLE_EXPENSE", deductibilityPercent: "100", notes: "", partnerName: "", partnerCif: "", partnerCountryCode: "RO",partnerVatPayer:"1" });
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -46,10 +47,10 @@ export default function RefPage() {
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setSaving(true); setError("");
-    const response = await fetch("/api/accounting/ref/transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+    const response = await fetch("/api/accounting/ref/transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({...form,vatRate:Number(form.vatAmount)>0?Number(form.vatRate):null}) });
     const data = await response.json().catch(() => ({})); setSaving(false);
     if (!response.ok) { setError(data.error || "Poziția nu a putut fi salvată."); return; }
-    setForm((value) => ({ ...value, documentNumber: "", explanation: "", grossAmount: "", vatAmount: "0", notes: "" }));
+    setForm((value) => ({ ...value, documentNumber: "", explanation: "", grossAmount: "", vatAmount: "0", notes: "", partnerName: "", partnerCif: "" }));
     await load();
   }
   async function remove(row: RefRow) {
@@ -77,7 +78,9 @@ export default function RefPage() {
         <label className="field-label">Data încasării/plății<input className="input" type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}/></label>
         <div className="ref-form-row"><label className="field-label">Document<select className="input" value={form.documentType} onChange={(e) => setForm({ ...form, documentType: e.target.value })}><option value="FACTURA">Factură</option><option value="CHITANTA">Chitanță</option><option value="EXTRAS_BANCAR">Extras bancar</option><option value="BON_FISCAL">Bon fiscal</option><option value="ALTELE">Alt document</option></select></label><label className="field-label">Număr<input className="input" value={form.documentNumber} onChange={(e) => setForm({ ...form, documentNumber: e.target.value })}/></label></div>
         <label className="field-label">Explicație<input className="input" required placeholder="Ex. servicii contabilitate" value={form.explanation} onChange={(e) => setForm({ ...form, explanation: e.target.value })}/></label>
+        {form.type === "EXPENSE" && <><label className="field-label">Furnizor<input className="input" placeholder="Denumire furnizor" value={form.partnerName} onChange={(e) => setForm({ ...form, partnerName: e.target.value })}/></label><div className="ref-form-row"><label className="field-label">CUI / cod TVA<input className="input" placeholder="RO12345678" value={form.partnerCif} onChange={(e) => setForm({ ...form, partnerCif: e.target.value.toUpperCase() })}/></label><label className="field-label">Statut TVA<select className="input" value={form.partnerVatPayer} onChange={e=>setForm({...form,partnerVatPayer:e.target.value})}><option value="1">Înregistrat TVA RO</option><option value="0">Neînregistrat TVA</option></select></label><label className="field-label">Țară<input className="input" maxLength={2} value={form.partnerCountryCode} onChange={(e) => setForm({ ...form, partnerCountryCode: e.target.value.toUpperCase() })}/></label></div></>}
         <div className="ref-form-row"><label className="field-label">Sumă brută (RON)<input className="input" type="number" min="0.01" step="0.01" required value={form.grossAmount} onChange={(e) => setForm({ ...form, grossAmount: e.target.value })}/></label><label className="field-label">TVA inclus (RON)<input className="input" type="number" min="0" step="0.01" value={form.vatAmount} onChange={(e) => setForm({ ...form, vatAmount: e.target.value })}/></label></div>
+        {Number(form.vatAmount)>0&&<label className="field-label">Cotă TVA<select className="input" value={form.vatRate} onChange={(e)=>setForm({...form,vatRate:e.target.value})}>{[21,11,19,9,5,20,24].map(rate=><option key={rate} value={rate}>{rate}%</option>)}</select></label>}
         <label className="field-label">Categorie fiscală<select className="input" value={form.fiscalCategory} onChange={(e) => setForm({ ...form, fiscalCategory: e.target.value, deductibilityPercent: e.target.value === "PARTIAL_EXPENSE" ? "50" : "100" })}>{form.type === "INCOME" ? <><option value="TAXABLE_INCOME">Venit impozabil</option><option value="NON_TAXABLE_INCOME">Venit neimpozabil</option></> : <><option value="DEDUCTIBLE_EXPENSE">Deductibilă integral</option><option value="PARTIAL_EXPENSE">Parțial deductibilă</option><option value="NON_DEDUCTIBLE_EXPENSE">Nedeductibilă</option></>}</select></label>
         {form.fiscalCategory === "PARTIAL_EXPENSE" && <label className="field-label">Procent deductibil<input className="input" type="number" min="0" max="100" step="1" value={form.deductibilityPercent} onChange={(e) => setForm({ ...form, deductibilityPercent: e.target.value })}/></label>}
         <div className="ref-preview"><span>Valoare fiscală calculată</span><strong>{money(fiscalPreview)} RON</strong></div><button className="btn-primary" disabled={saving} type="submit">{saving ? "Se salvează…" : "Adaugă în registru"}</button>

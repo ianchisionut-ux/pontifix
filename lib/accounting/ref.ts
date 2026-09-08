@@ -18,6 +18,7 @@ export type RefTransaction = {
   explanation: string;
   grossAmount: number;
   vatAmount: number;
+  vatRate: number | null;
   netAmount: number;
   fiscalCategory: RefFiscalCategory;
   deductibilityPercent: number;
@@ -25,6 +26,10 @@ export type RefTransaction = {
   invoiceId: number | null;
   paymentId: number | null;
   source: "MANUAL" | "AUTO_PAYMENT";
+  partnerName: string;
+  partnerCif: string;
+  partnerCountryCode: string;
+  partnerVatPayer: number;
   notes: string;
   createdAt: string;
 };
@@ -45,9 +50,14 @@ export type RefTransactionInput = {
   explanation: string;
   grossAmount: number;
   vatAmount?: number;
+  vatRate?: number | null;
   fiscalCategory: RefFiscalCategory;
   deductibilityPercent?: number;
   notes?: string;
+  partnerName?: string;
+  partnerCif?: string;
+  partnerCountryCode?: string;
+  partnerVatPayer?: number;
 };
 
 function round2(value: number) {
@@ -60,6 +70,7 @@ function mapTransaction(row: Record<string, unknown>): RefTransaction {
     date: String(row.date).slice(0, 10),
     grossAmount: Number(row.grossAmount),
     vatAmount: Number(row.vatAmount),
+    vatRate: row.vatRate == null ? null : Number(row.vatRate),
     netAmount: Number(row.netAmount),
     deductibilityPercent: Number(row.deductibilityPercent),
     fiscalAmount: Number(row.fiscalAmount),
@@ -102,6 +113,8 @@ function validateInput(input: RefTransactionInput) {
   if (!Number.isFinite(input.grossAmount) || input.grossAmount <= 0) throw new Error("Suma brută trebuie să fie pozitivă.");
   const vat = Number(input.vatAmount || 0);
   if (!Number.isFinite(vat) || vat < 0 || vat > input.grossAmount) throw new Error("Valoarea TVA este invalidă.");
+  if (input.vatRate != null && (![0,5,9,11,19,20,21,24].includes(Number(input.vatRate)))) throw new Error("Cota TVA nu este acceptată de formularele ANAF.");
+  if (input.partnerCountryCode && !/^[A-Za-z]{2}$/.test(input.partnerCountryCode.trim())) throw new Error("Codul țării partenerului trebuie să aibă două litere.");
   const incomeCategories = ["TAXABLE_INCOME", "NON_TAXABLE_INCOME"];
   const expenseCategories = ["DEDUCTIBLE_EXPENSE", "PARTIAL_EXPENSE", "NON_DEDUCTIBLE_EXPENSE"];
   if (input.type === "INCOME" && !incomeCategories.includes(input.fiscalCategory)) throw new Error("Categoria fiscală nu corespunde unui venit.");
@@ -115,6 +128,9 @@ export async function createRefTransaction(input: RefTransactionInput): Promise<
   const gross = round2(Number(input.grossAmount));
   const vat = round2(Number(input.vatAmount || 0));
   const net = round2(gross - vat);
+  const vatRate = input.vatRate == null ? null : Number(input.vatRate);
+  if (vat > 0 && vatRate == null) throw new Error("Cota TVA este obligatorie când documentul conține TVA.");
+  if (vatRate != null && Math.abs(vat - round2(net * vatRate / 100)) > Math.max(1, net * 0.01)) throw new Error("TVA-ul nu corespunde cotei selectate și bazei documentului.");
   const percent = input.fiscalCategory === "PARTIAL_EXPENSE"
     ? Math.min(100, Math.max(0, Number(input.deductibilityPercent ?? 50)))
     : input.fiscalCategory === "NON_DEDUCTIBLE_EXPENSE" ? 0 : 100;
@@ -129,10 +145,11 @@ export async function createRefTransaction(input: RefTransactionInput): Promise<
   const { rows } = await pool.query(
     `INSERT INTO ref_transactions
       (type, date, "documentType", "documentNumber", explanation, "grossAmount", "vatAmount", "netAmount",
-       "fiscalCategory", "deductibilityPercent", "fiscalAmount", source, notes)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'MANUAL',$12) RETURNING id`,
+       "fiscalCategory", "deductibilityPercent", "fiscalAmount", source, notes, "partnerName", "partnerCif", "partnerCountryCode", "vatRate", "partnerVatPayer")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'MANUAL',$12,$13,$14,$15,$16,$17) RETURNING id`,
     [input.type, input.date, input.documentType.trim(), input.documentNumber?.trim() || "", input.explanation.trim(),
-      gross, vat, net, input.fiscalCategory, percent, fiscalAmount, input.notes?.trim() || ""]
+      gross, vat, net, input.fiscalCategory, percent, fiscalAmount, input.notes?.trim() || "",
+      input.partnerName?.trim() || "", input.partnerCif?.trim().toUpperCase() || "", input.partnerCountryCode?.trim().toUpperCase() || "RO", vatRate, Number(input.partnerVatPayer??-1)]
   );
   return Number(rows[0].id);
 }
