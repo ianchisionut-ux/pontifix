@@ -13,6 +13,8 @@ import { ConnectionDeerPanel } from '@/components/connections/connection-deer-pa
 import { DEER_STATUS_META } from '@/lib/deer-submission'
 import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
+type MunicipalityEmail = { id: string; label: string; email: string }
+
 
 export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }: { initialCases: ConnectionCaseDto[]; canManage: boolean; canEditDeerDate: boolean }) {
   const [items, setItems] = useState(initialCases)
@@ -32,6 +34,8 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
   const [messageTemplate, setMessageTemplate] = useState<ConnectionWhatsAppTemplateKey>('PROGRAMMED')
   const [messageText, setMessageText] = useState('')
   const [municipalityEmail, setMunicipalityEmail] = useState('')
+  const [municipalityLabel, setMunicipalityLabel] = useState('')
+  const [municipalityEmails, setMunicipalityEmails] = useState<MunicipalityEmail[]>([])
 
   useEffect(() => {
     setItems(initialCases)
@@ -39,6 +43,13 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     setSelectedId(next?.id || '')
     setDraft(next ? { ...defaultConnectionFields(), ...next.fields } : defaultConnectionFields())
   }, [initialCases])
+
+  useEffect(() => {
+    fetch('/api/bransamente/municipality-emails')
+      .then((response) => response.ok ? response.json() : [])
+      .then((contacts: MunicipalityEmail[]) => setMunicipalityEmails(Array.isArray(contacts) ? contacts : []))
+      .catch(() => undefined)
+  }, [])
 
   const visible = useMemo(() => items.filter((item) => {
     const haystack = `${item.nib} ${item.sequenceNumber} ${item.fields.Beneficiar} ${item.fields.Telefon} ${item.fields.ATR} ${item.fields.Amplasament}`.toLocaleLowerCase('ro-RO')
@@ -162,12 +173,22 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     setMessageConnectionId(connectionId)
     setMessageTemplate(key)
     setMessageText(templateText(key, connectionId))
+    const item = items.find((entry) => entry.id === connectionId)
+    const entity = item?.fields.Entitate?.trim() || ''
+    const saved = municipalityEmails.find((contact) => entity && contact.label.toLocaleLowerCase('ro-RO').includes(entity.toLocaleLowerCase('ro-RO')))
+    setMunicipalityLabel(entity)
+    setMunicipalityEmail(saved?.email || '')
     setWhatsAppOpen(true)
   }
 
   function chooseMessageConnection(connectionId: string) {
     setMessageConnectionId(connectionId)
     setMessageText(templateText(messageTemplate, connectionId))
+    const item = items.find((entry) => entry.id === connectionId)
+    const entity = item?.fields.Entitate?.trim() || ''
+    const saved = municipalityEmails.find((contact) => entity && contact.label.toLocaleLowerCase('ro-RO').includes(entity.toLocaleLowerCase('ro-RO')))
+    setMunicipalityLabel(entity)
+    setMunicipalityEmail(saved?.email || '')
   }
 
   function chooseMessageTemplate(key: ConnectionWhatsAppTemplateKey) {
@@ -204,13 +225,44 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       setNotice('')
     } finally { setBusy('') }
   }
+  async function saveMunicipalityEmail() {
+    if (!municipalityLabel.trim() || !municipalityEmail.trim()) return alert('Completează denumirea primăriei și adresa de e-mail.')
+    setBusy('municipality-email')
+    try {
+      const response = await fetch('/api/bransamente/municipality-emails', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: municipalityLabel, email: municipalityEmail }) })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'Adresa nu a putut fi salvată.')
+      setMunicipalityEmails((current) => [...current.filter((contact) => contact.id !== body.id && contact.email !== body.email), body].sort((a, b) => a.label.localeCompare(b.label, 'ro')))
+      setMunicipalityEmail(body.email)
+      setMunicipalityLabel(body.label)
+      setNotice('Adresa primăriei a fost salvată în agendă.')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Adresa nu a putut fi salvată.')
+    } finally { setBusy('') }
+  }
+
+  async function deleteMunicipalityEmail() {
+    const contact = municipalityEmails.find((item) => item.email === municipalityEmail)
+    if (!contact || !confirm(`Ștergi din agendă ${contact.label} – ${contact.email}?`)) return
+    setBusy('municipality-email')
+    try {
+      const response = await fetch(`/api/bransamente/municipality-emails?id=${encodeURIComponent(contact.id)}`, { method: 'DELETE' })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'Adresa nu a putut fi ștearsă.')
+      setMunicipalityEmails((current) => current.filter((item) => item.id !== contact.id))
+      setMunicipalityEmail('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Adresa nu a putut fi ștearsă.')
+    } finally { setBusy('') }
+  }
+
   function openYahooDtacDraft() {
     const item = items.find((entry) => entry.id === messageConnectionId)
     if (!item || !canManage) return
     const fields = selected?.id === item.id ? draft : item.fields
     const beneficiary = fields.Beneficiar.trim() || 'BENEFICIAR'
     const location = fields.Amplasament.trim() || fields.AmplasamentA3.trim() || 'amplasament necompletat'
-    const subject = `DTAC - ${beneficiary}`
+    const subject = `⚡DTAC - ${beneficiary}`
     const body = [
       'Bună ziua,',
       '',
@@ -221,14 +273,22 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       'Vă mulțumim pentru sprijin și colaborare.',
       '',
       'Cu stimă,',
-      'SC ELMONT S.A.',
+      '',
+      '________________________________________________________________________________',
+      'S.C. ELMONT S.A. ZALĂU',
+      '☎ Tel. fix/fax: 0260 611 192',
+      '📍 Adresa: Str. 22 Decembrie 1989 nr. 113, Zalău, jud. Sălaj',
+      '=============================================',
+      '🖥 Dep. Proiectare',
+      '0730 004 210 - sing. Berar L.',
+      '0727 700 062 - tehn. Ianchis I.',
+      '=============================================',
     ].join('\n')
     const query = new URLSearchParams({ subject, body })
     if (municipalityEmail.trim()) query.set('to', municipalityEmail.trim())
     window.open(`https://compose.mail.yahoo.com/?${query.toString()}`, '_blank', 'noopener,noreferrer')
     setNotice('Am deschis schița DTAC în Yahoo. Atașează documentația înainte de trimitere.')
   }
-
   async function remove() {
     if (!selected || !canManage || !confirm(`Ștergi definitiv dosarul ${selected.fields.Beneficiar || 'fără nume'}?`)) return
     setBusy('delete')
@@ -276,9 +336,14 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
         <div className="mt-4 grid gap-2 sm:grid-cols-2">{CONNECTION_WHATSAPP_TEMPLATES.map((template)=><button key={template.key} type="button" onClick={()=>chooseMessageTemplate(template.key)} className={`rounded-2xl border p-3 text-left transition ${messageTemplate===template.key?'border-[#78bfe1] bg-[#edf7fc]':'border-slate-200 hover:bg-slate-50'}`}><strong className="block text-sm text-[#082b4d]">{template.label}</strong><span className="mt-1 block text-xs text-slate-500">{template.description}</span></button>)}</div>
         <label className="mt-4 block text-xs font-bold text-slate-500">Previzualizare mesaj WhatsApp<textarea value={messageText} onChange={(event)=>setMessageText(event.target.value)} maxLength={4000} className="input-field mt-1.5 min-h-[150px] w-full resize-y bg-white text-sm leading-6"/></label>
         <section className="mt-4 rounded-2xl border border-[#b9d8e8] bg-[#f4f9fc] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><strong className="flex items-center gap-2 text-sm text-[#082b4d]"><Mail size={16}/> E-mail DTAC către primărie</strong><p className="mt-1 text-xs text-slate-500">Subiect: DTAC - {items.find((item)=>item.id===messageConnectionId)?.fields.Beneficiar||'BENEFICIAR'}</p></div><button type="button" onClick={openYahooDtacDraft} className="btn-secondary inline-flex items-center gap-2 !border-[#78bfe1] !bg-white"><Mail size={16}/> Deschide schița în Yahoo</button></div>
-          <label className="mt-3 block text-xs font-bold text-slate-500">Adresa e-mail a primăriei <span className="font-normal text-slate-400">(opțional, se poate completa și în Yahoo)</span><input type="email" value={municipalityEmail} onChange={(event)=>setMunicipalityEmail(event.target.value)} placeholder="registratura@primarie.ro" className="input-field mt-1.5 w-full bg-white"/></label>
-          <p className="mt-2 text-[11px] leading-5 text-slate-500">Yahoo va deschide mesajul cu subiectul și textul completate automat. Din motive de securitate ale browserului, documentația DTAC se atașează manual înainte de trimitere.</p>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><strong className="flex items-center gap-2 text-sm text-[#082b4d]"><Mail size={16}/> E-mail DTAC către primărie</strong><p className="mt-1 text-xs text-slate-500">Subiect: ⚡DTAC - {items.find((item)=>item.id===messageConnectionId)?.fields.Beneficiar||'BENEFICIAR'}</p></div><button type="button" onClick={openYahooDtacDraft} className="btn-secondary inline-flex items-center gap-2 !border-[#78bfe1] !bg-white"><Mail size={16}/> Deschide schița în Yahoo</button></div>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <label className="text-xs font-bold text-slate-500">Adresă salvată<select value={municipalityEmails.some((contact)=>contact.email===municipalityEmail)?municipalityEmail:''} onChange={(event)=>{const contact=municipalityEmails.find((item)=>item.email===event.target.value);setMunicipalityEmail(contact?.email||'');setMunicipalityLabel(contact?.label||items.find((item)=>item.id===messageConnectionId)?.fields.Entitate||'')}} className="input-field mt-1.5 w-full bg-white"><option value="">Adresă nouă / nesalvată</option>{municipalityEmails.map((contact)=><option key={contact.id} value={contact.email}>{contact.label} · {contact.email}</option>)}</select></label>
+            <label className="text-xs font-bold text-slate-500">Primăria / instituția<input value={municipalityLabel} onChange={(event)=>setMunicipalityLabel(event.target.value)} placeholder="Primăria Hereclean" className="input-field mt-1.5 w-full bg-white"/></label>
+            <label className="text-xs font-bold text-slate-500 md:col-span-2">Adresa e-mail<input type="email" value={municipalityEmail} onChange={(event)=>setMunicipalityEmail(event.target.value)} placeholder="registratura@primarie.ro" className="input-field mt-1.5 w-full bg-white"/></label>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" onClick={saveMunicipalityEmail} disabled={busy==='municipality-email'} className="btn-secondary inline-flex items-center gap-2 !bg-white"><Save size={15}/> Memorează adresa</button>{municipalityEmails.some((contact)=>contact.email===municipalityEmail)&&<button type="button" onClick={deleteMunicipalityEmail} disabled={busy==='municipality-email'} className="round-action text-rose-500" title="Șterge adresa din agendă"><Trash2 size={15}/></button>}</div>
+          <p className="mt-2 text-[11px] leading-5 text-slate-500">Agenda este salvată pentru Elmont și apare tuturor utilizatorilor autorizați. Yahoo va deschide mesajul completat; documentația DTAC se atașează manual înainte de trimitere.</p>
         </section>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-500">Destinatar: <strong>{items.find((item)=>item.id===messageConnectionId)?.fields.Telefon||'telefon necompletat'}</strong></p><div className="flex gap-2"><button onClick={()=>setWhatsAppOpen(false)} className="btn-secondary">Renunță</button><button onClick={sendWhatsAppMessage} disabled={busy==='whatsapp'||!messageText.trim()} className="btn-primary inline-flex items-center gap-2">{busy==='whatsapp'?<Loader2 size={17} className="animate-spin"/>:<MessageCircle size={17}/>} Trimite pe WhatsApp</button></div></div>
       </div>

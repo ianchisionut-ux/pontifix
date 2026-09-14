@@ -33,6 +33,16 @@ export function ensureConnectionStorage() {
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "ConnectionCase_businessId_updatedAt_idx" ON "ConnectionCase"("businessId", "updatedAt")`)
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ConnectionCase_nib_key" ON "ConnectionCase"("nib") WHERE "nib" IS NOT NULL`)
       await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "ConnectionCase_quoteRequestId_key" ON "ConnectionCase"("quoteRequestId") WHERE "quoteRequestId" IS NOT NULL`)
+      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "MunicipalityEmail" (
+        "id" TEXT NOT NULL,
+        "businessId" TEXT NOT NULL,
+        "label" TEXT NOT NULL,
+        "email" TEXT NOT NULL,
+        "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        CONSTRAINT "MunicipalityEmail_pkey" PRIMARY KEY ("id")
+      )`)
+      await prisma.$executeRawUnsafe(`CREATE UNIQUE INDEX IF NOT EXISTS "MunicipalityEmail_businessId_email_key" ON "MunicipalityEmail"("businessId", "email")`)
     }).catch((error) => { ready = null; throw error })
   }
   return ready
