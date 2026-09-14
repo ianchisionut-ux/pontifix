@@ -202,7 +202,7 @@ export function PdfStampEditor({ template, canManage, onClose }: { template: For
     setBusy('replace'); setError('')
     try {
       const blob = await uploadPresigned(`formulare/semnare/${template.id.replace(/[^a-zA-Z0-9_-]/g, '-')}/${Date.now()}-${file.name}`, file, { access: 'private', handleUploadUrl: '/api/formulare/upload' })
-      const response = await fetch(`/api/formulare/${encodeURIComponent(template.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentPathname: blob.pathname, documentName: file.name }) })
+      const response = await fetch(`/api/formulare/${encodeURIComponent(template.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ documentPathname: blob.pathname, documentName: file.name, stampSchema: placements }) })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'PDF-ul nu a putut fi înlocuit.')
       setPdf(null); setPageCount(0); setVersion(Date.now()); router.refresh()

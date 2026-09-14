@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { uploadPresigned } from '@vercel/blob/client'
-import { Archive, ClipboardList, CreditCard, Download, Eye, FileText, FileUp, LayoutGrid, List, Loader2, MessageCircle, Plus, Save, Search, ShieldCheck, Trash2, WandSparkles, X } from 'lucide-react'
+import { Archive, ClipboardList, CreditCard, Download, Eye, FileText, FileUp, LayoutGrid, List, Loader2, Mail, MessageCircle, Plus, Save, Search, ShieldCheck, Trash2, WandSparkles, X } from 'lucide-react'
 import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, defaultConnectionFields, type ConnectionCaseDto, type ConnectionFields } from '@/lib/connection-fields'
 import { CONNECTION_STATUSES, CONNECTION_STATUS_META, type ConnectionStatus } from '@/lib/connection-status'
 import { AdminConnectionAccordion } from '@/components/connections/admin-connection-accordion'
@@ -31,6 +31,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
   const [messageConnectionId, setMessageConnectionId] = useState(initialCases[0]?.id || '')
   const [messageTemplate, setMessageTemplate] = useState<ConnectionWhatsAppTemplateKey>('PROGRAMMED')
   const [messageText, setMessageText] = useState('')
+  const [municipalityEmail, setMunicipalityEmail] = useState('')
 
   useEffect(() => {
     setItems(initialCases)
@@ -203,6 +204,31 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       setNotice('')
     } finally { setBusy('') }
   }
+  function openYahooDtacDraft() {
+    const item = items.find((entry) => entry.id === messageConnectionId)
+    if (!item || !canManage) return
+    const fields = selected?.id === item.id ? draft : item.fields
+    const beneficiary = fields.Beneficiar.trim() || 'BENEFICIAR'
+    const location = fields.Amplasament.trim() || fields.AmplasamentA3.trim() || 'amplasament necompletat'
+    const subject = `DTAC - ${beneficiary}`
+    const body = [
+      'Bună ziua,',
+      '',
+      `Vă transmitem atașată documentația DTAC pentru beneficiarul ${beneficiary}, aferentă amplasamentului ${location}.`,
+      '',
+      'Beneficiarul se va prezenta pentru achitarea taxei. După achitarea acesteia, vă rugăm să ne transmiteți autorizația scanată la această adresă de e-mail.',
+      '',
+      'Vă mulțumim pentru sprijin și colaborare.',
+      '',
+      'Cu stimă,',
+      'SC ELMONT S.A.',
+    ].join('\n')
+    const query = new URLSearchParams({ subject, body })
+    if (municipalityEmail.trim()) query.set('to', municipalityEmail.trim())
+    window.open(`https://compose.mail.yahoo.com/?${query.toString()}`, '_blank', 'noopener,noreferrer')
+    setNotice('Am deschis schița DTAC în Yahoo. Atașează documentația înainte de trimitere.')
+  }
+
   async function remove() {
     if (!selected || !canManage || !confirm(`Ștergi definitiv dosarul ${selected.fields.Beneficiar || 'fără nume'}?`)) return
     setBusy('delete')
@@ -223,7 +249,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
   return <div>
     <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
       <div><span className="text-xs font-black uppercase tracking-[.16em] text-[#197fb5]">Documentații electrice</span><h1 className="mt-1 text-3xl font-bold tracking-tight text-[#082b4d]">Branșamente</h1><p className="mt-1 text-sm text-slate-500">ATR → verificare date → contract, notificare, memoriu și dosar A3.</p></div>
-      <div className="flex flex-wrap items-center gap-2"><div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label="Mod de vizualizare"><button type="button" onClick={() => setViewMode('list')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold ${viewMode === 'list' ? 'bg-[#0d5d8b] text-white' : 'text-slate-500 hover:bg-slate-50'}`} title="Lista compacta"><List size={17}/><span className="hidden sm:inline">Lista</span></button><button type="button" onClick={() => setViewMode('grid')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold ${viewMode === 'grid' ? 'bg-[#0d5d8b] text-white' : 'text-slate-500 hover:bg-slate-50'}`} title="Grila extinsa"><LayoutGrid size={17}/><span className="hidden sm:inline">Grila</span></button></div><button type="button" onClick={()=>setShowRegister((value)=>!value)} className={`btn-secondary inline-flex items-center gap-2 ${showRegister ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`}><ClipboardList size={17}/> Registru DEER</button>{canManage ? <><button onClick={()=>openWhatsAppCenter('PROGRAMMED')} disabled={!!busy || !items.length} className="btn-secondary inline-flex items-center gap-2"><MessageCircle size={17}/> Mesaje WhatsApp</button><input ref={fileInput} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => createCase(event.target.files?.[0])}/><button onClick={() => fileInput.current?.click()} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'create' ? <Loader2 size={17} className="animate-spin"/> : <FileUp size={17}/>} Încarcă ATR</button><button onClick={() => createCase()} disabled={!!busy} className="btn-secondary inline-flex items-center gap-2"><Plus size={17}/> Fișă fără ATR</button></> : <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600"><Eye size={16}/> Mod vizualizare</span>}</div>
+      <div className="flex flex-wrap items-center gap-2"><div className="inline-flex rounded-xl border border-slate-200 bg-white p-1 shadow-sm" aria-label="Mod de vizualizare"><button type="button" onClick={() => setViewMode('list')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold ${viewMode === 'list' ? 'bg-[#0d5d8b] text-white' : 'text-slate-500 hover:bg-slate-50'}`} title="Lista compacta"><List size={17}/><span className="hidden sm:inline">Lista</span></button><button type="button" onClick={() => setViewMode('grid')} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold ${viewMode === 'grid' ? 'bg-[#0d5d8b] text-white' : 'text-slate-500 hover:bg-slate-50'}`} title="Grila extinsa"><LayoutGrid size={17}/><span className="hidden sm:inline">Grila</span></button></div><button type="button" onClick={()=>setShowRegister((value)=>!value)} className={`btn-secondary inline-flex items-center gap-2 ${showRegister ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`}><ClipboardList size={17}/> Registru DEER</button>{canManage ? <><button onClick={()=>openWhatsAppCenter('PROGRAMMED')} disabled={!!busy || !items.length} className="btn-secondary inline-flex items-center gap-2"><MessageCircle size={17}/> Mesaje și e-mail</button><input ref={fileInput} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(event) => createCase(event.target.files?.[0])}/><button onClick={() => fileInput.current?.click()} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'create' ? <Loader2 size={17} className="animate-spin"/> : <FileUp size={17}/>} Încarcă ATR</button><button onClick={() => createCase()} disabled={!!busy} className="btn-secondary inline-flex items-center gap-2"><Plus size={17}/> Fișă fără ATR</button></> : <span className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-4 py-2 text-sm font-bold text-slate-600"><Eye size={16}/> Mod vizualizare</span>}</div>
     </header>
     {showRegister && <section className="mb-5 overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div><h2 className="font-bold text-[#082b4d]">Registrul branșamentelor / dosarelor DEER</h2><p className="text-xs text-slate-500">Numerotarea rămâne în ordinea înregistrării. Data predării se completează când dosarul ajunge la DEER.</p></div><span className="rounded-full bg-[#edf7fc] px-3 py-1 text-xs font-black text-[#0d5d8b]">{items.length} dosare</span></div>
@@ -245,10 +271,15 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     {deerOpen && selected && <ConnectionDeerPanel item={selected} fields={draft} canEdit={canEditDeerDate} onClose={()=>setDeerOpen(false)} onSaved={(deerSubmission, deerSubmittedAt)=>setItems((current)=>current.map((entry)=>entry.id===selected.id?{...entry,deerSubmission,deerSubmittedAt,updatedAt:new Date().toISOString()}:entry))}/>}
     {canManage && whatsAppOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4" role="dialog" aria-modal="true">
       <div className="w-full max-w-3xl rounded-[26px] bg-white p-5 shadow-2xl lg:p-7">
-        <div className="mb-5 flex items-start justify-between gap-4"><div><span className="text-xs font-black uppercase tracking-[.14em] text-[#197fb5]">Comunicare beneficiar</span><h2 className="mt-1 text-2xl font-bold text-[#082b4d]">Mesaje WhatsApp predefinite</h2><p className="mt-1 text-sm text-slate-500">Selectează branșamentul și mesajul. Textul poate fi modificat înainte de trimitere.</p></div><button onClick={()=>setWhatsAppOpen(false)} className="round-action" aria-label="Închide"><X size={18}/></button></div>
+        <div className="mb-5 flex items-start justify-between gap-4"><div><span className="text-xs font-black uppercase tracking-[.14em] text-[#197fb5]">Comunicare beneficiar și autorități</span><h2 className="mt-1 text-2xl font-bold text-[#082b4d]">Mesaje și e-mail DTAC</h2><p className="mt-1 text-sm text-slate-500">Trimite mesajul beneficiarului sau deschide în Yahoo schița oficială pentru primărie.</p></div><button onClick={()=>setWhatsAppOpen(false)} className="round-action" aria-label="Închide"><X size={18}/></button></div>
         <div className="grid gap-4 md:grid-cols-2"><label className="text-xs font-bold text-slate-500">Branșament<select value={messageConnectionId} onChange={(event)=>chooseMessageConnection(event.target.value)} className="input-field mt-1.5 w-full bg-white">{items.map((item)=><option key={item.id} value={item.id}>{item.nib} · {item.fields.Beneficiar||'Beneficiar necompletat'}</option>)}</select></label><label className="text-xs font-bold text-slate-500">Tip mesaj<select value={messageTemplate} onChange={(event)=>chooseMessageTemplate(event.target.value as ConnectionWhatsAppTemplateKey)} className="input-field mt-1.5 w-full bg-white">{CONNECTION_WHATSAPP_TEMPLATES.map((template)=><option key={template.key} value={template.key}>{template.label}</option>)}</select></label></div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">{CONNECTION_WHATSAPP_TEMPLATES.map((template)=><button key={template.key} type="button" onClick={()=>chooseMessageTemplate(template.key)} className={`rounded-2xl border p-3 text-left transition ${messageTemplate===template.key?'border-[#78bfe1] bg-[#edf7fc]':'border-slate-200 hover:bg-slate-50'}`}><strong className="block text-sm text-[#082b4d]">{template.label}</strong><span className="mt-1 block text-xs text-slate-500">{template.description}</span></button>)}</div>
-        <label className="mt-4 block text-xs font-bold text-slate-500">Previzualizare și editare<textarea value={messageText} onChange={(event)=>setMessageText(event.target.value)} maxLength={4000} className="input-field mt-1.5 min-h-[190px] w-full resize-y bg-white text-sm leading-6"/></label>
+        <label className="mt-4 block text-xs font-bold text-slate-500">Previzualizare mesaj WhatsApp<textarea value={messageText} onChange={(event)=>setMessageText(event.target.value)} maxLength={4000} className="input-field mt-1.5 min-h-[150px] w-full resize-y bg-white text-sm leading-6"/></label>
+        <section className="mt-4 rounded-2xl border border-[#b9d8e8] bg-[#f4f9fc] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><strong className="flex items-center gap-2 text-sm text-[#082b4d]"><Mail size={16}/> E-mail DTAC către primărie</strong><p className="mt-1 text-xs text-slate-500">Subiect: DTAC - {items.find((item)=>item.id===messageConnectionId)?.fields.Beneficiar||'BENEFICIAR'}</p></div><button type="button" onClick={openYahooDtacDraft} className="btn-secondary inline-flex items-center gap-2 !border-[#78bfe1] !bg-white"><Mail size={16}/> Deschide schița în Yahoo</button></div>
+          <label className="mt-3 block text-xs font-bold text-slate-500">Adresa e-mail a primăriei <span className="font-normal text-slate-400">(opțional, se poate completa și în Yahoo)</span><input type="email" value={municipalityEmail} onChange={(event)=>setMunicipalityEmail(event.target.value)} placeholder="registratura@primarie.ro" className="input-field mt-1.5 w-full bg-white"/></label>
+          <p className="mt-2 text-[11px] leading-5 text-slate-500">Yahoo va deschide mesajul cu subiectul și textul completate automat. Din motive de securitate ale browserului, documentația DTAC se atașează manual înainte de trimitere.</p>
+        </section>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-500">Destinatar: <strong>{items.find((item)=>item.id===messageConnectionId)?.fields.Telefon||'telefon necompletat'}</strong></p><div className="flex gap-2"><button onClick={()=>setWhatsAppOpen(false)} className="btn-secondary">Renunță</button><button onClick={sendWhatsAppMessage} disabled={busy==='whatsapp'||!messageText.trim()} className="btn-primary inline-flex items-center gap-2">{busy==='whatsapp'?<Loader2 size={17} className="animate-spin"/>:<MessageCircle size={17}/>} Trimite pe WhatsApp</button></div></div>
       </div>
     </div>}  </div>
