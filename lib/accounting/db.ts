@@ -1,6 +1,7 @@
 import { Pool } from "pg";
+import chartOfAccounts from "./chart-of-accounts.ro.json";
 
-const ACCOUNTING_SCHEMA_VERSION = 12;
+const ACCOUNTING_SCHEMA_VERSION = 14;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -181,6 +182,7 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "vatCategoryCode" TEXT NOT NULL DEFAULT 'S';`);
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "taxExemptionReasonCode" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "taxExemptionReason" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "revenueAccount" TEXT NOT NULL DEFAULT '704';`);
   await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "unitCode" TEXT NOT NULL DEFAULT 'H87';`);
   await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "vatCategoryCode" TEXT NOT NULL DEFAULT 'S';`);
   await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "taxExemptionReasonCode" TEXT NOT NULL DEFAULT '';`);
@@ -308,6 +310,14 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerCountryCode" TEXT NOT NULL DEFAULT 'RO';`);
   await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "vatRate" NUMERIC(5,2);`);
   await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerVatPayer" INTEGER NOT NULL DEFAULT -1;`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerRegCom" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerAddress" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerCounty" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerCity" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerPostalCode" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerPhone" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerRegistrationStatus" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerInactive" INTEGER NOT NULL DEFAULT 0;`);
   await pool.query(`
     CREATE TABLE IF NOT EXISTS tax_declaration_periods (
       id SERIAL PRIMARY KEY,
@@ -364,6 +374,80 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "invoiceSeries" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "allocatedInvoiceFrom" INTEGER NOT NULL DEFAULT 0;`);
   await pool.query(`ALTER TABLE tax_declaration_settings ADD COLUMN IF NOT EXISTS "allocatedInvoiceTo" INTEGER NOT NULL DEFAULT 0;`);
+
+  // Registrul contabil in partida dubla. Tabelele sunt tinute langa modulul
+  // de facturare pentru ca emiterea si incasarea sa fie contate in aceeasi
+  // tranzactie cu documentul sursa.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS accounting_accounts (
+      code TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      nature TEXT NOT NULL CHECK (nature IN ('DEBIT','CREDIT','BOTH','GROUP')),
+      "allowPosting" INTEGER NOT NULL DEFAULT 1,
+      active INTEGER NOT NULL DEFAULT 1,
+      system INTEGER NOT NULL DEFAULT 1,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS accounting_periods (
+      year INTEGER NOT NULL CHECK (year BETWEEN 2000 AND 2100),
+      month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+      status TEXT NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN','CLOSED')),
+      "closedAt" TIMESTAMPTZ,
+      "closedBy" TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      PRIMARY KEY (year, month)
+    );
+    CREATE TABLE IF NOT EXISTS accounting_counters (
+      year INTEGER PRIMARY KEY,
+      "lastNumber" INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE TABLE IF NOT EXISTS journal_entries (
+      id BIGSERIAL PRIMARY KEY,
+      "entryNumber" INTEGER NOT NULL,
+      year INTEGER NOT NULL,
+      date DATE NOT NULL,
+      description TEXT NOT NULL,
+      "documentNumber" TEXT NOT NULL DEFAULT '',
+      "sourceType" TEXT NOT NULL DEFAULT 'MANUAL',
+      "sourceId" INTEGER,
+      status TEXT NOT NULL DEFAULT 'POSTED' CHECK (status IN ('POSTED','REVERSED')),
+      "reversalOfId" BIGINT REFERENCES journal_entries(id),
+      "createdBy" TEXT NOT NULL DEFAULT '',
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "postedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(year, "entryNumber")
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS "journal_entries_source_key"
+      ON journal_entries ("sourceType", "sourceId") WHERE "sourceId" IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS "journal_entries_date_idx" ON journal_entries (date, id);
+    CREATE TABLE IF NOT EXISTS journal_lines (
+      id BIGSERIAL PRIMARY KEY,
+      "entryId" BIGINT NOT NULL REFERENCES journal_entries(id) ON DELETE CASCADE,
+      "lineNumber" INTEGER NOT NULL,
+      "accountCode" TEXT NOT NULL REFERENCES accounting_accounts(code),
+      debit NUMERIC(16,2) NOT NULL DEFAULT 0 CHECK (debit >= 0),
+      credit NUMERIC(16,2) NOT NULL DEFAULT 0 CHECK (credit >= 0),
+      explanation TEXT NOT NULL DEFAULT '',
+      "partnerId" INTEGER REFERENCES clients(id) ON DELETE SET NULL,
+      UNIQUE("entryId", "lineNumber"),
+      CHECK ((debit > 0 AND credit = 0) OR (credit > 0 AND debit = 0))
+    );
+    CREATE INDEX IF NOT EXISTS "journal_lines_account_idx" ON journal_lines ("accountCode", "entryId");
+  `);
+
+  // Planul general de conturi primit de la utilizator. Upsert-ul actualizeaza
+  // denumirile oficiale, dar pastreaza conturile analitice create in aplicatie.
+  await pool.query(
+    `INSERT INTO accounting_accounts (code,name,nature,"allowPosting",system)
+     SELECT x.code,x.name,x.nature,CASE WHEN x."allowPosting" THEN 1 ELSE 0 END,1
+       FROM jsonb_to_recordset($1::jsonb)
+         AS x(code text,name text,nature text,"allowPosting" boolean)
+     ON CONFLICT (code) DO UPDATE SET
+       name=EXCLUDED.name,nature=EXCLUDED.nature,
+       "allowPosting"=EXCLUDED."allowPosting","updatedAt"=now()`,
+    [JSON.stringify(chartOfAccounts)],
+  );
   // Populam idempotent registrul cu incasarile deja existente in Facturare.
   await pool.query(`
     INSERT INTO ref_transactions
@@ -386,29 +470,27 @@ async function ensureSchema(pool: Pool) {
     CROSS JOIN company co
     ON CONFLICT ("paymentId") WHERE "paymentId" IS NOT NULL DO NOTHING;
   `);
+  await pool.query(`
+    UPDATE ref_transactions r SET
+      "partnerName"=COALESCE(NULLIF(r."partnerName",''),c.name),
+      "partnerCif"=COALESCE(NULLIF(r."partnerCif",''),c.cif),
+      "partnerCountryCode"=COALESCE(NULLIF(r."partnerCountryCode",''),c."countryCode",'RO'),
+      "partnerVatPayer"=CASE WHEN r."partnerVatPayer"=-1 THEN c."vatPayer" ELSE r."partnerVatPayer" END,
+      "partnerRegCom"=COALESCE(NULLIF(r."partnerRegCom",''),c."regCom"),
+      "partnerAddress"=COALESCE(NULLIF(r."partnerAddress",''),c.address),
+      "partnerCounty"=COALESCE(NULLIF(r."partnerCounty",''),c.judet),
+      "partnerCity"=COALESCE(NULLIF(r."partnerCity",''),c.city),
+      "partnerPostalCode"=COALESCE(NULLIF(r."partnerPostalCode",''),c."postalCode"),
+      "partnerPhone"=COALESCE(NULLIF(r."partnerPhone",''),c.phone)
+    FROM invoices i JOIN clients c ON c.id=i."clientId"
+    WHERE r."invoiceId"=i.id AND r.source='AUTO_PAYMENT';
+  `);
 }
 
 async function ensureSchemaVersion(pool: Pool) {
   try {
     const { rows } = await pool.query(`SELECT version FROM accounting_schema_meta WHERE id=1`);
     if (Number(rows[0]?.version || 0) >= ACCOUNTING_SCHEMA_VERSION) return;
-    if (Number(rows[0]?.version) === 10) {
-      // Additive upgrade only: do not rerun historical financial backfills.
-      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "anafSendAfter" TIMESTAMPTZ;`);
-      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "anafApprovedEnvironment" TEXT;`);
-      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "integrationSource" TEXT;`);
-      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "externalId" TEXT;`);
-      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_integration_reference_key" ON invoices ("integrationSource", "externalId") WHERE "integrationSource" IS NOT NULL AND "externalId" IS NOT NULL;`);
-      await pool.query(`UPDATE accounting_schema_meta SET version=$1 WHERE id=1 AND version=10`, [ACCOUNTING_SCHEMA_VERSION]);
-      return;
-    }
-    if (Number(rows[0]?.version) === 11) {
-      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "integrationSource" TEXT;`);
-      await pool.query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS "externalId" TEXT;`);
-      await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "invoices_integration_reference_key" ON invoices ("integrationSource", "externalId") WHERE "integrationSource" IS NOT NULL AND "externalId" IS NOT NULL;`);
-      await pool.query(`UPDATE accounting_schema_meta SET version=$1 WHERE id=1 AND version=11`, [ACCOUNTING_SCHEMA_VERSION]);
-      return;
-    }
   } catch (error) {
     if ((error as { code?: string }).code !== "42P01") throw error;
   }

@@ -30,6 +30,14 @@ export type RefTransaction = {
   partnerCif: string;
   partnerCountryCode: string;
   partnerVatPayer: number;
+  partnerRegCom: string;
+  partnerAddress: string;
+  partnerCounty: string;
+  partnerCity: string;
+  partnerPostalCode: string;
+  partnerPhone: string;
+  partnerRegistrationStatus: string;
+  partnerInactive: number;
   notes: string;
   createdAt: string;
 };
@@ -58,6 +66,14 @@ export type RefTransactionInput = {
   partnerCif?: string;
   partnerCountryCode?: string;
   partnerVatPayer?: number;
+  partnerRegCom?: string;
+  partnerAddress?: string;
+  partnerCounty?: string;
+  partnerCity?: string;
+  partnerPostalCode?: string;
+  partnerPhone?: string;
+  partnerRegistrationStatus?: string;
+  partnerInactive?: number;
 };
 
 function round2(value: number) {
@@ -145,11 +161,14 @@ export async function createRefTransaction(input: RefTransactionInput): Promise<
   const { rows } = await pool.query(
     `INSERT INTO ref_transactions
       (type, date, "documentType", "documentNumber", explanation, "grossAmount", "vatAmount", "netAmount",
-       "fiscalCategory", "deductibilityPercent", "fiscalAmount", source, notes, "partnerName", "partnerCif", "partnerCountryCode", "vatRate", "partnerVatPayer")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'MANUAL',$12,$13,$14,$15,$16,$17) RETURNING id`,
+       "fiscalCategory", "deductibilityPercent", "fiscalAmount", source, notes, "partnerName", "partnerCif", "partnerCountryCode", "vatRate", "partnerVatPayer",
+       "partnerRegCom","partnerAddress","partnerCounty","partnerCity","partnerPostalCode","partnerPhone","partnerRegistrationStatus","partnerInactive")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'MANUAL',$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id`,
     [input.type, input.date, input.documentType.trim(), input.documentNumber?.trim() || "", input.explanation.trim(),
       gross, vat, net, input.fiscalCategory, percent, fiscalAmount, input.notes?.trim() || "",
-      input.partnerName?.trim() || "", input.partnerCif?.trim().toUpperCase() || "", input.partnerCountryCode?.trim().toUpperCase() || "RO", vatRate, Number(input.partnerVatPayer??-1)]
+      input.partnerName?.trim() || "", input.partnerCif?.trim().toUpperCase() || "", input.partnerCountryCode?.trim().toUpperCase() || "RO", vatRate, Number(input.partnerVatPayer??-1),
+      input.partnerRegCom?.trim() || "", input.partnerAddress?.trim() || "", input.partnerCounty?.trim() || "", input.partnerCity?.trim() || "",
+      input.partnerPostalCode?.trim() || "", input.partnerPhone?.trim() || "", input.partnerRegistrationStatus?.trim() || "", Number(input.partnerInactive || 0)]
   );
   return Number(rows[0].id);
 }
@@ -174,14 +193,20 @@ export async function createRefIncomeForPayment(input: {
     : gross;
   const vat = round2(gross - net);
   const fiscalAmount = vatPayer ? net : gross;
+  const partner = (await executor.query(
+    `SELECT c.* FROM invoices i JOIN clients c ON c.id=i."clientId" WHERE i.id=$1`,
+    [input.invoiceId],
+  )).rows[0] || {};
   await executor.query(
     `INSERT INTO ref_transactions
       (type, date, "documentType", "documentNumber", explanation, "grossAmount", "vatAmount", "netAmount",
-       "fiscalCategory", "deductibilityPercent", "fiscalAmount", "invoiceId", "paymentId", source)
-     VALUES ('INCOME',$1,'FACTURA',$2,$3,$4,$5,$6,'TAXABLE_INCOME',100,$7,$8,$9,'AUTO_PAYMENT')
+       "fiscalCategory", "deductibilityPercent", "fiscalAmount", "invoiceId", "paymentId", source,
+       "partnerName","partnerCif","partnerCountryCode","partnerVatPayer","partnerRegCom","partnerAddress","partnerCounty","partnerCity","partnerPostalCode","partnerPhone")
+     VALUES ('INCOME',$1,'FACTURA',$2,$3,$4,$5,$6,'TAXABLE_INCOME',100,$7,$8,$9,'AUTO_PAYMENT',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      ON CONFLICT ("paymentId") WHERE "paymentId" IS NOT NULL DO NOTHING`,
     [input.date, `${input.series} ${input.number}`, `Încasare factură – ${input.clientName}`, gross, vat, net,
-      fiscalAmount, input.invoiceId, input.paymentId]
+      fiscalAmount, input.invoiceId, input.paymentId, input.clientName, partner.cif || "", partner.countryCode || "RO", Number(partner.vatPayer || 0),
+      partner.regCom || "", partner.address || "", partner.judet || "", partner.city || "", partner.postalCode || "", partner.phone || ""]
   );
 }
 

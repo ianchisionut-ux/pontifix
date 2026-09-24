@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Download } from "lucide-react";
 
-type Product = { id: number; name: string; um: string; price: number; cost: number; vatRate: number; unitCode: string; vatCategoryCode: string; taxExemptionReasonCode: string; taxExemptionReason: string };
-const emptyForm = { name: "", um: "buc", price: 0, cost: 0, vatRate: 21, unitCode: "H87", vatCategoryCode: "S", taxExemptionReasonCode: "", taxExemptionReason: "" };
+type Product = { id: number; name: string; um: string; price: number; cost: number; vatRate: number; unitCode: string; vatCategoryCode: string; taxExemptionReasonCode: string; taxExemptionReason: string; revenueAccount: string };
+const emptyForm = { name: "", um: "buc", price: 0, cost: 0, vatRate: 21, unitCode: "H87", vatCategoryCode: "S", taxExemptionReasonCode: "", taxExemptionReason: "", revenueAccount: "704" };
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
@@ -41,7 +41,7 @@ export default function ProductsPage() {
   }
 
   function edit(p: Product) {
-    setForm({ name: p.name, um: p.um, price: p.price, cost: p.cost, vatRate: p.vatRate, unitCode: p.unitCode || "H87", vatCategoryCode: p.vatCategoryCode || "S", taxExemptionReasonCode: p.taxExemptionReasonCode || "", taxExemptionReason: p.taxExemptionReason || "" });
+    setForm({ name: p.name, um: p.um, price: p.price, cost: p.cost, vatRate: p.vatRate, unitCode: p.unitCode || "H87", vatCategoryCode: p.vatCategoryCode || "S", taxExemptionReasonCode: p.taxExemptionReasonCode || "", taxExemptionReason: p.taxExemptionReason || "", revenueAccount: p.revenueAccount || "704" });
     setEditingId(p.id);
     setShowForm(true);
   }
@@ -119,6 +119,14 @@ export default function ProductsPage() {
             />
           </div>
           <div>
+            <label className="field-label">Cont venit</label>
+            <select className="input" value={form.revenueAccount} onChange={(e) => setForm({ ...form, revenueAccount: e.target.value })}>
+              <option value="704">704 · Servicii prestate</option>
+              <option value="707">707 · Vânzarea mărfurilor</option>
+              <option value="708">708 · Alte activități</option>
+            </select>
+          </div>
+          <div>
             <label className="field-label">Cod U.M. UBL</label>
             <select className="input" value={form.unitCode} onChange={(e) => setForm({ ...form, unitCode: e.target.value })}>
               <option value="H87">H87 · bucată</option><option value="C62">C62 · unitate</option><option value="HUR">HUR · oră</option><option value="DAY">DAY · zi</option><option value="MTR">MTR · metru</option><option value="KGM">KGM · kilogram</option><option value="LTR">LTR · litru</option>
@@ -147,14 +155,14 @@ export default function ProductsPage() {
               <th>U.M. / UBL</th>
               <th className="text-right">Pret vanzare</th>
               <th className="text-right">Cost</th>
-              <th className="text-right">TVA %</th>
+              <th className="text-right">TVA %</th><th>Cont venit</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             {products.length === 0 && (
               <tr>
-                <td colSpan={6} className="empty-row">
+                <td colSpan={7} className="empty-row">
                   Niciun produs/serviciu inregistrat inca.
                 </td>
               </tr>
@@ -166,6 +174,7 @@ export default function ProductsPage() {
                 <td className="text-right num">{p.price.toFixed(2)}</td>
                 <td className="text-right num" style={{ color: "var(--text-faint)" }}>{p.cost.toFixed(2)}</td>
                 <td className="text-right num">{p.vatRate}%</td>
+                <td><span className="doc-chip">{p.revenueAccount || "704"}</span></td>
                 <td className="text-right space-x-3">
                   <button onClick={() => edit(p)} className="link-action">
                     editeaza

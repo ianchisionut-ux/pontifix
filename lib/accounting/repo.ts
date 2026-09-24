@@ -2,6 +2,11 @@ import { ready } from "./db";
 import { createRefIncomeForPayment } from "./ref";
 import type { PoolClient } from "pg";
 import { bucharestDate } from "./date";
+import {
+  postInvoiceToLedger,
+  postPaymentToLedger,
+  removeAutomaticEntriesForInvoice,
+} from "./ledger";
 
 export type User = {
   id: number;
@@ -75,6 +80,7 @@ export type Product = {
   vatCategoryCode: string;
   taxExemptionReasonCode: string;
   taxExemptionReason: string;
+  revenueAccount: string;
 };
 
 export type InvoiceItemInput = {
@@ -477,8 +483,11 @@ export async function createProduct(
   data: Omit<Product, "id">,
 ): Promise<number> {
   const pool = await ready();
+  const revenueAccount = data.revenueAccount || "704";
+  const account = (await pool.query(`SELECT active,"allowPosting" FROM accounting_accounts WHERE code=$1`, [revenueAccount])).rows[0];
+  if (!account?.active || !account.allowPosting) throw new Error("Contul de venit selectat nu permite postare.");
   const { rows } = await pool.query(
-    `INSERT INTO products (name, um, price, cost, "vatRate", "unitCode", "vatCategoryCode", "taxExemptionReasonCode", "taxExemptionReason") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    `INSERT INTO products (name, um, price, cost, "vatRate", "unitCode", "vatCategoryCode", "taxExemptionReasonCode", "taxExemptionReason", "revenueAccount") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
     [
       data.name,
       data.um,
@@ -489,6 +498,7 @@ export async function createProduct(
       data.vatCategoryCode || "S",
       data.taxExemptionReasonCode || "",
       data.taxExemptionReason || "",
+      revenueAccount,
     ],
   );
   return rows[0].id as number;
@@ -496,8 +506,11 @@ export async function createProduct(
 
 export async function updateProduct(id: number, data: Omit<Product, "id">) {
   const pool = await ready();
+  const revenueAccount = data.revenueAccount || "704";
+  const account = (await pool.query(`SELECT active,"allowPosting" FROM accounting_accounts WHERE code=$1`, [revenueAccount])).rows[0];
+  if (!account?.active || !account.allowPosting) throw new Error("Contul de venit selectat nu permite postare.");
   await pool.query(
-    `UPDATE products SET name=$1, um=$2, price=$3, cost=$4, "vatRate"=$5, "unitCode"=$6, "vatCategoryCode"=$7, "taxExemptionReasonCode"=$8, "taxExemptionReason"=$9 WHERE id=$10`,
+    `UPDATE products SET name=$1, um=$2, price=$3, cost=$4, "vatRate"=$5, "unitCode"=$6, "vatCategoryCode"=$7, "taxExemptionReasonCode"=$8, "taxExemptionReason"=$9, "revenueAccount"=$10 WHERE id=$11`,
     [
       data.name,
       data.um,
@@ -508,6 +521,7 @@ export async function updateProduct(id: number, data: Omit<Product, "id">) {
       data.vatCategoryCode || "S",
       data.taxExemptionReasonCode || "",
       data.taxExemptionReason || "",
+      revenueAccount,
       id,
     ],
   );
@@ -794,6 +808,8 @@ export async function createInvoice(input: {
       );
     }
 
+    await postInvoiceToLedger(invoiceId, connection);
+
     if (input.paidOnSpot) {
       const { rows: paymentRows } = await connection.query(
         `INSERT INTO payments ("invoiceId", amount, date, method, notes) VALUES ($1,$2,$3,'numerar',$4) RETURNING id`,
@@ -813,6 +829,7 @@ export async function createInvoice(input: {
         },
         connection,
       );
+      await postPaymentToLedger(Number(paymentRows[0].id), connection);
       const receiptNumber = await takeNextNumber("CH1", connection);
       await connection.query(
         `INSERT INTO receipts (series, number, "invoiceId", "issueDate", amount, cashier) VALUES ('CH1',$1,$2,$3,$4,$5)`,
@@ -1043,6 +1060,7 @@ export async function correctUnsentInvoice(id: number, input: { clientId?: numbe
     }
     await connection.query(`UPDATE invoices SET "dueDate"=$1,"paymentTerms"=$2,notes=$3 WHERE id=$4`, [input.dueDate || null, input.paymentTerms, input.notes, id]);
     for (const item of input.items) await connection.query(`UPDATE invoice_items SET description=$1 WHERE id=$2 AND "invoiceId"=$3`, [item.description.trim(), item.id, id]);
+    if (changedMoney || changedClient) await postInvoiceToLedger(id, connection);
     // Preserve payments, receipts, amounts, fiscal classification and transmission history.
     await connection.query("COMMIT");
   } catch (error) { await connection.query("ROLLBACK"); throw error; }
@@ -1077,6 +1095,7 @@ export async function deleteInvoice(id: number) {
     }
 
     if (invoice.invoiceType === "STORNO") {
+      await removeAutomaticEntriesForInvoice(id, connection);
       await connection.query(`DELETE FROM receipts WHERE "invoiceId"=$1`, [id]);
       await connection.query(`DELETE FROM invoices WHERE id=$1`, [id]);
       if (invoice.originalInvoiceId) {
@@ -1098,6 +1117,8 @@ export async function deleteInvoice(id: number) {
         }
       }
     } else {
+      const related = await connection.query(`SELECT id FROM invoices WHERE id=$1 OR "originalInvoiceId"=$1`, [id]);
+      for (const row of related.rows) await removeAutomaticEntriesForInvoice(Number(row.id), connection);
       await connection.query(
         `DELETE FROM receipts WHERE "invoiceId"=$1 OR "invoiceId" IN (SELECT id FROM invoices WHERE "originalInvoiceId"=$1)`,
         [id],
@@ -1183,6 +1204,7 @@ export async function addPayment(
       },
       connection,
     );
+    await postPaymentToLedger(Number(paymentRows[0].id), connection);
 
     const paid = round2(alreadyPaid + amount);
     const status: Invoice["status"] =

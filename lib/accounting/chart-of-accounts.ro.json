@@ -1,0 +1,3464 @@
+[
+  {
+    "code": "101",
+    "name": "Capital",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1011",
+    "name": "Capital subscris nevarsat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1012",
+    "name": "Capital subscris vărsat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1015",
+    "name": "Patrimoniul regiei",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1016",
+    "name": "Patrimoniul public",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1017",
+    "name": "Patrimoniul privat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1018",
+    "name": "Patrimoniul institutelor naționale de cercetare-dezvoltare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "103",
+    "name": "Alte elemente de capitaluri proprii",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1031",
+    "name": "Beneficii acordate angajaților sub forma instrumentelor de capitaluri proprii",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1033",
+    "name": "Diferențe de curs valutar în relație cu investiția neta într-o entitate străină",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "1038",
+    "name": "Diferențe din modificarea valorii juste a activelor financiare disponibile în vederea vânzării și alte elemente de capitaluri proprii",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "104",
+    "name": "Prime de capital",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1041",
+    "name": "Prime de emisiune",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1042",
+    "name": "Prime de fuziune/divizare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1043",
+    "name": "Prime de aport",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1044",
+    "name": "Prime de conversie a obligațiunilor în acțiuni",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "105",
+    "name": "Rezerve din reevaluare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "106",
+    "name": "Rezerve",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1061",
+    "name": "Rezerve legale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1063",
+    "name": "Rezerve statutare sau contractuale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1068",
+    "name": "Alte rezerve",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "107",
+    "name": "Diferențe de curs valutar din conversie",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "108",
+    "name": "Interese care nu controlează",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1081",
+    "name": "Interese care nu controlează - rezultatul exercițiului financiar",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "1082",
+    "name": "Interese care nu controlează - alte capitaluri proprii",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "109",
+    "name": "Acțiuni proprii",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1091",
+    "name": "Acțiuni proprii deținute pe termen scurt",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1092",
+    "name": "Acțiuni proprii deținute pe termen lung",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1095",
+    "name": "Acțiuni proprii reprezentând titluri deținute de societatea absorbita la societatea absorbanta",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "117",
+    "name": "Rezultatul reportat",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1171",
+    "name": "Rezultatul reportat reprezentând profitul nerepartizat sau pierderea neacoperita",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "1172",
+    "name": "Rezultatul reportat provenit din adoptarea pentru prima data a IAS, mai puțin IAS 29*",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "1173",
+    "name": "Rezultatul reportat provenit din modificările politicilor contabile",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "1174",
+    "name": "Rezultatul reportat provenit din corectarea erorilor contabile",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "1175",
+    "name": "Rezultatul reportat reprezentând surplusul realizat din rezerve din reevaluare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1176",
+    "name": "Rezultatul reportat provenit din trecerea la aplicarea reglementarilor contabile conforme cu directivele europene",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "121",
+    "name": "Profit sau pierdere",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "129",
+    "name": "Repartizarea profitului (A) cedarea cu titlu gratuit sau anularea instrumentelor de capitaluri proprii",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "141",
+    "name": "Câștiguri legate de vânzarea sau anularea instrumentelor de capitaluri proprii",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1411",
+    "name": "Câștiguri legate de vânzarea instrumentelor de capitaluri proprii",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1412",
+    "name": "Câștiguri legate de anularea instrumentelor de capitaluri proprii",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "149",
+    "name": "Pierderi legate de emiterea, răscumpărarea, vânzarea, cedarea cu titlu gratuit sau anularea instrumentelor de capitaluri proprii",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1491",
+    "name": "Pierderi rezultate din vânzarea instrumentelor de capitaluri proprii",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1495",
+    "name": "Pierderi rezultate din reorganizări, care sunt determinate de anularea titlurilor deținute",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1496",
+    "name": "Pierderi rezultate din reorganizări de societăți, corespunzătoare activului net negativ al societății absorbite",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "1498",
+    "name": "Alte pierderi legate de instrumentele de capitaluri proprii",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "151",
+    "name": "Provizioane",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1511",
+    "name": "Provizioane pentru litigii",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1512",
+    "name": "Provizioane pentru garanții acordate clienților",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1513",
+    "name": "Provizioane pentru dezafectare imobilizări corporale și alte acțiuni similare legate de acestea",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1514",
+    "name": "Provizioane pentru restructurare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1515",
+    "name": "Provizioane pentru pensii și obligații similare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1516",
+    "name": "Provizioane pentru impozite",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1517",
+    "name": "Provizioane pentru terminarea contractului de munca",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1518",
+    "name": "Alte provizioane",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "161",
+    "name": "Împrumuturi din emisiuni de obligațiuni",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1614",
+    "name": "Împrumuturi externe din emisiuni de obligațiuni garantate de stat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1615",
+    "name": "Împrumuturi externe din emisiuni de obligațiuni garantate de bănci",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1617",
+    "name": "Împrumuturi interne din emisiuni de obligațiuni garantate de stat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1618",
+    "name": "Alte împrumuturi din emisiuni de obligațiuni",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "162",
+    "name": "Credite bancare pe termen lung",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1621",
+    "name": "Credite bancare pe termen lung",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1622",
+    "name": "Credite bancare pe termen lung nerambursate la scadenta",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1623",
+    "name": "Credite externe guvernamentale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1624",
+    "name": "Credite bancare externe garantate de stat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1625",
+    "name": "Credite bancare externe garantate de bănci",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1626",
+    "name": "Credite de la trezoreria statului",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1627",
+    "name": "Credite bancare interne garantate de stat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "166",
+    "name": "Datorii care privesc imobilizările financiare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1661",
+    "name": "Datorii fata de entitățile afiliate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1663",
+    "name": "Datorii fata de entitățile asociate și entitățile controlate în comun",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "167",
+    "name": "Alte împrumuturi și datorii asimilate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "168",
+    "name": "Dobânzi aferente împrumuturilor și datoriilor asimilate",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1681",
+    "name": "Dobânzi aferente împrumuturilor din emisiuni de obligațiuni",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1682",
+    "name": "Dobânzi aferente creditelor bancare pe termen lung",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1685",
+    "name": "Dobânzi aferente datoriilor fata de entitățile afiliate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1686",
+    "name": "Dobânzi aferente datoriilor fata de entitățile asociate și entitățile controlate în comun",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1687",
+    "name": "Dobânzi aferente altor împrumuturi și datorii asimilate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "169",
+    "name": "Prime privind rambursarea obligațiunilor și a altor datorii",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "1691",
+    "name": "Prime privind rambursarea obligațiunilor",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "1692",
+    "name": "Prime privind rambursarea altor datorii",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "201",
+    "name": "Cheltuieli de constituire",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "203",
+    "name": "Cheltuieli de dezvoltare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "205",
+    "name": "Concesiuni, brevete, licențe, mărci comerciale, drepturi și active similare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "206",
+    "name": "Active necorporale de explorare și evaluare a resurselor minerale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "207",
+    "name": "Fond comercial",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2071",
+    "name": "Fond comercial pozitiv",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2075",
+    "name": "Fond comercial negativ",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "208",
+    "name": "Alte imobilizări necorporale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "211",
+    "name": "Terenuri și amenajări de terenuri",
+    "nature": "DEBIT",
+    "allowPosting": false
+  },
+  {
+    "code": "2111",
+    "name": "Terenuri",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2112",
+    "name": "Amenajări de terenuri",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "212",
+    "name": "Construcții",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "213",
+    "name": "Instalații tehnice și mijloace de transport",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2131",
+    "name": "Echipamente tehnologice (mașini, utilaje și instalații de lucru)",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2132",
+    "name": "Aparate și instalații de măsurare, control și reglare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2133",
+    "name": "Mijloace de transport",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "214",
+    "name": "Mobilier, aparatura birotica, echipamente de protecție a valorilor umane și materiale și alte active corporale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "215",
+    "name": "Investiții imobiliare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "216",
+    "name": "Active corporale de explorare și evaluare a resurselor minerale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "217",
+    "name": "Active biologice productive",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "223",
+    "name": "Instalații tehnice și mijloace de transport în curs de aprovizionare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "224",
+    "name": "Mobilier, aparatura birotica, echipamente de protecție a valorilor umane și materiale și alte active corporale în curs de aprovizionare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "227",
+    "name": "Active biologice productive în curs de aprovizionare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "231",
+    "name": "Imobilizări corporale în curs de execuție",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "235",
+    "name": "Investiții imobiliare în curs de execuție",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "261",
+    "name": "Acțiuni deținute la entitățile afiliate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "262",
+    "name": "Acțiuni deținute la entități asociate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "263",
+    "name": "Acțiuni deținute la entități controlate în comun",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "264",
+    "name": "Titluri puse în echivalenta",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "265",
+    "name": "Alte titluri imobilizate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "266",
+    "name": "Certificate verzi amânate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "267",
+    "name": "Creanțe imobilizate",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2671",
+    "name": "Sume de încasat de la entitățile afiliate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2672",
+    "name": "Dobândă aferenta sumelor de încasat de la entitățile afiliate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2673",
+    "name": "Creanțe fata de entitățile asociate și entitățile controlate în comun",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2674",
+    "name": "Dobândă aferenta creanțelor fata de entitățile asociate și entitățile controlate în comun",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2675",
+    "name": "Împrumuturi acordate pe termen lung",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2676",
+    "name": "Dobândă aferenta împrumuturilor acordate pe termen lung",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2677",
+    "name": "Obligațiuni achiziționate cu ocazia emisiunilor efectuate de terti",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2678",
+    "name": "Alte creanțe imobilizate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2679",
+    "name": "Dobânzi aferente altor creanțe imobilizate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "269",
+    "name": "Vărsăminte de efectuat pentru imobilizări financiare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2691",
+    "name": "Vărsăminte de efectuat privind acțiunile deținute la entitățile afiliate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2692",
+    "name": "Vărsăminte de efectuat privind acțiunile deținute la entități asociate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2693",
+    "name": "Vărsăminte de efectuat privind acțiunile deținute la entități controlate în comun",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2695",
+    "name": "Vărsăminte de efectuat pentru alte imobilizări financiare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "280",
+    "name": "Amortizări privind imobilizările necorporale",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2801",
+    "name": "Amortizarea cheltuielilor de constituire",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2803",
+    "name": "Amortizarea cheltuielilor de dezvoltare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2805",
+    "name": "Amortizarea concesiunilor, brevetelor, licențelor, mărcilor comerciale, drepturilor și activelor similare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2806",
+    "name": "Amortizarea activelor necorporale de explorare și evaluare a resurselor minerale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2807",
+    "name": "Amortizarea fondului comercial",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2808",
+    "name": "Amortizarea altor imobilizări necorporale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "281",
+    "name": "Amortizări privind imobilizările corporale",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2811",
+    "name": "Amortizarea amenajărilor de terenuri",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2812",
+    "name": "Amortizarea construcțiilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2813",
+    "name": "Amortizarea instalațiilor și mijloacelor de transport",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2814",
+    "name": "Amortizarea altor imobilizări corporale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2815",
+    "name": "Amortizarea investițiilor imobiliare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2816",
+    "name": "Amortizarea activelor corporale de explorare și evaluare a resurselor minerale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2817",
+    "name": "Amortizarea activelor biologice productive",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "290",
+    "name": "Ajustări pentru deprecierea imobilizărilor necorporale",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2903",
+    "name": "Ajustări pentru deprecierea cheltuielilor de dezvoltare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2905",
+    "name": "Ajustări pentru deprecierea concesiunilor, brevetelor, licențelor, mărcilor comerciale, drepturilor și activelor similare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2906",
+    "name": "Ajustări pentru deprecierea activelor necorporale de explorare și evaluare a resurselor minerale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2908",
+    "name": "Ajustări pentru deprecierea altor imobilizări necorporale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "291",
+    "name": "Ajustări pentru deprecierea imobilizărilor corporale",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2911",
+    "name": "Ajustări pentru deprecierea terenurilor și amenajărilor de terenuri",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2912",
+    "name": "Ajustări pentru deprecierea construcțiilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2913",
+    "name": "Ajustări pentru deprecierea instalațiilor și mijloacelor de transport",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2914",
+    "name": "Ajustări pentru deprecierea altor imobilizări corporale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2915",
+    "name": "Ajustări pentru deprecierea investițiilor imobiliare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2916",
+    "name": "Ajustări pentru deprecierea activelor corporale de explorare și evaluare a resurselor minerale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2917",
+    "name": "Ajustări pentru deprecierea activelor biologice productive",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "293",
+    "name": "Ajustări pentru deprecierea imobilizărilor în curs de execuție",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2931",
+    "name": "Ajustări pentru deprecierea imobilizărilor corporale în curs de execuție",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2935",
+    "name": "Ajustări pentru deprecierea investițiilor imobiliare în curs de execuție",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "296",
+    "name": "Ajustări pentru pierderea de valoare a imobilizărilor financiare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "2961",
+    "name": "Ajustări pentru pierderea de valoare a acțiunilor deținute la entitățile afiliate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2962",
+    "name": "Ajustări pentru pierderea de valoare a acțiunilor deținute la entități asociate și entități controlate în comun",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2963",
+    "name": "Ajustări pentru pierderea de valoare a altor titluri imobilizate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2964",
+    "name": "Ajustări pentru pierderea de valoare a sumelor de încasat de la entitățile afiliate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2965",
+    "name": "Ajustări pentru pierderea de valoare a creanțelor fata de entitățile asociate și entitățile controlate în comun",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2966",
+    "name": "Ajustări pentru pierderea de valoare a împrumuturilor acordate pe termen lung",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "2968",
+    "name": "Ajustări pentru pierderea de valoare a altor creanțe imobilizate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "301",
+    "name": "Materii prime",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "302",
+    "name": "Materiale consumabile",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "3021",
+    "name": "Materiale auxiliare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3022",
+    "name": "Combustibili",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3023",
+    "name": "Materiale pentru ambalat",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3024",
+    "name": "Piese de schimb",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3025",
+    "name": "Semințe și materiale de plantat",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3026",
+    "name": "Furaje",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3028",
+    "name": "Alte materiale consumabile",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "303",
+    "name": "Materiale de natura obiectelor de inventar",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "308",
+    "name": "Diferențe de preț la materii prime și materiale",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "321",
+    "name": "Materii prime în curs de aprovizionare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "322",
+    "name": "Materiale consumabile în curs de aprovizionare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "323",
+    "name": "Materiale de natura obiectelor de inventar în curs de aprovizionare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "326",
+    "name": "Active biologice de natura stocurilor în curs de aprovizionare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "327",
+    "name": "Mărfuri în curs de aprovizionare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "328",
+    "name": "Ambalaje în curs de aprovizionare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "331",
+    "name": "Produse în curs de execuție",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "332",
+    "name": "Servicii în curs de execuție",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "341",
+    "name": "Semifabricate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "345",
+    "name": "Produse finite",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "346",
+    "name": "Produse reziduale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "347",
+    "name": "Produse agricole",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "348",
+    "name": "Diferențe de preț la produse",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "351",
+    "name": "Materii și materiale aflate la terti",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "354",
+    "name": "Produse aflate la terti",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "356",
+    "name": "Active biologice de natura stocurilor aflate la terti",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "357",
+    "name": "Mărfuri aflate la terti",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "358",
+    "name": "Ambalaje aflate la terti",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "361",
+    "name": "Active biologice de natura stocurilor",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "368",
+    "name": "Diferențe de preț la active biologice de natura stocurilor",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "371",
+    "name": "Mărfuri",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "378",
+    "name": "Diferențe de preț la mărfuri",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "381",
+    "name": "Ambalaje",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "388",
+    "name": "Diferențe de preț la ambalaje",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "391",
+    "name": "Ajustări pentru deprecierea materiilor prime",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "392",
+    "name": "Ajustări pentru deprecierea materialelor",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "3921",
+    "name": "Ajustări pentru deprecierea materialelor consumabile",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3922",
+    "name": "Ajustări pentru deprecierea materialelor de natura obiectelor de inventar",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "393",
+    "name": "Ajustări pentru deprecierea producției în curs de execuție",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "394",
+    "name": "Ajustări pentru deprecierea produselor",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "3941",
+    "name": "Ajustări pentru deprecierea semifabricatelor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3945",
+    "name": "Ajustări pentru deprecierea produselor finite",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3946",
+    "name": "Ajustări pentru deprecierea produselor reziduale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3947",
+    "name": "Ajustări pentru deprecierea produselor agricole",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "395",
+    "name": "Ajustări pentru deprecierea stocurilor aflate la terti",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "3951",
+    "name": "Ajustări pentru deprecierea materiilor și materialelor aflate la terti",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3952",
+    "name": "Ajustări pentru deprecierea semifabricatelor aflate la terti",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3953",
+    "name": "Ajustări pentru deprecierea produselor finite aflate la terti",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3954",
+    "name": "Ajustări pentru deprecierea produselor reziduale aflate la terti",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3955",
+    "name": "Ajustări pentru deprecierea produselor agricole aflate la terti",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3956",
+    "name": "Ajustări pentru deprecierea activelor biologice de natura stocurilor aflate la terti",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3957",
+    "name": "Ajustări pentru deprecierea mărfurilor aflate la terti",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "3958",
+    "name": "Ajustări pentru deprecierea ambalajelor aflate la terti",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "396",
+    "name": "Ajustări pentru deprecierea activelor biologice de natura stocurilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "397",
+    "name": "Ajustări pentru deprecierea mărfurilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "398",
+    "name": "Ajustări pentru deprecierea ambalajelor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "401",
+    "name": "Furnizori",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "403",
+    "name": "Efecte de plătit",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "404",
+    "name": "Furnizori de imobilizări",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "405",
+    "name": "Efecte de plătit pentru imobilizări",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "408",
+    "name": "Furnizori - facturi nesosite",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "409",
+    "name": "Furnizori - debitori",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4091",
+    "name": "Furnizori - debitori pentru cumpărări de bunuri de natura stocurilor",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4092",
+    "name": "Furnizori - debitori pentru prestări de servicii",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4093",
+    "name": "Avansuri acordate pentru imobilizări corporale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4094",
+    "name": "Avansuri acordate pentru imobilizări necorporale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "411",
+    "name": "Clienți",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4111",
+    "name": "Clienți",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4118",
+    "name": "Clienți incerți sau în litigiu",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "413",
+    "name": "Efecte de primit de la clienți",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "418",
+    "name": "Clienți - facturi de întocmit",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "419",
+    "name": "Clienți - creditori",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "421",
+    "name": "Personal - salarii datorate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "423",
+    "name": "Personal - ajutoare materiale datorate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "424",
+    "name": "Prime reprezentând participarea personalului la profit",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "425",
+    "name": "Avansuri acordate personalului",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "426",
+    "name": "Drepturi de personal neridicate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "427",
+    "name": "Rețineri din salarii datorate terților",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "428",
+    "name": "Alte datorii și creanțe în legătură cu personalul",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4281",
+    "name": "Alte datorii în legătură cu personalul",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4282",
+    "name": "Alte creanțe în legătură cu personalul",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "431",
+    "name": "Asigurări sociale",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4311",
+    "name": "Contribuția unității la asigurările sociale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4312",
+    "name": "Contribuția personalului la asigurările sociale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4313",
+    "name": "Contribuția angajatorului pentru asigurările sociale de sănătate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4314",
+    "name": "Contribuția angajaților pentru asigurările sociale de sănătate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4315",
+    "name": "Contribuția de asigurări sociale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4316",
+    "name": "Contribuția de asigurări sociale de sănătate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4318",
+    "name": "Alte contribuții pentru asigurările sociale de sănătate",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "436",
+    "name": "Contribuția asiguratorie pentru munca",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "437",
+    "name": "Ajutor de șomaj",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4371",
+    "name": "Contribuția unității la fondul de șomaj",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4372",
+    "name": "Contribuția personalului la fondul de șomaj",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "438",
+    "name": "Alte datorii și creanțe sociale",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4381",
+    "name": "Alte datorii sociale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4382",
+    "name": "Alte creanțe sociale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "441",
+    "name": "Impozitul pe profit și alte impozite",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4411",
+    "name": "Impozitul pe profit",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4415",
+    "name": "Impozitul specific unor activități",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4417",
+    "name": "Impozitul pe profit la nivelul impozitului minim pe cifra de afaceri",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4418",
+    "name": "Impozitul pe venit",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "442",
+    "name": "Taxa pe valoarea adăugată",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4423",
+    "name": "TVA de plata",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4424",
+    "name": "TVA de recuperat",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4426",
+    "name": "TVA deductibila",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4427",
+    "name": "TVA colectata",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4428",
+    "name": "TVA neexigibila",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "444",
+    "name": "Impozitul pe venituri de natura salariilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "445",
+    "name": "Subvenții",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4451",
+    "name": "Subvenții guvernamentale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4452",
+    "name": "Împrumuturi nerambursabile cu caracter de subvenții",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4458",
+    "name": "Alte sume primite cu caracter de subvenții",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "446",
+    "name": "Alte impozite, taxe și vărsăminte asimilate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "447",
+    "name": "Fonduri speciale - taxe și vărsăminte asimilate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "448",
+    "name": "Alte datorii și creanțe cu bugetul statului",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4481",
+    "name": "Alte datorii fata de bugetul statului",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4482",
+    "name": "Alte creanțe privind bugetul statului",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "451",
+    "name": "Decontări intre entitățile afiliate",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4511",
+    "name": "Decontări intre entitățile afiliate",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "4518",
+    "name": "Dobânzi aferente decontărilor intre entitățile afiliate",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "453",
+    "name": "Decontări cu entitățile asociate și entitățile controlate în comun",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4531",
+    "name": "Decontări cu entitățile asociate și entitățile controlate",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "4538",
+    "name": "Dobânzi aferente decontărilor cu entitățile asociate și entitățile controlate în comun",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "455",
+    "name": "Sume datorate acționarilor/asociaților",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4551",
+    "name": "Acționari/Asociați - conturi curente",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4558",
+    "name": "Acționari/Asociați - dobânzi la conturi curente",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "456",
+    "name": "Decontări cu acționarii/asociații privind capitalul",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "457",
+    "name": "Dividende de plata",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "458",
+    "name": "Decontări din operațiuni în participație",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4581",
+    "name": "Decontări din operațiuni în participație - pasiv",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4582",
+    "name": "Decontări din operațiuni în participație - activ",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "461",
+    "name": "Debitori diverși",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "462",
+    "name": "Creditori diverși",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "463",
+    "name": "Creanțe reprezentând dividende repartizate în cursul exercițiului financiar",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "466",
+    "name": "Decontări din operațiuni de fiducie",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4661",
+    "name": "Datorii din operațiuni de fiducie",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4662",
+    "name": "Creanțe din operațiuni de fiducie",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "467",
+    "name": "Datorii aferente distribuirilor interimare de dividende",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "471",
+    "name": "Cheltuieli înregistrate în avans",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "472",
+    "name": "Venituri înregistrate în avans",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "473",
+    "name": "Decontări din operațiuni în curs de clarificare",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "475",
+    "name": "Subvenții pentru investiții",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4751",
+    "name": "Subvenții guvernamentale pentru investiții",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4752",
+    "name": "Împrumuturi nerambursabile cu caracter de subvenții pentru investiții",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4753",
+    "name": "Donații pentru investiții",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4754",
+    "name": "Plusuri de inventar de natura imobilizărilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4758",
+    "name": "Alte sume primite cu caracter de subvenții pentru investiții",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "478",
+    "name": "Venituri în avans aferente activelor primite prin transfer de la clienți",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "481",
+    "name": "Decontări intre unitate și subunități",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "482",
+    "name": "Decontări intre subunități",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "490",
+    "name": "Ajustări pentru deprecierea creanțelor reprezentând avansuri acordate furnizorilor",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "4901",
+    "name": "Ajustări pentru deprecierea creanțelor aferente cumpărărilor de bunuri de natura stocurilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4902",
+    "name": "Ajustări pentru deprecierea creanțelor aferente prestărilor de servicii",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4903",
+    "name": "Ajustări pentru deprecierea creanțelor aferente imobilizărilor corporale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "4904",
+    "name": "Ajustări pentru deprecierea creanțelor aferente imobilizărilor necorporale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "491",
+    "name": "Ajustări pentru deprecierea creanțelor - clienți",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "495",
+    "name": "Ajustări pentru deprecierea creanțelor - decontări în cadrul grupului și cu acționarii/asociații",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "496",
+    "name": "Ajustări pentru deprecierea creanțelor - debitori diverși",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "501",
+    "name": "Acțiuni deținute la entitățile afiliate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "505",
+    "name": "Obligațiuni emise și răscumpărate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "506",
+    "name": "Obligațiuni",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "507",
+    "name": "Certificate verzi primite",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "508",
+    "name": "Alte investiții pe termen scurt și creanțe asimilate",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "5081",
+    "name": "Alte titluri de plasament",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5088",
+    "name": "Dobânzi la obligațiuni și titluri de plasament",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "509",
+    "name": "Vărsăminte de efectuat pentru investițiile pe termen scurt",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "5091",
+    "name": "Vărsăminte de efectuat pentru acțiunile deținute la entitățile afiliate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5092",
+    "name": "Vărsăminte de efectuat pentru alte investiții pe termen scurt",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "511",
+    "name": "Valori de încasat",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "5112",
+    "name": "Cecuri de încasat",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5113",
+    "name": "Efecte de încasat",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5114",
+    "name": "Efecte remise spre scontare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "512",
+    "name": "Conturi curente la bănci",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "5121",
+    "name": "Conturi la bănci în lei",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5124",
+    "name": "Conturi la bănci în valuta",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5125",
+    "name": "Sume în curs de decontare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "518",
+    "name": "Dobânzi",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "5186",
+    "name": "Dobânzi de plătit",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5187",
+    "name": "Dobânzi de încasat",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "519",
+    "name": "Credite bancare pe termen scurt",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "5191",
+    "name": "Credite bancare pe termen scurt",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5192",
+    "name": "Credite bancare pe termen scurt nerambursate la scadenta",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5193",
+    "name": "Credite externe guvernamentale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5194",
+    "name": "Credite externe garantate de stat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5195",
+    "name": "Credite externe garantate de bănci",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5196",
+    "name": "Credite de la Trezoreria Statului",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5197",
+    "name": "Credite interne garantate de stat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5198",
+    "name": "Dobânzi aferente creditelor bancare pe termen scurt",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "531",
+    "name": "Casa",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "5311",
+    "name": "Casa în lei",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5314",
+    "name": "Casa în valuta",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "532",
+    "name": "Alte valori",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "5321",
+    "name": "Timbre fiscale și poștale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5322",
+    "name": "Bilete de tratament și odihna",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5323",
+    "name": "Tichete și bilete de călătorie",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5328",
+    "name": "Alte valori",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "541",
+    "name": "Acreditive",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "5411",
+    "name": "Acreditive în lei",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "5414",
+    "name": "Acreditive în valuta",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "542",
+    "name": "Avansuri de trezorerie",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "581",
+    "name": "Viramente interne",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "591",
+    "name": "Ajustări pentru pierderea de valoare a acțiunilor deținute la entitățile afiliate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "595",
+    "name": "Ajustări pentru pierderea de valoare a obligațiunilor emise și răscumpărate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "596",
+    "name": "Ajustări pentru pierderea de valoare a obligațiunilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "598",
+    "name": "Ajustări pentru pierderea de valoare a altor investiții pe termen scurt și creanțe asimilate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "601",
+    "name": "Cheltuieli cu materiile prime",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "602",
+    "name": "Cheltuieli cu materialele consumabile",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6021",
+    "name": "Cheltuieli cu materialele auxiliare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6022",
+    "name": "Cheltuieli privind combustibilii",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6023",
+    "name": "Cheltuieli privind materialele pentru ambalat",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6024",
+    "name": "Cheltuieli privind piesele de schimb",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6025",
+    "name": "Cheltuieli privind semințele și materialele de plantat",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6026",
+    "name": "Cheltuieli privind furajele",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6028",
+    "name": "Cheltuieli privind alte materiale consumabile",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "603",
+    "name": "Cheltuieli privind materialele de natura obiectelor de inventar",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "604",
+    "name": "Cheltuieli privind materialele nestocate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "605",
+    "name": "Cheltuieli privind utilitățile",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6051",
+    "name": "Cheltuieli privind consumul de energie",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6052",
+    "name": "Cheltuieli privind consumul de apa",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6053",
+    "name": "Cheltuieli privind consumul de gaze naturale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6058",
+    "name": "Cheltuieli cu alte utilități",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "606",
+    "name": "Cheltuieli privind activele biologice de natura stocurilor",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "607",
+    "name": "Cheltuieli privind mărfurile",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "608",
+    "name": "Cheltuieli privind ambalajele",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "609",
+    "name": "Reduceri comerciale primite",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "611",
+    "name": "Cheltuieli cu întreținerea și reparațiile",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "612",
+    "name": "Cheltuieli cu redevențele, locațiile de gestiune și chiriile",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6121",
+    "name": "Cheltuieli cu redevențele",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6122",
+    "name": "Cheltuieli cu locațiile de gestiune",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6123",
+    "name": "Cheltuieli cu chiriile",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "613",
+    "name": "Cheltuieli cu primele de asigurare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "614",
+    "name": "Cheltuieli cu studiile și cercetările",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "615",
+    "name": "Cheltuieli cu pregătirea personalului",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "616",
+    "name": "Cheltuieli aferente drepturilor de proprietate intelectuală”",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "617",
+    "name": "Cheltuieli de management",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "618",
+    "name": "Cheltuieli de consultanta",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "621",
+    "name": "Cheltuieli cu colaboratorii",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "622",
+    "name": "Cheltuieli privind comisioanele și onorariile",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "623",
+    "name": "Cheltuieli de protocol, reclama și publicitate",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6231",
+    "name": "Cheltuieli de protocol",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6232",
+    "name": "Cheltuieli de reclama și publicitate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "624",
+    "name": "Cheltuieli cu transportul de bunuri și personal",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "625",
+    "name": "Cheltuieli cu deplasări, detașări și transferări",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "626",
+    "name": "Cheltuieli poștale și taxe de telecomunicații",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "627",
+    "name": "Cheltuieli cu serviciile bancare și asimilate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "628",
+    "name": "Alte cheltuieli cu serviciile executate de terți",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "635",
+    "name": "Cheltuieli cu alte impozite, taxe și vărsăminte asimilate",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6351",
+    "name": "Cheltuieli cu impozitul suplimentar pentru sectoarele de activitate specifice",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "641",
+    "name": "Cheltuieli cu salariile personalului",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "642",
+    "name": "Cheltuieli cu avantajele în natura și tichetele acordate salariaților",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6421",
+    "name": "Cheltuieli cu avantajele în natura acordate salariaților",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6422",
+    "name": "Cheltuieli cu tichetele acordate salariaților",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "643",
+    "name": "Cheltuieli cu remunerarea în instrumente de capitaluri proprii",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "644",
+    "name": "Cheltuieli cu primele reprezentând participarea personalului la profit",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "645",
+    "name": "Cheltuieli privind asigurările și protecția sociala",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6451",
+    "name": "Cheltuieli privind contribuția unității la asigurările sociale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6452",
+    "name": "Cheltuieli privind contribuția unității pentru ajutorul de șomaj",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6453",
+    "name": "Cheltuieli privind contribuția angajatorului pentru asigurările sociale de sănătate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6455",
+    "name": "Cheltuieli privind contribuția unității la asigurările de viață",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6456",
+    "name": "Cheltuieli privind contribuția unității la fondurile de pensii facultative",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6457",
+    "name": "Cheltuieli privind contribuția unității la primele de asigurare voluntara de sănătate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6458",
+    "name": "Alte cheltuieli privind asigurările și protecția sociala",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "646",
+    "name": "Cheltuieli privind contribuția asiguratorie pentru munca",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6461",
+    "name": "Cheltuieli privind contribuția asiguratorie pentru munca corespunzătoare salariaților",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6462",
+    "name": "Cheltuieli privind contribuția asiguratorie pentru munca corespunzătoare altor persoane, decât salariații",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "651",
+    "name": "Cheltuieli din operațiuni de fiducie",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6511",
+    "name": "Cheltuieli ocazionate de constituirea fiduciei",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6512",
+    "name": "Cheltuieli din derularea operațiunilor de fiducie",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6513",
+    "name": "Cheltuieli din lichidarea operațiunilor de fiducie",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "652",
+    "name": "Cheltuieli cu protecția mediului înconjurător",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "654",
+    "name": "Pierderi din creanțe și debitori diverși",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "655",
+    "name": "Cheltuieli din reevaluarea imobilizărilor corporale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "658",
+    "name": "Alte cheltuieli de exploatare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6581",
+    "name": "Despăgubiri, amenzi și penalități",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6582",
+    "name": "Donații acordate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6583",
+    "name": "Cheltuieli privind activele cedate și alte operațiuni de capital",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6584",
+    "name": "Cheltuieli cu sumele sau bunurile acordate că sponsorizări",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6586",
+    "name": "Cheltuieli reprezentând transferuri și contribuții datorate în baza unor acte normative speciale",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6587",
+    "name": "Cheltuieli privind calamitățile și alte evenimente similare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6588",
+    "name": "Alte cheltuieli de exploatare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "663",
+    "name": "Pierderi din creanțe legate de participații",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "664",
+    "name": "Cheltuieli privind investițiile financiare cedate",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6641",
+    "name": "Cheltuieli privind imobilizările financiare cedate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6642",
+    "name": "Pierderi din investițiile pe termen scurt cedate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "665",
+    "name": "Cheltuieli din diferențe de curs valutar",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6651",
+    "name": "Diferențe nefavorabile de curs valutar legate de elementele monetare exprimate în valuta",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6652",
+    "name": "Diferențe nefavorabile de curs valutar din evaluarea elementelor monetare care fac parte din investiția neta într-o entitate străină",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "666",
+    "name": "Cheltuieli privind dobânzile",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "667",
+    "name": "Cheltuieli privind sconturile acordate",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "668",
+    "name": "Alte cheltuieli financiare sau pierdere de valoare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "681",
+    "name": "Cheltuieli de exploatare privind amortizările, provizioanele și ajustările pentru depreciere",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6811",
+    "name": "Cheltuieli de exploatare privind amortizarea imobilizărilor",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6812",
+    "name": "Cheltuieli de exploatare privind provizioanele",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6813",
+    "name": "Cheltuieli de exploatare privind ajustările pentru deprecierea imobilizărilor",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6814",
+    "name": "Cheltuieli de exploatare privind ajustările pentru deprecierea activelor circulante",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6817",
+    "name": "Cheltuieli de exploatare privind ajustările pentru deprecierea fondului comercial",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6818",
+    "name": "Cheltuieli de exploatare privind ajustările pentru deprecierea creanțelor reprezentând avansuri acordate furnizorilor",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "686",
+    "name": "Cheltuieli financiare privind amortizările, provizioanele și ajustările pentru pierdere de valoare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "6861",
+    "name": "Cheltuieli privind actualizarea provizioanelor",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6863",
+    "name": "Cheltuieli financiare privind ajustările pentru pierderea de valoare a imobilizărilor financiare",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6864",
+    "name": "Cheltuieli financiare privind ajustările pentru pierderea de valoare a activelor circulante",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6865",
+    "name": "Cheltuieli financiare privind amortizarea diferențelor aferente titlurilor de stat",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "6868",
+    "name": "Cheltuieli financiare privind amortizarea primelor de rambursare a obligațiunilor și a altor datorii",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "691",
+    "name": "Cheltuieli cu impozitul pe profit",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "694",
+    "name": "Cheltuieli cu impozitul pe profit rezultat din decontările în cadrul grupului fiscal în domeniul impozitului pe profit",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "695",
+    "name": "Cheltuieli cu impozitul specific unor activități",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "697",
+    "name": "Cheltuieli cu impozitul pe profit la nivelul impozitului minim pe cifra de afaceri",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "698",
+    "name": "Cheltuieli cu impozitul pe venit și cu alte impozite care nu apar în elementele de mai sus",
+    "nature": "DEBIT",
+    "allowPosting": true
+  },
+  {
+    "code": "701",
+    "name": "Venituri din vânzarea produselor finite, produselor agricole și a activelor biologice de natura stocurilor",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "7015",
+    "name": "Venituri din vânzarea produselor finite",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7017",
+    "name": "Venituri din vânzarea produselor agricole",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7018",
+    "name": "Venituri din vânzarea activelor biologice de natura stocurilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "702",
+    "name": "Venituri din vânzarea semifabricatelor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "703",
+    "name": "Venituri din vânzarea produselor reziduale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "704",
+    "name": "Venituri din servicii prestate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "705",
+    "name": "Venituri din studii și cercetări",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "706",
+    "name": "Venituri din redevențe, locații de gestiune și chirii",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "707",
+    "name": "Venituri din vânzarea mărfurilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "708",
+    "name": "Venituri din activități diverse",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "709",
+    "name": "Reduceri comerciale acordate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "711",
+    "name": "Venituri aferente costurilor stocurilor de produse",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "712",
+    "name": "Venituri aferente costurilor serviciilor în curs de execuție",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "721",
+    "name": "Venituri din producția de imobilizări necorporale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "722",
+    "name": "Venituri din producția de imobilizări corporale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "725",
+    "name": "Venituri din producția de investiții imobiliare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "741",
+    "name": "Venituri din subvenții de exploatare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "7411",
+    "name": "Venituri din subvenții de exploatare aferente cifrei de afaceri",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7412",
+    "name": "Venituri din subvenții de exploatare pentru materii prime și materiale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7413",
+    "name": "Venituri din subvenții de exploatare pentru alte cheltuieli externe",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7414",
+    "name": "Venituri din subvenții de exploatare pentru plata personalului",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7415",
+    "name": "Venituri din subvenții de exploatare pentru asigurări și protecție sociala",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7416",
+    "name": "Venituri din subvenții de exploatare pentru alte cheltuieli de exploatare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7417",
+    "name": "Venituri din subvenții de exploatare în caz de calamitați și alte evenimente similare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7418",
+    "name": "Venituri din subvenții de exploatare pentru dobândă datorata",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7419",
+    "name": "Venituri din subvenții de exploatare aferente altor venituri",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "751",
+    "name": "Venituri din operațiuni de fiducie",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "7511",
+    "name": "Venituri ocazionate de constituirea fiduciei",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7512",
+    "name": "Venituri din derularea operațiunilor de fiducie",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7513",
+    "name": "Venituri din lichidarea operațiunilor de fiducie",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "754",
+    "name": "Venituri din creanțe reactivate și debitori diverși",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "755",
+    "name": "Venituri din reevaluarea imobilizărilor corporale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "758",
+    "name": "Alte venituri din exploatare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "7581",
+    "name": "Venituri din despăgubiri, amenzi și penalități",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7582",
+    "name": "Venituri din donații primite",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7583",
+    "name": "Venituri din vânzarea activelor și alte operațiuni de capital",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7584",
+    "name": "Venituri din subvenții pentru investiții",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7586",
+    "name": "Venituri reprezentând transferuri cuvenite în baza unor acte normative speciale",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7588",
+    "name": "Alte venituri din exploatare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "761",
+    "name": "Venituri din imobilizări financiare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "7611",
+    "name": "Venituri din acțiuni deținute la entitățile afiliate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7612",
+    "name": "Venituri din acțiuni deținute la entități asociate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7613",
+    "name": "Venituri din acțiuni deținute la entități controlate în comun",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7615",
+    "name": "Venituri din alte imobilizări financiare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "762",
+    "name": "Venituri din investiții financiare pe termen scurt",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "764",
+    "name": "Venituri din investiții financiare cedate",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "7641",
+    "name": "Venituri din imobilizări financiare cedate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7642",
+    "name": "Câștiguri din investiții pe termen scurt cedate",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "765",
+    "name": "Venituri din diferențe de curs valutar",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "7651",
+    "name": "Diferențe favorabile de curs valutar legate de elementele monetare exprimate în valuta",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7652",
+    "name": "Diferențe favorabile de curs valutar din evaluarea elementelor monetare care fac parte din investiția neta într-o entitate străină",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "766",
+    "name": "Venituri din dobânzi",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "767",
+    "name": "Venituri din sconturi obținute",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "768",
+    "name": "Alte venituri financiare pierdere de valoare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "781",
+    "name": "Venituri din provizioane și ajustări pentru depreciere privind activitatea de exploatare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "7812",
+    "name": "Venituri din provizioane",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7813",
+    "name": "Venituri din ajustări pentru deprecierea imobilizărilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7814",
+    "name": "Venituri din ajustări pentru deprecierea activelor circulante",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7815",
+    "name": "Venituri din fondul comercial negativ",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7818",
+    "name": "Venituri din ajustări pentru deprecierea creanțelor reprezentând avansuri acordate furnizorilor",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "786",
+    "name": "Venituri financiare din amortizări și ajustări pentru pierdere de valoare",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "7863",
+    "name": "Venituri financiare din ajustări pentru pierderea de valoare a imobilizărilor financiare",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7864",
+    "name": "Venituri financiare din ajustări pentru pierderea de valoare a activelor circulante",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "7865",
+    "name": "Venituri financiare din amortizarea diferențelor aferente titlurilor de stat",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "794",
+    "name": "Venituri din impozitul pe profit rezultat din decontările în cadrul grupului fiscal în domeniul impozitului pe profit",
+    "nature": "CREDIT",
+    "allowPosting": true
+  },
+  {
+    "code": "801",
+    "name": "Angajamente acordate",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "8011",
+    "name": "Giruri și garanții acordate",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8018",
+    "name": "Alte angajamente acordate",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "802",
+    "name": "Angajamente primite",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "8021",
+    "name": "Giruri și garanții primite",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8028",
+    "name": "Alte angajamente primite",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "803",
+    "name": "Alte conturi în afara bilanțului",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "8031",
+    "name": "Imobilizări corporale primite cu chirie sau în baza altor contracte similare",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8032",
+    "name": "Valori materiale primite spre prelucrare sau reparare",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8033",
+    "name": "Valori materiale primite în păstrare sau custodie",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8034",
+    "name": "Debitori scoși din activ, urmăriți în continuare",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8035",
+    "name": "Stocuri de natura obiectelor de inventar date în folosință",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8036",
+    "name": "Redevențe, locații de gestiune, chirii și alte datorii asimilate",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8037",
+    "name": "Efecte scontate neajunse la scadenta",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8038",
+    "name": "Bunuri primite în administrare, concesiune, cu chirie și alte bunuri similare",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8039",
+    "name": "Alte valori în afara bilanțului",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "804",
+    "name": "Certificate verzi",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "805",
+    "name": "Dobânzi aferente contractelor de leasing și altor contracte asimilate, neajunse la scadenta",
+    "nature": "GROUP",
+    "allowPosting": false
+  },
+  {
+    "code": "8051",
+    "name": "Dobânzi de plătit",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "8052",
+    "name": "Dobânzi de încasat",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "806",
+    "name": "Certificate de emisii de gaze cu efect de sera",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "807",
+    "name": "Active contingente",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "808",
+    "name": "Datorii contingente",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "809",
+    "name": "Creanțe preluate prin cesionare",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "891",
+    "name": "Bilanț de deschidere",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "892",
+    "name": "Bilanț de închidere",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "901",
+    "name": "Decontări interne privind cheltuielile",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "902",
+    "name": "Decontări interne privind producția obținută",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "903",
+    "name": "Decontări interne privind diferențele de preț",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "920",
+    "name": "Cheltuielile activității de bază",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "921",
+    "name": "Cheltuielile activităților auxiliare",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "922",
+    "name": "Cheltuieli indirecte de producție",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "923",
+    "name": "Cheltuieli generale de administrație",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "924",
+    "name": "Cheltuieli de desfacere",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "931",
+    "name": "Costul producției obținute",
+    "nature": "BOTH",
+    "allowPosting": true
+  },
+  {
+    "code": "933",
+    "name": "Costul producției în curs de execuție",
+    "nature": "BOTH",
+    "allowPosting": true
+  }
+]
