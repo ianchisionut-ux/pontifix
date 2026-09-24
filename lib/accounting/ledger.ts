@@ -312,6 +312,35 @@ export async function createManualJournalEntry(input: JournalEntryInput) {
   }
 }
 
+function sagaEntrySourceKey(entry: JournalEntryInput) {
+  const signature = JSON.stringify({ date: entry.date, documentNumber: entry.documentNumber || "", description: entry.description,
+    lines: entry.lines.map(line => ({ accountCode: line.accountCode, debit: round2(Number(line.debit || 0)), credit: round2(Number(line.credit || 0)) })) });
+  return createHash("sha256").update(signature).digest("hex");
+}
+
+export async function validateSagaJournalEntries(entries: JournalEntryInput[]) {
+  const pool = await ready();
+  const codes = [...new Set(entries.flatMap(entry => entry.lines.map(line => line.accountCode)))];
+  const periods = [...new Set(entries.map(entry => entry.date.slice(0, 7)))];
+  const sourceKeys = entries.map(sagaEntrySourceKey);
+  const [accountsResult, periodsResult, duplicateResult] = await Promise.all([
+    pool.query(`SELECT code,active,"allowPosting" FROM accounting_accounts WHERE code=ANY($1::text[])`, [codes]),
+    pool.query(`SELECT year,month FROM accounting_periods WHERE status='CLOSED' AND concat(year,'-',lpad(month::text,2,'0'))=ANY($1::text[])`, [periods]),
+    pool.query(`SELECT "sourceKey" FROM journal_entries WHERE "sourceType"='SAGA_IMPORT' AND "sourceKey"=ANY($1::text[])`, [sourceKeys]),
+  ]);
+  const accounts = new Map(accountsResult.rows.map(row => [String(row.code), row]));
+  const closed = new Set(periodsResult.rows.map(row => `${row.year}-${String(row.month).padStart(2, "0")}`));
+  const errors: string[] = [];
+  for (const code of codes) {
+    const account = accounts.get(code);
+    if (!account) errors.push(`Contul ${code} nu există în planul de conturi.`);
+    else if (!account.active) errors.push(`Contul ${code} este inactiv.`);
+    else if (!account.allowPosting) errors.push(`Contul ${code} este sintetic și nu permite postare.`);
+  }
+  for (const period of periods) if (closed.has(period)) errors.push(`Perioada ${period} este închisă.`);
+  return { errors, duplicates: duplicateResult.rowCount || 0 };
+}
+
 export async function importSagaJournalEntries(entries: JournalEntryInput[], importKey: string, createdBy?: string) {
   if (!entries.length) throw new Error("Fișierul nu conține articole contabile.");
   if (!/^[a-f0-9]{64}$/.test(importKey)) throw new Error("Identificatorul importului nu este valid.");
@@ -320,10 +349,8 @@ export async function importSagaJournalEntries(entries: JournalEntryInput[], imp
     await connection.query("BEGIN");
     await connection.query(`SELECT pg_advisory_xact_lock(hashtext('PONTIFIX_SAGA_JOURNAL_IMPORT'))`);
     let created = 0, skipped = 0;
-    for (const [index, entry] of entries.entries()) {
-      const signature = JSON.stringify({ date: entry.date, documentNumber: entry.documentNumber || "", description: entry.description,
-        lines: entry.lines.map(line => ({ accountCode: line.accountCode, debit: round2(Number(line.debit || 0)), credit: round2(Number(line.credit || 0)) })) });
-      const sourceKey = createHash("sha256").update(signature).digest("hex");
+    for (const entry of entries) {
+      const sourceKey = sagaEntrySourceKey(entry);
       const exists = (await connection.query(
         `SELECT id FROM journal_entries WHERE "sourceType"='SAGA_IMPORT' AND "sourceKey"=$1`, [sourceKey],
       )).rows[0];
