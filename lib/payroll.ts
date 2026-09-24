@@ -127,5 +127,5 @@ export async function finalizePayroll(businessId: string, month: string, finaliz
   }), { gross: 0, cas: 0, cass: 0, incomeTax: 0, cam: 0, otherDeductions: 0, advancePaid: 0 })
   if (totals.gross <= 0) throw new Error('Statul nu are venituri salariale de contabilizat. Verifică pontajele.')
   await postPayrollToLedger({ runId: run.id, month, ...totals, createdBy: finalizedBy })
-  return prisma.payrollRun.update({ where: { id: run.id }, data: { status: 'FINALIZED', finalizedAt: new Date(), finalizedBy } })
+  return getPayroll(businessId, month)
 }

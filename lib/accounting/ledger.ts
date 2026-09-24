@@ -137,6 +137,12 @@ export async function postPayrollToLedger(input: {
   const connection = await (await ready()).connect();
   try {
     await connection.query("BEGIN");
+    const payrollRun = (await connection.query(`SELECT status FROM "PayrollRun" WHERE id=$1 FOR UPDATE`, [input.runId])).rows[0];
+    if (!payrollRun) throw new Error("Statul de salarii nu mai există.");
+    if (payrollRun.status === "FINALIZED") {
+      await connection.query("COMMIT");
+      return;
+    }
     const [year, month] = input.month.split("-").map(Number);
     const lastDay = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
     await assertOpenPeriod(connection, lastDay);
@@ -169,6 +175,10 @@ export async function postPayrollToLedger(input: {
       createdBy: input.createdBy,
       lines,
     });
+    await connection.query(
+      `UPDATE "PayrollRun" SET status='FINALIZED', "finalizedAt"=now(), "finalizedBy"=$2, "updatedAt"=now() WHERE id=$1`,
+      [input.runId, input.createdBy || ""],
+    );
     await connection.query("COMMIT");
   } catch (error) {
     await connection.query("ROLLBACK");
