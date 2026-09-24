@@ -1,9 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { CheckCircle2, ClipboardCopy, ExternalLink, FileCheck2, Loader2, Save, X } from 'lucide-react'
+import { CheckCircle2, ClipboardCopy, Download, ExternalLink, FileCheck2, Loader2, Save, X } from 'lucide-react'
 import type { ConnectionCaseDto, ConnectionFields } from '@/lib/connection-fields'
-import { DEER_ACTIONS, DEER_STATUSES, DEER_STATUS_META, defaultDeerSubmission, extractDeerDossierNumber, getDeerDocumentsForAction, isValidDeerDossierNumber, type DeerSubmission } from '@/lib/deer-submission'
+import { DEER_ACTIONS, DEER_CONTACT_EMAIL, DEER_STATUSES, DEER_STATUS_META, defaultDeerSubmission, extractDeerDossierNumber, getDeerDocumentsForAction, isValidDeerDossierNumber, type DeerSubmission } from '@/lib/deer-submission'
 import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
 const DEER_PORTAL_URL = 'https://avize.distributie-energie.ro/solicitare'
@@ -18,7 +18,7 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
   const atrDossierNumber = useMemo(() => extractDeerDossierNumber(fields.ATR), [fields.ATR])
   const [draft, setDraft] = useState<DeerSubmission>(() => {
     const current = item.deerSubmission || defaultDeerSubmission()
-    return { ...current, dossierNumber: atrDossierNumber || current.dossierNumber }
+    return { ...current, dossierNumber: atrDossierNumber || current.dossierNumber, email: DEER_CONTACT_EMAIL }
   })
   const [submittedAt, setSubmittedAt] = useState(item.deerSubmittedAt || '')
   const [busy, setBusy] = useState('')
@@ -26,7 +26,7 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
 
   useEffect(() => {
     const current = item.deerSubmission || defaultDeerSubmission()
-    setDraft({ ...current, dossierNumber: atrDossierNumber || current.dossierNumber })
+    setDraft({ ...current, dossierNumber: atrDossierNumber || current.dossierNumber, email: DEER_CONTACT_EMAIL })
     setSubmittedAt(item.deerSubmittedAt || '')
     setNotice('')
   }, [item.id, item.deerSubmission, item.deerSubmittedAt, atrDossierNumber])
@@ -95,6 +95,30 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
     window.open(DEER_PORTAL_URL, '_blank', 'noopener,noreferrer')
   }
 
+  function downloadAutomationConfig() {
+    if (missing.length) return alert(`Completează înainte: ${missing.join(', ')}.`)
+    const actionLabel = DEER_ACTIONS.find(([value]) => value === draft.action)?.[1] || draft.action
+    const payload = {
+      dossierNumber: draft.dossierNumber,
+      applicant,
+      locality,
+      street,
+      action: draft.action,
+      actionLabel,
+      email: DEER_CONTACT_EMAIL,
+      pdfDirectory: 'C:\\CALE\\CATRE\\DOSARUL-PDF',
+      documents: draft.documents.map((label) => ({ label, file: '' })),
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `deer-${draft.dossierNumber}.json`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    setNotice('Fișierul pentru asistentul DEER a fost descărcat. Completează numele PDF-urilor și pornește comanda din ghid.')
+  }
+
   function toggleDocument(document: string) {
     if (!canEdit) return
     setDraft((current) => ({
@@ -135,7 +159,8 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
                     : null}
               </label>
               <label className="text-xs font-bold text-slate-500">Adresă e-mail
-                <input disabled={!canEdit} type="email" value={draft.email} onChange={(event) => setDraft({ ...draft, email: event.target.value })} placeholder="E-mail pentru confirmare" className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50"/>
+                <input readOnly type="email" value={DEER_CONTACT_EMAIL} className="input-field mt-1.5 w-full bg-slate-50 text-slate-600"/>
+                <span className="mt-1.5 block text-[11px] font-bold text-slate-400">Adresă fixă pentru toate depunerile Elmont.</span>
               </label>
               <label className="text-xs font-bold text-slate-500 md:col-span-2">Acțiune
                 <select disabled={!canEdit} value={draft.action} onChange={(event) => setDraft({ ...draft, action: event.target.value as DeerSubmission['action'] })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50">
@@ -195,6 +220,7 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
             <div className="mt-4 grid gap-2">
               <button type="button" onClick={() => copyData()} className="btn-secondary inline-flex items-center justify-center gap-2"><ClipboardCopy size={16}/> Copiază datele</button>
               <button type="button" onClick={prepareAndOpen} disabled={!!busy} className="btn-primary inline-flex items-center justify-center gap-2">{busy ? <Loader2 size={16} className="animate-spin"/> : <ExternalLink size={16}/>} Deschide portalul DEER</button>
+              {canEdit && <button type="button" onClick={downloadAutomationConfig} className="btn-secondary inline-flex items-center justify-center gap-2"><Download size={16}/> Descarcă automatizarea</button>}
               {canEdit && <button type="button" onClick={() => save()} disabled={!!busy} className="btn-secondary inline-flex items-center justify-center gap-2">{busy ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează în registru</button>}
             </div>
             {canEdit && item.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${item.id}/atr`} title={`ATR · ${fields.Beneficiar || item.nib}`} className="mt-3 flex w-full items-center justify-center gap-2 text-xs font-black text-[#0d5d8b]">Deschide ATR-ul salvat</SecurePdfViewerButton>}

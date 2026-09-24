@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export const DEER_CONTACT_EMAIL = 'elmont_zalau@yahoo.com'
+
 export const DEER_ACTIONS = [
   ['completareDocumentatie', 'Completare documentație'],
   ['incarcareDIU', 'Încărcare documentație instalație utilizare'],
@@ -64,7 +66,7 @@ export const deerSubmissionSchema = z.object({
   dossierNumber: z.string().trim().max(200).default(''),
   action: z.enum(deerActionValues).default('completareDocumentatie'),
   status: z.enum(DEER_STATUSES).default('DRAFT'),
-  email: z.string().trim().max(320).default(''),
+  email: z.string().trim().max(320).default(DEER_CONTACT_EMAIL),
   registrationNumber: z.string().trim().max(300).default(''),
   documents: z.array(z.string().trim().max(200)).max(30).default([]),
   notes: z.string().trim().max(4000).default(''),
@@ -74,5 +76,5 @@ export const deerSubmissionSchema = z.object({
 export type DeerSubmission = z.infer<typeof deerSubmissionSchema>
 
 export function defaultDeerSubmission(): DeerSubmission {
-  return deerSubmissionSchema.parse({})
+  return deerSubmissionSchema.parse({ email: DEER_CONTACT_EMAIL })
 }
