@@ -1153,6 +1153,8 @@ export async function deleteInvoice(id: number) {
     }
 
     if (invoice.invoiceType === "STORNO") {
+      const refunds = (await connection.query(`SELECT id FROM payments WHERE "invoiceId"=$1 AND amount<0 LIMIT 1`, [invoice.originalInvoiceId])).rows[0];
+      if (refunds) throw new Error("Factura storno are restituiri înregistrate. Ștergerea ar invalida soldul clientului.");
       await removeAutomaticEntriesForInvoice(id, connection);
       await connection.query(`DELETE FROM receipts WHERE "invoiceId"=$1`, [id]);
       await connection.query(`DELETE FROM invoices WHERE id=$1`, [id]);
@@ -1203,6 +1205,7 @@ export async function addPayment(
   date: string,
   method: string,
   notes?: string,
+  refund = false,
 ) {
   const pool = await ready();
   const connection = await pool.connect();
@@ -1216,13 +1219,18 @@ export async function addPayment(
     if (
       !invoice ||
       invoice.invoiceType === "STORNO" ||
-      ["storno", "stornoed", "canceled"].includes(invoice.status)
+      (refund ? invoice.status !== "stornoed" : ["storno", "stornoed", "canceled"].includes(invoice.status))
     ) {
       throw new Error("Factura selectată nu acceptă încasări.");
     }
     if (!Number.isFinite(amount) || amount <= 0)
       throw new Error("Suma încasată trebuie să fie pozitivă.");
     if (!isIsoDate(date)) throw new Error("Data încasării nu este validă.");
+    if (!["numerar", "cash", "bank", "banca", "bancă", "card", "transfer"].includes(String(method).toLowerCase())) throw new Error("Metoda de plată nu este validă.");
+    if (refund) {
+      const storno = (await connection.query(`SELECT "issueDate" FROM invoices WHERE "originalInvoiceId"=$1 AND "invoiceType"='STORNO'`, [invoiceId])).rows[0];
+      if (!storno || date < storno.issueDate) throw new Error("Restituirea necesită factura storno și o dată ulterioară sau egală cu aceasta.");
+    }
 
     const alreadyPaid = round2(
       Number((await connection.query(
@@ -1230,11 +1238,12 @@ export async function addPayment(
         [invoiceId],
       )).rows[0].amount),
     );
-    const outstanding = round2(Number(invoice.total) - alreadyPaid);
+    const outstanding = refund ? alreadyPaid : round2(Number(invoice.total) - alreadyPaid);
     if (outstanding <= 0) throw new Error("Factura este deja achitată integral.");
     if (round2(amount) > outstanding)
       throw new Error(`Suma depășește restul de plată de ${outstanding.toFixed(2)} ${invoice.currency}.`);
     amount = round2(amount);
+    if (refund) amount = -amount;
 
     const { rows: paymentRows } = await connection.query(
       `INSERT INTO payments ("invoiceId", amount, date, method, notes) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
@@ -1265,7 +1274,7 @@ export async function addPayment(
     await postPaymentToLedger(Number(paymentRows[0].id), connection);
 
     const paid = round2(alreadyPaid + amount);
-    const status: Invoice["status"] =
+    const status: Invoice["status"] = refund ? "stornoed" :
       paid <= 0 ? "issued" : paid >= invoice.total ? "paid" : "partial";
     await connection.query(
       `UPDATE invoices SET "paidAmount"=$1, status=$2 WHERE id=$3`,

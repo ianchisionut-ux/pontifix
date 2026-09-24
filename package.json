@@ -11,6 +11,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "test:accounting-xml": "node scripts/test-accounting-xml.cjs",
+    "test:accounting-flow": "node scripts/test-accounting-flow.cjs",
     "test:anaf-workflow": "node scripts/test-anaf-workflow.cjs",
     "test:payroll": "node --experimental-strip-types scripts/test-payroll.ts",
     "test:saga-import": "node --experimental-strip-types scripts/test-saga-import.ts",

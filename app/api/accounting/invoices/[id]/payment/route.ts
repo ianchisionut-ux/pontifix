@@ -6,7 +6,7 @@ async function POSTHandler(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   try {
     const data = await req.json();
-    await addPayment(Number(id), Number(data.amount), data.date, data.method ?? "numerar", data.notes ?? "");
+    await addPayment(Number(id), Number(data.amount), data.date, data.method ?? "numerar", data.notes ?? "", data.refund === true);
     return NextResponse.json(await getInvoiceFull(Number(id)));
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Plata nu a putut fi înregistrată." }, { status: 400 });

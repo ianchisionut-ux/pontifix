@@ -6,6 +6,7 @@ import Link from "next/link";
 import { StatusBadge } from "@/components/accounting/StatusBadge";
 import { EFacturaPanel } from "@/components/accounting/EFacturaPanel";
 import { InvoiceCorrection } from "@/components/accounting/InvoiceCorrection";
+import { InvoiceRefund } from "@/components/accounting/InvoiceRefund";
 import { ArrowLeft, Download, Trash2, Receipt as ReceiptIcon, RotateCcw } from "lucide-react";
 import { bucharestDate } from "@/lib/accounting/date";
 
@@ -216,6 +217,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {invoice.status === "stornoed" && Number(invoice.paidAmount) > 0 && <InvoiceRefund invoiceId={invoice.id} remaining={Number(invoice.paidAmount)} onSaved={load} />}
       {financialLocked && <div className="card mb-6"><div className="section-label">Document fără încasare</div><p className="text-sm text-slate-500">{invoice.invoiceType === "STORNO" ? `Aceasta este factura storno pentru documentul inițial. ${invoice.stornoReason || ""}` : "Factura a fost stornată; încasările și chitanțele sunt blocate."}</p></div>}
       {!financialLocked && <div className="grid grid-cols-2 gap-6">
         <div className="card">

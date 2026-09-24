@@ -35,6 +35,7 @@ function validDate(value: string) {
 async function assertOpenPeriod(client: PoolClient, date: string) {
   if (!validDate(date)) throw new Error("Data articolului contabil nu este validă.");
   const [year, month] = date.split("-").map(Number);
+  await client.query(`SELECT pg_advisory_xact_lock(73003,$1)`, [year * 100 + month]);
   const { rows } = await client.query(
     `SELECT status FROM accounting_periods WHERE year=$1 AND month=$2`,
     [year, month],
@@ -445,22 +446,22 @@ export async function postPaymentToLedger(paymentId: number, client: PoolClient)
   const cash = ["cash", "numerar"].includes(String(payment.method).toLowerCase());
   const amount = round2(Number(payment.amount) * Number(payment.exchangeRate || 1));
   const reference = `${payment.series} ${payment.number}`;
+  const lines: JournalLineInput[] = [];
+  addSignedLines(lines, cash ? "5311" : "5121", "4111", amount,
+    amount < 0 ? `Restituire ${reference}` : `Încasare ${reference}`, payment.clientId);
   return replaceAutomaticEntry(client, {
     date: String(payment.date).slice(0, 10),
-    description: `Încasare factură ${reference} - ${payment.clientName || "Client"}`,
+    description: `${amount < 0 ? "Restituire" : "Încasare"} factură ${reference} - ${payment.clientName || "Client"}`,
     documentNumber: reference,
     sourceType: "PAYMENT",
     sourceId: paymentId,
-    lines: [
-      { accountCode: cash ? "5311" : "5121", debit: amount, explanation: `Încasare ${reference}`, partnerId: payment.clientId },
-      { accountCode: "4111", credit: amount, explanation: `Stingere creanță ${reference}`, partnerId: payment.clientId },
-    ],
+    lines,
   });
 }
 
 export async function postPurchaseInvoiceToLedger(purchaseId: number, client: PoolClient) {
   const { rows } = await client.query(
-    `SELECT p.*,s.name AS "supplierName",s."analyticAccount"
+    `SELECT p.*,p."issueDate"::text AS "issueDate",s.name AS "supplierName",s."analyticAccount"
        FROM purchase_invoices p JOIN suppliers s ON s.id=p."supplierId" WHERE p.id=$1`,
     [purchaseId],
   );
@@ -507,7 +508,7 @@ export async function postPurchaseInvoiceToLedger(purchaseId: number, client: Po
 
 export async function postSupplierPaymentToLedger(paymentId: number, client: PoolClient) {
   const { rows } = await client.query(
-    `SELECT sp.*,p."documentNumber",p."supplierId",p."exchangeRate",s.name AS "supplierName",s."analyticAccount"
+    `SELECT sp.*,sp.date::text AS date,p."documentNumber",p."supplierId",p."exchangeRate",s.name AS "supplierName",s."analyticAccount"
        FROM supplier_payments sp JOIN purchase_invoices p ON p.id=sp."purchaseInvoiceId"
        JOIN suppliers s ON s.id=p."supplierId" WHERE sp.id=$1`,
     [paymentId],
@@ -685,13 +686,20 @@ export async function setPeriodStatus(year: number, month: number, status: "OPEN
   if (!Number.isInteger(year) || year < 2000 || year > 2100 || !Number.isInteger(month) || month < 1 || month > 12) {
     throw new Error("Perioada nu este validă.");
   }
-  const pool = await ready();
-  await pool.query(
+  if (!["OPEN", "CLOSED"].includes(status)) throw new Error("Stare invalidă.");
+  const connection = await (await ready()).connect();
+  try {
+  await connection.query("BEGIN");
+  await connection.query(`SELECT pg_advisory_xact_lock(73003,$1)`, [year * 100 + month]);
+  await connection.query(
     `INSERT INTO accounting_periods (year,month,status,"closedAt","closedBy")
      VALUES ($1,$2,$3,CASE WHEN $3='CLOSED' THEN now() ELSE NULL END,$4)
      ON CONFLICT (year,month) DO UPDATE SET status=EXCLUDED.status,"closedAt"=EXCLUDED."closedAt","closedBy"=EXCLUDED."closedBy"`,
     [year, month, status, status === "CLOSED" ? closedBy : ""],
   );
+  await connection.query("COMMIT");
+  } catch (error) { await connection.query("ROLLBACK"); throw error; }
+  finally { connection.release(); }
 }
 
 export async function getLedgerStats() {

@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import chartOfAccounts from "./chart-of-accounts.ro.json";
 
-const ACCOUNTING_SCHEMA_VERSION = 17;
+const ACCOUNTING_SCHEMA_VERSION = 18;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -607,6 +607,17 @@ async function ensureSchemaVersion(pool: Pool) {
   }
 
   await ensureSchema(pool);
+  // Recompute from source amounts, never multiply previously converted values.
+  await pool.query(`WITH corrected AS (
+    SELECT r.id,ROUND((p.amount*i."exchangeRate")::numeric,2) AS gross,
+      CASE WHEN co."vatPayer"=1 AND i.total<>0
+        THEN ROUND((ROUND((p.amount*i."exchangeRate")::numeric,2)*i.subtotal/i.total)::numeric,2)
+        ELSE ROUND((p.amount*i."exchangeRate")::numeric,2) END AS net
+    FROM ref_transactions r JOIN payments p ON p.id=r."paymentId"
+    JOIN invoices i ON i.id=p."invoiceId" CROSS JOIN company co
+    WHERE r.source='AUTO_PAYMENT' AND co.id=1 AND i."exchangeRate"<>1
+  ) UPDATE ref_transactions r SET "grossAmount"=c.gross,"netAmount"=c.net,
+    "vatAmount"=c.gross-c.net,"fiscalAmount"=c.net FROM corrected c WHERE r.id=c.id`);
   await pool.query(`CREATE TABLE IF NOT EXISTS accounting_schema_meta (id INTEGER PRIMARY KEY, version INTEGER NOT NULL);`);
   await pool.query(
     `INSERT INTO accounting_schema_meta (id, version) VALUES (1, $1)

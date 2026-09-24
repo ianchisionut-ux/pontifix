@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Download } from "lucide-react";
+import { RefundReport } from "@/components/accounting/RefundReport";
 
 function fmt(n: number) {
   return (n ?? 0).toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -86,6 +87,7 @@ export default function ReportsPage() {
         </p>
       </div>
 
+      <RefundReport />
       <div className="flex gap-2 mb-5">
         {tabs.map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)} className={`pill ${tab === t.key ? "active" : ""}`}>

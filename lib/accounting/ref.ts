@@ -185,9 +185,11 @@ export async function createRefIncomeForPayment(input: {
   clientName: string;
 }, client?: PoolClient) {
   const executor = client || await ready();
+  const invoiceRow = (await executor.query(`SELECT "exchangeRate" FROM invoices WHERE id=$1`, [input.invoiceId])).rows[0];
+  if (!invoiceRow) throw new Error("Factura încasării nu există.");
   const companyResult = await executor.query(`SELECT "vatPayer" FROM company WHERE id=1`);
   const vatPayer = Boolean(Number(companyResult.rows[0]?.vatPayer || 0));
-  const gross = round2(input.amount);
+  const gross = round2(input.amount * Number(invoiceRow.exchangeRate || 1));
   const net = vatPayer && input.invoiceTotal > 0
     ? round2(gross * input.invoiceSubtotal / input.invoiceTotal)
     : gross;

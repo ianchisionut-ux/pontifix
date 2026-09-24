@@ -98,9 +98,22 @@ export async function getDeclarationPeriod(year: number, month: number) {
     pool.query(
       `SELECT id, "partnerName", "partnerCif", UPPER("partnerCountryCode") as "partnerCountryCode",
               "documentType", "documentNumber", "grossAmount", "netAmount", "vatAmount",
-              "deductibilityPercent", "fiscalCategory", "vatRate"
-         FROM ref_transactions
-        WHERE type='EXPENSE' AND date >= $1::date AND date < $2::date ORDER BY date,id`,
+              "deductibilityPercent", "fiscalCategory", "vatRate", 0 AS "reverseCharge", 0 AS "vatOnCollection"
+         FROM ref_transactions r
+        WHERE type='EXPENSE' AND date >= $1::date AND date < $2::date
+          AND NOT EXISTS (SELECT 1 FROM purchase_invoices p JOIN suppliers s ON s.id=p."supplierId"
+            WHERE p.status<>'CANCELED' AND p."issueDate">=$1::date AND p."issueDate"<$2::date
+            AND upper(trim(p."documentNumber"))=upper(trim(r."documentNumber"))
+            AND regexp_replace(upper(s.cif),'^RO','')=regexp_replace(upper(r."partnerCif"),'^RO','')
+            AND trim(s.cif)<>'')
+        UNION ALL
+        SELECT -i.id,s.name,s.cif,UPPER(s."countryCode"),p."documentType",p."documentNumber",
+          ROUND((i."netAmount"+CASE WHEN p."reverseCharge"=1 THEN 0 ELSE i."vatAmount" END)*p."exchangeRate",2),
+          ROUND(i."netAmount"*p."exchangeRate",2),ROUND(i."vatAmount"*p."exchangeRate",2),
+          i."deductibilityPercent",'DEDUCTIBLE_EXPENSE',i."vatRate",p."reverseCharge",p."vatOnCollection"
+        FROM purchase_invoices p JOIN purchase_invoice_items i ON i."purchaseInvoiceId"=p.id
+        JOIN suppliers s ON s.id=p."supplierId"
+        WHERE p.status<>'CANCELED' AND p."issueDate">=$1::date AND p."issueDate"<$2::date`,
       [start, next]
     ),
     pool.query(
@@ -131,6 +144,7 @@ export async function getDeclarationPeriod(year: number, month: number) {
     documentCount: Number(row.documentCount), taxableBase: round2(Number(row.taxableBase)), vat: round2(Number(row.vat)), gross: round2(Number(row.gross)),
   }));
   const expenses = expensesResult.rows.map((row) => ({
+    reverseCharge: Boolean(Number(row.reverseCharge)), vatOnCollection: Boolean(Number(row.vatOnCollection)),
     id: Number(row.id), partnerName: String(row.partnerName || ""), partnerCif: String(row.partnerCif || ""),
     countryCode: String(row.partnerCountryCode || "RO"), documentType: String(row.documentType), documentNumber: String(row.documentNumber || ""),
     gross: round2(Number(row.grossAmount)), net: round2(Number(row.netAmount)), vat: round2(Number(row.vatAmount)),
@@ -173,6 +187,7 @@ export async function getDeclarationPeriod(year: number, month: number) {
   const invalidD390Company = !/^[1-9]\d{1,9}$/.test(companyCui) || !String(company.name || "").trim() || !String(company.address || "").trim();
   const invalidD390Operations = d390Operations.filter((row) => !row.partnerName.trim() || Math.round(row.taxableBase) <= 0 || (row.direction === "SALE" && !vatNumberWithoutCountry(row.partnerCif, row.countryCode))).length;
   const d300Blockers: string[] = [];
+  if (expenses.some(row => row.reverseCharge || row.vatOnCollection)) d300Blockers.push("Achizițiile cu taxare inversă sau TVA la încasare necesită reconcilierea exigibilității și clasificării înainte de XML D300.");
   if (year < 2026) d300Blockers.push("XML D300 este implementat pe structura ANAF v12 numai pentru perioade din 2026.");
   if (!Number(company.vatPayer || 0)) d300Blockers.push("Firma nu este configurată ca plătitoare de TVA.");
   if (vatOnCashAccounting) d300Blockers.push("TVA la încasare necesită jurnalul de exigibilitate pe cote; XML-ul este blocat până la reconcilierea contabilă.");
