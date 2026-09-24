@@ -4,6 +4,8 @@ import {
   CheckCircle2,
   Cloud,
   Download,
+  Eye,
+  FileText,
   Link2,
   RefreshCw,
   ShieldCheck,
@@ -320,13 +322,11 @@ export default function EFacturaPage() {
                       })}
                   </td>
                   <td>
-                    <a
-                      className="btn-secondary"
-                      href={`/api/accounting/efactura/messages/${m.downloadId}/download`}
-                    >
-                      <Download size={13} />
-                      ZIP
-                    </a>
+                    <div className="flex gap-2 flex-wrap">
+                      <a className="btn-primary" target="_blank" rel="noreferrer" href={`/api/accounting/efactura/messages/${m.downloadId}/pdf`}><Eye size={13}/>Vezi PDF</a>
+                      <a className="btn-secondary" href={`/api/accounting/efactura/messages/${m.downloadId}/pdf?download=1`}><FileText size={13}/>PDF</a>
+                      <a className="btn-secondary" href={`/api/accounting/efactura/messages/${m.downloadId}/download`}><Download size={13}/>ZIP</a>
+                    </div>
                   </td>
                 </tr>
               ))

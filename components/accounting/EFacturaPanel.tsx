@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, CloudUpload, Code2, Download, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
+import { CheckCircle2, CloudUpload, Code2, Download, Eye, FileText, RefreshCw, ShieldCheck, TriangleAlert } from "lucide-react";
 
 type Submission = {
   id: number;
@@ -165,7 +165,9 @@ export function EFacturaPanel({ invoiceId }: { invoiceId: number }) {
         {canSend && <button className="btn-primary" onClick={send} disabled={!data?.valid || busy}><CloudUpload size={14}/>{busy ? "Se procesează…" : submission ? "Retrimite manual" : "Trimite acum în SPV"}</button>}
         {canCheck && <button className="btn-secondary" onClick={check} disabled={busy}><RefreshCw className={busy ? "ef-spin" : ""} size={14}/>Reverifică statusul ANAF</button>}
         {submission?.status === "UNCERTAIN" && <button className="btn-secondary" onClick={reconcile} disabled={busy}><RefreshCw className={busy ? "ef-spin" : ""} size={14}/>{busy ? "Se sincronizează…" : "Sincronizează registrul SPV"}</button>}
-        {submission?.downloadId && <a className="btn-secondary" href={`/api/accounting/efactura/messages/${submission.downloadId}/download`}><Download size={14}/>Descarcă răspunsul ANAF</a>}
+        {submission?.downloadId && <a className="btn-primary" target="_blank" rel="noreferrer" href={`/api/accounting/efactura/messages/${submission.downloadId}/pdf`}><Eye size={14}/>Vezi PDF ANAF</a>}
+        {submission?.downloadId && <a className="btn-secondary" href={`/api/accounting/efactura/messages/${submission.downloadId}/pdf?download=1`}><FileText size={14}/>Descarcă PDF</a>}
+        {submission?.downloadId && <a className="btn-secondary" href={`/api/accounting/efactura/messages/${submission.downloadId}/download`}><Download size={14}/>Descarcă ZIP ANAF</a>}
       </div>
     </div>
   );
