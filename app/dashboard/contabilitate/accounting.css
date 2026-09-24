@@ -44,6 +44,12 @@
 .ledger-account-select .field-label { min-width:min(520px,70vw); }
 .ledger-search { margin-bottom:12px; }
 .ledger-period-year { width:180px; margin-bottom:15px; }
+.purchase-lines { overflow-x:auto; }
+.purchase-line { display:grid; grid-template-columns:minmax(190px,1.5fr) minmax(190px,1.3fr) 65px 80px 115px 82px 90px 28px; gap:7px; align-items:center; min-width:980px; margin-bottom:7px; }
+.purchase-line-head { margin-bottom:5px; color:var(--text-faint); font-size:10px; font-weight:900; letter-spacing:.04em; text-transform:uppercase; }
+.modal-backdrop { position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(0,26,61,.42); backdrop-filter:blur(3px); }
+.accounting-root .modal-card { width:min(560px,100%); box-shadow:0 28px 70px rgba(0,26,61,.25); }
+.ref-warning { display:flex; align-items:center; gap:8px; padding:10px 13px; border:1px solid #f1d49a; border-radius:10px; background:#fff8e8; color:#8a5a08; font-size:12px; font-weight:750; }
 .ref-partner-box { display:grid; gap:10px; padding:12px; border:1px solid var(--border); border-radius:10px; background:color-mix(in srgb,var(--surface) 82%,var(--cyan) 2%); }
 .ref-cui-lookup { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px; }
 .ref-cui-lookup .btn-secondary { white-space:nowrap; }
@@ -113,6 +119,7 @@
 .accounting-root .doc-chip { display: inline-flex; padding: 4px 9px; border: 1px solid #accff5; border-radius: 8px; background: #eef6ff; color: var(--cyan-strong); font-family: var(--font-mono); font-size: 12px; font-weight: 800; }
 .accounting-root .badge { display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 999px; font-size: 10px; font-weight: 900; }
 .accounting-root .badge-issued { background:#fff3d9; color:#9a650d; }
+.accounting-root .badge-draft { background:#fff3d9; color:#9a650d; }
 .accounting-root .badge-paid { background:#e4f8ef; color:#08784a; }
 .accounting-root .badge-partial { background:#e5f4fb; color:#0065d9; }
 .accounting-root .badge-canceled { background:#fdebed; color:#b72e3d; }

@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import chartOfAccounts from "./chart-of-accounts.ro.json";
 
-const ACCOUNTING_SCHEMA_VERSION = 14;
+const ACCOUNTING_SCHEMA_VERSION = 15;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -448,6 +448,91 @@ async function ensureSchema(pool: Pool) {
        "allowPosting"=EXCLUDED."allowPosting","updatedAt"=now()`,
     [JSON.stringify(chartOfAccounts)],
   );
+
+  // Nomenclator furnizori si documente de intrare. Contul analitic 401.xxxxx
+  // se creeaza la salvarea furnizorului, iar documentele sunt contate automat.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS suppliers (
+      id SERIAL PRIMARY KEY,
+      code TEXT NOT NULL DEFAULT '',
+      name TEXT NOT NULL,
+      cif TEXT NOT NULL DEFAULT '',
+      "regCom" TEXT NOT NULL DEFAULT '',
+      "countryCode" TEXT NOT NULL DEFAULT 'RO',
+      county TEXT NOT NULL DEFAULT '',
+      city TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
+      "postalCode" TEXT NOT NULL DEFAULT '',
+      "bankAccount" TEXT NOT NULL DEFAULT '',
+      bank TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL DEFAULT '',
+      "vatPayer" INTEGER NOT NULL DEFAULT 0,
+      "vatOnCollection" INTEGER NOT NULL DEFAULT 0,
+      inactive INTEGER NOT NULL DEFAULT 0,
+      "dueDays" INTEGER NOT NULL DEFAULT 30,
+      blocked INTEGER NOT NULL DEFAULT 0,
+      warning INTEGER NOT NULL DEFAULT 0,
+      affiliated INTEGER NOT NULL DEFAULT 0,
+      notes TEXT NOT NULL DEFAULT '',
+      "analyticAccount" TEXT NOT NULL DEFAULT '',
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS suppliers_code_key ON suppliers(code) WHERE code<>'';
+    CREATE UNIQUE INDEX IF NOT EXISTS suppliers_cif_key ON suppliers(UPPER(cif)) WHERE cif<>'';
+
+    CREATE TABLE IF NOT EXISTS purchase_invoices (
+      id SERIAL PRIMARY KEY,
+      "internalNumber" INTEGER NOT NULL,
+      year INTEGER NOT NULL,
+      "supplierId" INTEGER NOT NULL REFERENCES suppliers(id),
+      "documentType" TEXT NOT NULL DEFAULT 'FACTURA',
+      "documentNumber" TEXT NOT NULL,
+      "issueDate" DATE NOT NULL,
+      "dueDate" DATE NOT NULL,
+      currency TEXT NOT NULL DEFAULT 'RON',
+      "exchangeRate" NUMERIC(14,6) NOT NULL DEFAULT 1,
+      subtotal NUMERIC(14,2) NOT NULL DEFAULT 0,
+      "vatTotal" NUMERIC(14,2) NOT NULL DEFAULT 0,
+      total NUMERIC(14,2) NOT NULL DEFAULT 0,
+      "paidAmount" NUMERIC(14,2) NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'POSTED' CHECK (status IN ('POSTED','PARTIAL','PAID','CANCELED')),
+      "reverseCharge" INTEGER NOT NULL DEFAULT 0,
+      "vatOnCollection" INTEGER NOT NULL DEFAULT 0,
+      notes TEXT NOT NULL DEFAULT '',
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE(year,"internalNumber")
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS purchase_invoice_supplier_document_key
+      ON purchase_invoices("supplierId",UPPER("documentNumber"),"issueDate") WHERE status<>'CANCELED';
+    CREATE INDEX IF NOT EXISTS purchase_invoices_date_idx ON purchase_invoices("issueDate",id);
+
+    CREATE TABLE IF NOT EXISTS purchase_invoice_items (
+      id SERIAL PRIMARY KEY,
+      "purchaseInvoiceId" INTEGER NOT NULL REFERENCES purchase_invoices(id) ON DELETE CASCADE,
+      description TEXT NOT NULL,
+      "expenseAccount" TEXT NOT NULL REFERENCES accounting_accounts(code),
+      unit TEXT NOT NULL DEFAULT 'buc',
+      quantity NUMERIC(14,3) NOT NULL DEFAULT 1,
+      "unitPrice" NUMERIC(14,4) NOT NULL DEFAULT 0,
+      "vatRate" NUMERIC(6,2) NOT NULL DEFAULT 21,
+      "netAmount" NUMERIC(14,2) NOT NULL DEFAULT 0,
+      "vatAmount" NUMERIC(14,2) NOT NULL DEFAULT 0,
+      "deductibilityPercent" NUMERIC(6,2) NOT NULL DEFAULT 100
+    );
+    CREATE TABLE IF NOT EXISTS supplier_payments (
+      id SERIAL PRIMARY KEY,
+      "purchaseInvoiceId" INTEGER NOT NULL REFERENCES purchase_invoices(id) ON DELETE CASCADE,
+      date DATE NOT NULL,
+      amount NUMERIC(14,2) NOT NULL CHECK (amount>0),
+      method TEXT NOT NULL DEFAULT 'BANK',
+      reference TEXT NOT NULL DEFAULT '',
+      notes TEXT NOT NULL DEFAULT '',
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS "supplierId" INTEGER REFERENCES suppliers(id) ON DELETE SET NULL;
+  `);
   // Populam idempotent registrul cu incasarile deja existente in Facturare.
   await pool.query(`
     INSERT INTO ref_transactions

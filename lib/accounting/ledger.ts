@@ -9,6 +9,7 @@ export type JournalLineInput = {
   credit?: number;
   explanation?: string;
   partnerId?: number | null;
+  supplierId?: number | null;
 };
 
 export type JournalEntryInput = {
@@ -111,9 +112,9 @@ async function insertEntry(client: PoolClient, input: JournalEntryInput) {
   for (const [index, line] of lines.entries()) {
     await client.query(
       `INSERT INTO journal_lines
-         ("entryId","lineNumber","accountCode",debit,credit,explanation,"partnerId")
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [entryId, index + 1, line.accountCode, line.debit, line.credit, line.explanation || "", line.partnerId ?? null],
+         ("entryId","lineNumber","accountCode",debit,credit,explanation,"partnerId","supplierId")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [entryId, index + 1, line.accountCode, line.debit, line.credit, line.explanation || "", line.partnerId ?? null, line.supplierId ?? null],
     );
   }
   return entryId;
@@ -222,6 +223,77 @@ export async function postPaymentToLedger(paymentId: number, client: PoolClient)
     lines: [
       { accountCode: cash ? "5311" : "5121", debit: amount, explanation: `Încasare ${reference}`, partnerId: payment.clientId },
       { accountCode: "4111", credit: amount, explanation: `Stingere creanță ${reference}`, partnerId: payment.clientId },
+    ],
+  });
+}
+
+export async function postPurchaseInvoiceToLedger(purchaseId: number, client: PoolClient) {
+  const { rows } = await client.query(
+    `SELECT p.*,s.name AS "supplierName",s."analyticAccount"
+       FROM purchase_invoices p JOIN suppliers s ON s.id=p."supplierId" WHERE p.id=$1`,
+    [purchaseId],
+  );
+  const purchase = rows[0];
+  if (!purchase) throw new Error("Factura de intrare nu există pentru contare.");
+  const items = (await client.query(
+    `SELECT * FROM purchase_invoice_items WHERE "purchaseInvoiceId"=$1 ORDER BY id`,
+    [purchaseId],
+  )).rows;
+  const rate = Number(purchase.exchangeRate || 1);
+  const reference = String(purchase.documentNumber);
+  const expenseTotals = new Map<string, number>();
+  let deductibleVat = 0;
+  let reverseVat = 0;
+  for (const item of items) {
+    const net = round2(Number(item.netAmount) * rate);
+    const vat = round2(Number(item.vatAmount) * rate);
+    const deductible = round2(vat * Number(item.deductibilityPercent || 0) / 100);
+    const expense = round2(net + vat - deductible);
+    const account = String(item.expenseAccount || "628");
+    expenseTotals.set(account, round2((expenseTotals.get(account) || 0) + expense));
+    deductibleVat = round2(deductibleVat + deductible);
+    reverseVat = round2(reverseVat + vat);
+  }
+  const lines: JournalLineInput[] = [];
+  for (const [accountCode, amount] of expenseTotals) {
+    if (amount) lines.push({ accountCode, debit: amount, explanation: `Achiziție ${reference}`, supplierId: purchase.supplierId });
+  }
+  if (deductibleVat) lines.push({ accountCode: "4426", debit: deductibleVat, explanation: `TVA deductibilă ${reference}`, supplierId: purchase.supplierId });
+  if (purchase.reverseCharge && reverseVat) {
+    lines.push({ accountCode: "4427", credit: reverseVat, explanation: `Taxare inversă ${reference}`, supplierId: purchase.supplierId });
+  }
+  const supplierCredit = round2(Number(purchase.total) * rate);
+  lines.push({ accountCode: purchase.analyticAccount, credit: supplierCredit, explanation: `Datorie furnizor ${reference}`, supplierId: purchase.supplierId });
+  return replaceAutomaticEntry(client, {
+    date: String(purchase.issueDate).slice(0, 10),
+    description: `Factură furnizor ${reference} - ${purchase.supplierName}`,
+    documentNumber: reference,
+    sourceType: "PURCHASE",
+    sourceId: purchaseId,
+    lines,
+  });
+}
+
+export async function postSupplierPaymentToLedger(paymentId: number, client: PoolClient) {
+  const { rows } = await client.query(
+    `SELECT sp.*,p."documentNumber",p."supplierId",p."exchangeRate",s.name AS "supplierName",s."analyticAccount"
+       FROM supplier_payments sp JOIN purchase_invoices p ON p.id=sp."purchaseInvoiceId"
+       JOIN suppliers s ON s.id=p."supplierId" WHERE sp.id=$1`,
+    [paymentId],
+  );
+  const payment = rows[0];
+  if (!payment) throw new Error("Plata furnizorului nu există pentru contare.");
+  const cash = ["cash", "numerar"].includes(String(payment.method).toLowerCase());
+  const amount = round2(Number(payment.amount) * Number(payment.exchangeRate || 1));
+  return replaceAutomaticEntry(client, {
+    date: String(payment.date).slice(0, 10),
+    description: `Plată furnizor ${payment.supplierName} - ${payment.documentNumber}`,
+    documentNumber: payment.reference || payment.documentNumber,
+    sourceType: "SUPPLIER_PAYMENT",
+    sourceId: paymentId,
+    lines: [
+      { accountCode: payment.analyticAccount, debit: amount, explanation: `Stingere datorie ${payment.documentNumber}`, supplierId: payment.supplierId },
+      { accountCode: cash ? "5311" : "5121", credit: amount, explanation: `Plată ${payment.documentNumber}`, supplierId: payment.supplierId },
     ],
   });
 }
