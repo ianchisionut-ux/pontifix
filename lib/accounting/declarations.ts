@@ -60,7 +60,12 @@ function vatNumberWithoutCountry(value: string, countryCode: string) {
 export async function getDeclarationPeriod(year: number, month: number) {
   const { start, next } = periodBounds(year, month);
   const pool = await ready();
-  const [companyResult, vatRowsResult, salesPartnersResult, d390SalesDocsResult, expensesResult, incomeResult, efResult, savedResult, settingsResult, classificationsResult] = await Promise.all([
+  const settingsResult = await pool.query(`SELECT * FROM tax_declaration_settings WHERE id=1`);
+  const settings = settingsResult.rows[0] || {};
+  const periodType = String(settings.fiscalPeriodType || "L");
+  const periodMonths = periodType === "T" ? 3 : periodType === "S" ? 6 : periodType === "A" ? 12 : 1;
+  const fiscalStart = periodBounds(year, Math.floor((month - 1) / periodMonths) * periodMonths + 1).start;
+  const [companyResult, vatRowsResult, salesPartnersResult, d390SalesDocsResult, expensesResult, incomeResult, efResult, savedResult, classificationsResult] = await Promise.all([
     pool.query(`SELECT name,cif,address,phone,email,bank,iban,"vatPayer", "vatIncasare" FROM company WHERE id=1`),
     pool.query(
       `SELECT ii."vatRate" as "vatRate", COUNT(DISTINCT i.id)::int as "documentCount",
@@ -69,7 +74,7 @@ export async function getDeclarationPeriod(year: number, month: number) {
          FROM invoices i JOIN invoice_items ii ON ii."invoiceId"=i.id
         WHERE i."issueDate"::date >= $1::date AND i."issueDate"::date < $2::date AND i.status<>'canceled'
         GROUP BY ii."vatRate" ORDER BY ii."vatRate" DESC`,
-      [start, next]
+      [fiscalStart, next]
     ),
     pool.query(
       `SELECT COALESCE(NULLIF(i."clientSnapshot"->>'name',''),c.name) as "partnerName",
@@ -82,7 +87,7 @@ export async function getDeclarationPeriod(year: number, month: number) {
          FROM invoices i JOIN clients c ON c.id=i."clientId"
         WHERE i."issueDate"::date >= $1::date AND i."issueDate"::date < $2::date AND i.status<>'canceled'
         GROUP BY 1,2,3 ORDER BY 1`,
-      [start, next]
+      [fiscalStart, next]
     ),
     pool.query(
       `SELECT i.id, COALESCE(NULLIF(i."clientSnapshot"->>'name',''),c.name) as "partnerName",
@@ -98,7 +103,8 @@ export async function getDeclarationPeriod(year: number, month: number) {
     pool.query(
       `SELECT id, "partnerName", "partnerCif", UPPER("partnerCountryCode") as "partnerCountryCode",
               "documentType", "documentNumber", "grossAmount", "netAmount", "vatAmount",
-              "deductibilityPercent", "fiscalCategory", "vatRate", 0 AS "reverseCharge", 0 AS "vatOnCollection"
+              "deductibilityPercent", "fiscalCategory", "vatRate", 0 AS "reverseCharge", 0 AS "vatOnCollection",
+              'REF:' || id AS "documentKey", date::text AS "documentDate"
          FROM ref_transactions r
         WHERE type='EXPENSE' AND date >= $1::date AND date < $2::date
           AND NOT EXISTS (SELECT 1 FROM purchase_invoices p JOIN suppliers s ON s.id=p."supplierId"
@@ -110,16 +116,17 @@ export async function getDeclarationPeriod(year: number, month: number) {
         SELECT -i.id,s.name,s.cif,UPPER(s."countryCode"),p."documentType",p."documentNumber",
           ROUND((i."netAmount"+CASE WHEN p."reverseCharge"=1 THEN 0 ELSE i."vatAmount" END)*p."exchangeRate",2),
           ROUND(i."netAmount"*p."exchangeRate",2),ROUND(i."vatAmount"*p."exchangeRate",2),
-          i."deductibilityPercent",'DEDUCTIBLE_EXPENSE',i."vatRate",p."reverseCharge",p."vatOnCollection"
+          i."deductibilityPercent",'DEDUCTIBLE_EXPENSE',i."vatRate",p."reverseCharge",p."vatOnCollection",
+          'PURCHASE:' || p.id,p."issueDate"::text
         FROM purchase_invoices p JOIN purchase_invoice_items i ON i."purchaseInvoiceId"=p.id
         JOIN suppliers s ON s.id=p."supplierId"
         WHERE p.status<>'CANCELED' AND p."issueDate">=$1::date AND p."issueDate"<$2::date`,
-      [start, next]
+      [fiscalStart, next]
     ),
     pool.query(
       `SELECT COALESCE(SUM("vatAmount"),0) as "collectedVat"
          FROM ref_transactions WHERE type='INCOME' AND date >= $1::date AND date < $2::date`,
-      [start, next]
+      [fiscalStart, next]
     ),
     pool.query(
       `SELECT COUNT(*)::int as total,
@@ -132,7 +139,6 @@ export async function getDeclarationPeriod(year: number, month: number) {
       [start, next]
     ),
     pool.query(`SELECT * FROM tax_declaration_periods WHERE year=$1 AND month=$2`, [year, month]),
-    pool.query(`SELECT * FROM tax_declaration_settings WHERE id=1`),
     pool.query(`SELECT "sourceKey","operationCode" FROM tax_declaration_classifications WHERE year=$1 AND month=$2 AND "declarationType"='D390'`, [year, month]),
   ]);
 
@@ -144,6 +150,7 @@ export async function getDeclarationPeriod(year: number, month: number) {
     documentCount: Number(row.documentCount), taxableBase: round2(Number(row.taxableBase)), vat: round2(Number(row.vat)), gross: round2(Number(row.gross)),
   }));
   const expenses = expensesResult.rows.map((row) => ({
+    documentKey: String(row.documentKey || `REF:${row.id}`), documentDate: String(row.documentDate || start),
     reverseCharge: Boolean(Number(row.reverseCharge)), vatOnCollection: Boolean(Number(row.vatOnCollection)),
     id: Number(row.id), partnerName: String(row.partnerName || ""), partnerCif: String(row.partnerCif || ""),
     countryCode: String(row.partnerCountryCode || "RO"), documentType: String(row.documentType), documentNumber: String(row.documentNumber || ""),
@@ -152,15 +159,23 @@ export async function getDeclarationPeriod(year: number, month: number) {
     deductibleVat: row.fiscalCategory === "NON_DEDUCTIBLE_EXPENSE" ? 0 : round2(Number(row.vatAmount) * Number(row.deductibilityPercent) / 100),
   }));
   const domesticSales = salesPartners.filter((row) => row.countryCode === "RO");
-  const intraEuSales = salesPartners.filter((row) => row.countryCode !== "RO" && EU_COUNTRIES.has(normalizeEuCountry(row.countryCode)));
-  const domesticPurchases = expenses.filter((row) => row.countryCode === "RO" && row.documentType === "FACTURA");
+  const intraEuSales: PartnerRow[] = d390SalesDocsResult.rows.filter(row => row.countryCode !== "RO" && EU_COUNTRIES.has(normalizeEuCountry(String(row.countryCode)))).map(row => ({
+    partnerName: String(row.partnerName || ""), partnerCif: String(row.partnerCif || ""), countryCode: normalizeEuCountry(String(row.countryCode)),
+    documentCount: 1, taxableBase: round2(Number(row.taxableBase)), vat: round2(Number(row.vat)), gross: round2(Number(row.gross)),
+  }));
+  const seenPurchaseDocuments = new Set<string>();
+  const domesticPurchases = expenses.filter((row) => row.countryCode === "RO" && row.documentType === "FACTURA").map(row => {
+    const documentCount = seenPurchaseDocuments.has(row.documentKey) ? 0 : 1;
+    seenPurchaseDocuments.add(row.documentKey);
+    return { ...row, documentCount };
+  });
   const classificationMap = new Map(classificationsResult.rows.map((row) => [String(row.sourceKey), String(row.operationCode)]));
   const d390Operations: D390Operation[] = [
     ...d390SalesDocsResult.rows.filter((row) => row.countryCode !== "RO" && EU_COUNTRIES.has(normalizeEuCountry(String(row.countryCode)))).map((row) => ({
       sourceKey: `INVOICE:${Number(row.id)}`, direction: "SALE" as const, partnerName: String(row.partnerName || ""), partnerCif: String(row.partnerCif || ""),
       countryCode: normalizeEuCountry(String(row.countryCode)), documentCount: 1, taxableBase: round2(Number(row.taxableBase)), vat: round2(Number(row.vat)), gross: round2(Number(row.gross)),
     })),
-    ...expenses.filter((row) => row.documentType === "FACTURA" && row.countryCode !== "RO" && EU_COUNTRIES.has(normalizeEuCountry(row.countryCode))).map((row) => ({
+    ...expenses.filter((row) => row.documentDate >= start && row.documentDate < next && row.documentType === "FACTURA" && row.countryCode !== "RO" && EU_COUNTRIES.has(normalizeEuCountry(row.countryCode))).map((row) => ({
       sourceKey: `REF:${row.id}`, direction: "PURCHASE" as const, partnerName: row.partnerName, partnerCif: row.partnerCif,
       countryCode: normalizeEuCountry(row.countryCode), documentCount: 1, taxableBase: row.net, vat: row.vat, gross: row.gross,
     })),
@@ -179,7 +194,6 @@ export async function getDeclarationPeriod(year: number, month: number) {
   if (!Number(companyResult.rows[0]?.vatPayer || 0)) warnings.push("Firma nu este marcată ca plătitoare de TVA.");
   if (vatOnCashAccounting) warnings.push("D300 folosește TVA din încasările înregistrate în REF, conform configurării TVA la încasare; verifică extrasele și numerarul perioadei.");
   if (missingPurchasePartners) warnings.push(`${missingPurchasePartners} achiziții interne nu au furnizorul sau CUI-ul completat.`);
-  const settings = settingsResult.rows[0] || {};
   const missingDeclarant = [settings.declarantLastName, settings.declarantFirstName, settings.declarantFunction].filter((value) => !String(value || "").trim()).length;
   const unclassifiedD390 = d390Operations.filter((row) => !row.operationCode).length;
   const company = companyResult.rows[0] || {};
@@ -193,8 +207,10 @@ export async function getDeclarationPeriod(year: number, month: number) {
   if (vatOnCashAccounting) d300Blockers.push("TVA la încasare necesită jurnalul de exigibilitate pe cote; XML-ul este blocat până la reconcilierea contabilă.");
   if (!String(settings.profileConfirmedAt || "")) d300Blockers.push("Profilul fiscal D300/D394 nu a fost confirmat.");
   if (!/^\d{4}$/.test(String(settings.caen || ""))) d300Blockers.push("Codul CAEN de 4 cifre lipsește.");
-  const periodType=String(settings.fiscalPeriodType||"L");
-  if((periodType==="T"&&![2,3,5,6,8,9,11,12].includes(month))||(periodType==="S"&&![6,12].includes(month))||(periodType==="A"&&month!==12)) d300Blockers.push("Luna selectată nu este final de perioadă pentru tipul de decont configurat.");
+  const incompletePeriod = month % periodMonths !== 0;
+  if(incompletePeriod) d300Blockers.push("Luna selectată nu este final de perioadă. Trecerea la TVA lunar în cursul trimestrului necesită verificarea contabilului și configurarea perioadei speciale.");
+  if (!["L","T","S","A"].includes(periodType)) d300Blockers.push("Tipul perioadei fiscale este invalid.");
+  if (invalidD390Company) d300Blockers.push("Datele de identificare ale firmei sunt incomplete sau invalide.");
   if(Number(settings.proRata??100)!==100) d300Blockers.push("Pro-rata diferită de 100% necesită calculul contabil al ajustărilor înainte de generare.");
   if(Number(settings.priorVatPayable||0)>0&&Number(settings.priorVatRefundable||0)>0) d300Blockers.push("Soldurile precedente de plată și negativ nu pot fi ambele pozitive.");
   if (!String(company.bank || "").trim() || !String(company.iban || "").trim()) d300Blockers.push("Banca și contul IBAN sunt obligatorii.");
@@ -208,10 +224,21 @@ export async function getDeclarationPeriod(year: number, month: number) {
   if (d390Operations.length && invalidD390Company) warnings.push("Denumirea, adresa sau CUI-ul firmei nu sunt valide pentru XML D390.");
   if (invalidD390Operations) warnings.push(`${invalidD390Operations} operațiuni D390 au partenerul, codul TVA sau baza impozabilă invalidă.`);
   if (Number(ef.total) > Number(ef.validated)) warnings.push(`${Number(ef.total) - Number(ef.validated)} facturi ale perioadei nu sunt încă validate în RO e-Factura.`);
+  const d394Blockers: string[] = [];
+  if (!Number(company.vatPayer || 0)) d394Blockers.push("Firma nu este configurată ca plătitoare de TVA.");
+  if (!settings.profileConfirmedAt) d394Blockers.push("Profilul fiscal nu a fost confirmat.");
+  if (!/^\d{4}$/.test(String(settings.caen || ""))) d394Blockers.push("Codul CAEN de 4 cifre lipsește.");
+  if (domesticSales.some(row => !row.partnerName.trim())) d394Blockers.push("Există vânzări fără denumirea clientului.");
+  if (missingDeclarant) d394Blockers.push("Datele declarantului sunt incomplete.");
+  if (!String(settings.preparerName || "").trim() || !/^\d{2,13}$/.test(String(settings.preparerCif || "")) || !String(settings.preparerCapacity || "").trim()) d394Blockers.push("Datele persoanei care întocmește declarația sunt incomplete.");
+  if (invalidD390Company) d394Blockers.push("Datele de identificare ale firmei sunt incomplete sau invalide.");
+  if (missingPurchasePartners) d394Blockers.push(`${missingPurchasePartners} poziții de achiziție nu au furnizorul sau CUI-ul completat.`);
+  if (incompletePeriod) d394Blockers.push("Luna selectată nu încheie perioada fiscală configurată.");
+  if (!["L","T","S","A"].includes(periodType)) d394Blockers.push("Tipul perioadei fiscale este invalid.");
 
   const saved = savedResult.rows[0];
   return {
-    period: { year, month, start, endExclusive: next },
+    period: { year, month, start, fiscalStart, endExclusive: next },
     officialForms: getOfficialAnafForms(year, month),
     declarationSettings: {
       declarantLastName: String(settings.declarantLastName || ""),
@@ -232,6 +259,7 @@ export async function getDeclarationPeriod(year: number, month: number) {
     },
     basis: { vatPayer: Boolean(Number(companyResult.rows[0]?.vatPayer || 0)), vatOnCashAccounting },
     d300: {
+      documentCount: salesPartners.reduce((sum, row) => sum + row.documentCount, 0),
       dueDate: indicativeDueDate(year, month, 25), outputVat, invoicedOutputVat, inputVat,
       vatPayable: Math.max(0, round2(outputVat - inputVat)), vatRefundable: Math.max(0, round2(inputVat - outputVat)), vatRows,
       ready: d300Blockers.length === 0,
@@ -239,7 +267,8 @@ export async function getDeclarationPeriod(year: number, month: number) {
     },
     d394: {
       dueDate: indicativeDueDate(year, month, 30), sales: domesticSales, purchases: domesticPurchases,
-      ready: missingPurchasePartners === 0,
+      purchaseDocumentCount: new Set(domesticPurchases.map(row => row.documentKey)).size,
+      ready: d394Blockers.length === 0, blockers: d394Blockers,
     },
     d390: {
       dueDate: indicativeDueDate(year, month, 25), sales: intraEuSales, operations: d390Operations,
@@ -277,11 +306,12 @@ export async function updateDeclarationSettings(input: DeclarationSettingsInput)
   if (!["L","T","S","A"].includes(fiscalPeriodType)) throw new Error("Perioada fiscală este invalidă.");
   if (!preparerName || !/^\d{2,13}$/.test(preparerCif) || !preparerCapacity) throw new Error("Datele persoanei/organizației care întocmește D394 sunt incomplete.");
   const numeric=(value:unknown,min=0,max=99999999999999)=>{const number=Number(value??0);if(!Number.isFinite(number)||number<min||number>max)throw new Error("O valoare din profilul fiscal este invalidă.");return round2(number);};
-  const proRata=numeric(input.proRata,0,100);
+  const proRata=numeric(input.proRata ?? 100,0,100);
   const moneyValues=[input.priorVatPayable,input.priorVatRefundable,input.inspectionVatPayable,input.inspectionVatRefundable,input.deductibleAdjustments,input.refundedForeignVat].map(value=>numeric(value));
   const preparerType=Number(input.preparerType||0), consultOption=Number(input.consultOption||0), affiliatedTransactions=Number(input.affiliatedTransactions||0), requestRefund=Number(input.requestRefund||0);
   if (![0,1].includes(preparerType)||![0,1].includes(consultOption)||![0,1].includes(affiliatedTransactions)||![0,1].includes(requestRefund)) throw new Error("O opțiune fiscală are o valoare invalidă.");
   const invoiceSeries=String(input.invoiceSeries||"").trim().toUpperCase(), allocatedInvoiceFrom=Math.trunc(Number(input.allocatedInvoiceFrom||0)), allocatedInvoiceTo=Math.trunc(Number(input.allocatedInvoiceTo||0));
+  if (!Number.isSafeInteger(Number(input.allocatedInvoiceFrom ?? 0)) || !Number.isSafeInteger(Number(input.allocatedInvoiceTo ?? 0))) throw new Error("Plaja de facturi trebuie să conțină numere întregi valide.");
   if(invoiceSeries && (!/^[A-Z0-9._/-]{1,20}$/.test(invoiceSeries)||allocatedInvoiceFrom<1||allocatedInvoiceTo<allocatedInvoiceFrom)) throw new Error("Plaja anuală de facturi pentru D394 este invalidă.");
   const pool = await ready();
   await pool.query(
@@ -332,7 +362,7 @@ export async function generateOfficialD390Xml(year: number, month: number, recti
   if (!String(entity.name || "").trim() || !String(entity.address || "").trim()) throw new Error("Denumirea și adresa firmei sunt obligatorii pentru D390.");
   const rawOperations = report.d390.operations.map((row) => ({
     ...row,
-    baza: Math.round(row.taxableBase),
+    baza: row.taxableBase,
     codO: vatNumberWithoutCountry(row.partnerCif, row.countryCode),
   }));
   for (const row of rawOperations) {
@@ -347,7 +377,7 @@ export async function generateOfficialD390Xml(year: number, month: number, recti
     if (current) current.baza += row.baza;
     else grouped.set(key, { ...row });
   }
-  const operations = Array.from(grouped.values());
+  const operations = Array.from(grouped.values()).map(row => ({ ...row, baza: Math.round(row.baza) }));
   const bases = { L:0,T:0,A:0,P:0,S:0,R:0 } as Record<D390OperationCode, number>;
   for (const row of operations) bases[row.operationCode as D390OperationCode] += row.baza;
   const totalBase = Object.values(bases).reduce((sum, value) => sum + value, 0);
@@ -384,7 +414,10 @@ export async function generateOfficialD300Xml(year:number,month:number) {
   if(!/^[1-9]\d{1,9}$/.test(cui)) throw new Error("CUI-ul firmei nu este valid pentru D300.");
   const sales=new Map(report.d300.vatRows.map(row=>[Number(row.vatRate),{base:Math.round(row.taxableBase),vat:Math.round(row.vat),count:row.documentCount}]));
   const purchases=report.d394.purchases as Array<{net:number;vat:number;vatRate:number|null;deductibleVat:number}>;
-  const purchaseRate=(rate:number)=>purchases.filter(row=>Number(row.vatRate)===rate).reduce((acc,row)=>({base:acc.base+Math.round(row.net),vat:acc.vat+Math.round(row.vat),deductible:acc.deductible+Math.round(row.deductibleVat)}),{base:0,vat:0,deductible:0});
+  const purchaseRate=(rate:number)=>{
+    const totals=purchases.filter(row=>Number(row.vatRate)===rate).reduce((acc,row)=>({base:acc.base+row.net,vat:acc.vat+row.vat,deductible:acc.deductible+row.deductibleVat}),{base:0,vat:0,deductible:0});
+    return {base:Math.round(totals.base),vat:Math.round(totals.vat),deductible:Math.round(totals.deductible)};
+  };
   const p21=purchaseRate(21),p11=purchaseRate(11);
   const s21=sales.get(21)||{base:0,vat:0,count:0},s11=sales.get(11)||{base:0,vat:0,count:0};
   const collectedBase=s21.base+s11.base, collectedVat=s21.vat+s11.vat;
@@ -401,7 +434,7 @@ export async function generateOfficialD300Xml(year:number,month:number) {
     R27_1:purchaseBase,R27_2:deductibleVat,R28_2:taxDeducted,R29_2:Math.round(settings.refundedForeignVat),R31_2:Math.round(settings.deductibleAdjustments),R32_2:adjustedDeducted,
     R33_2:negativePeriod,R34_2:payablePeriod,R35_2:Math.round(settings.priorVatPayable),R36_2:Math.round(settings.inspectionVatPayable),R37_2:payableCumulative,
     R38_2:Math.round(settings.priorVatRefundable),R39_2:Math.round(settings.inspectionVatRefundable),R40_2:negativeCumulative,R41_2:finalPayable,R42_2:finalRefundable,
-    nr_facturi:report.d300.vatRows.reduce((sum,row)=>sum+row.documentCount,0),baza:collectedBase,tva:collectedVat,nr_facturi_primite:purchases.length,baza_primite:purchaseBase,tva_primite:deductibleVat,
+    nr_facturi:report.d300.documentCount,baza:collectedBase,tva:collectedVat,nr_facturi_primite:report.d394.purchaseDocumentCount,baza_primite:purchaseBase,tva_primite:deductibleVat,
   };
   const numericAttrs=Object.entries(fields).filter(([,value])=>value!==0).map(([key,value])=>`${key}="${value}"`);
   const totalControl=Object.entries(fields).filter(([key])=>!["baza_primite","tva_primite"].includes(key)).reduce((sum,[,value])=>sum+value,0);
@@ -446,10 +479,12 @@ export async function exportDeclarationWorkingPaper(type: DeclarationType, year:
   } else if (type === "D394") {
     rows = [["Tip", "Partener", "CUI", "Țară", "Documente", "Bază RON", "TVA RON", "Total RON"],
       ...report.d394.sales.map((row) => ["LIVRARE", row.partnerName, row.partnerCif, row.countryCode, row.documentCount, row.taxableBase, row.vat, row.gross]),
-      ...report.d394.purchases.map((row) => ["ACHIZIȚIE", row.partnerName, row.partnerCif, row.countryCode, 1, row.net, row.vat, row.gross])];
+      ...report.d394.purchases.map((row) => ["ACHIZIȚIE", row.partnerName, row.partnerCif, row.countryCode, row.documentCount, row.net, row.vat, row.gross])];
   } else {
-    rows = [["Partener", "Cod TVA", "Țară", "Documente", "Bază RON"], ...report.d390.sales.map((row) => [row.partnerName, row.partnerCif, row.countryCode, row.documentCount, row.taxableBase])];
+    rows = [["Sens", "Tip operațiune", "Sursă", "Partener", "Cod TVA", "Țară", "Bază RON"], ...report.d390.operations.map((row) => [row.direction, row.operationCode, row.sourceKey, row.partnerName, row.partnerCif, row.countryCode, row.taxableBase])];
   }
+  const section = type === "D300" ? report.d300 : type === "D394" ? report.d394 : report.d390;
+  rows.push([], ["Fișă de lucru — nu declarație validată"], ["De la", type === "D390" ? report.period.start : report.period.fiscalStart], ["Până la (exclusiv)", report.period.endExclusive], ...section.blockers.map(message => ["Verificare necesară", message]));
   return `\uFEFF${rows.map((row) => row.map(csvCell).join(";")).join("\r\n")}`;
 }
 

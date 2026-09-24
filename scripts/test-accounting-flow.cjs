@@ -76,6 +76,47 @@ async function main() {
   assert.equal(report.d394.purchases.length,1);
   assert.equal(report.d394.purchases[0].net,100);
   assert.ok(declarationQueries.some(sql=>sql.includes('UNION ALL')&&sql.includes('purchase_invoice_items')&&sql.includes('NOT EXISTS')));
+  assert.equal(report.d394.ready,false);
+  assert.ok(report.d394.blockers.some(x=>x.includes('Profilul fiscal')));
+
+  let fiscalType='T', eu=false;
+  const ranges=[];
+  const settings={profileConfirmedAt:'2026-09-01',caen:'6201',declarantLastName:'Test',declarantFirstName:'Ana',declarantFunction:'Administrator',preparerName:'Test',preparerCif:'123456',preparerCapacity:'Contabil',proRata:100};
+  const detailed=load('lib/accounting/declarations.ts',{'./db':{ready:async()=>({async query(sql,args=[]){
+    ranges.push({sql,args});
+    if(sql.includes('SELECT * FROM tax_declaration_settings'))return {rows:[{...settings,fiscalPeriodType:fiscalType}]};
+    if(sql.includes('SELECT name,cif,address'))return {rows:[{name:'TEST',cif:'123456',address:'Adresa',bank:'Banca',iban:'ROTEST',vatPayer:1,vatIncasare:0}]};
+    if(sql.includes('GROUP BY ii."vatRate"'))return {rows:[{vatRate:21,documentCount:1,taxableBase:100,vat:21},{vatRate:11,documentCount:1,taxableBase:100,vat:11}]};
+    if(sql.includes('GROUP BY 1,2,3'))return {rows:[{partnerName:'Client',partnerCif:'123456',countryCode:'RO',documentCount:1,taxableBase:200,vat:32,gross:232}]};
+    if(sql.includes('FROM ref_transactions r'))return {rows:(eu?[1,2,3]:[1,2]).map(id=>({id:-id,documentKey:'PURCHASE:10',documentDate:id===1?'2026-07-20':'2026-09-20',partnerName:'Furnizor',partnerCif:eu?'DE12345':'12345',partnerCountryCode:eu?'DE':'RO',documentType:'FACTURA',documentNumber:'F1',netAmount:eu?12.4:12.01,vatAmount:2.52,grossAmount:eu?14.92:14.53,vatRate:21,deductibilityPercent:100}))};
+    if(sql.includes('FROM tax_declaration_classifications'))return {rows:[{sourceKey:'REF:-2',operationCode:'A'},{sourceKey:'REF:-3',operationCode:'A'}]};
+    return {rows:[]};
+  }})},'./anaf-official-forms':{getOfficialAnafForms:()=>({})}});
+  const quarter=await detailed.getDeclarationPeriod(2026,9);
+  assert.equal(quarter.period.fiscalStart,'2026-07-01');
+  assert.equal(quarter.d394.purchaseDocumentCount,1);
+  assert.equal(quarter.d394.purchases.reduce((n,r)=>n+r.documentCount,0),1);
+  assert.equal(quarter.d300.documentCount,1);
+  assert.equal(quarter.d300.ready,true);
+  assert.equal(quarter.d394.ready,true);
+  assert.ok(ranges.filter(x=>x.sql.includes('GROUP BY ii.')||x.sql.includes('FROM ref_transactions r')||x.sql.includes('GROUP BY 1,2,3')).every(x=>x.args[0]==='2026-07-01'));
+  assert.ok(ranges.filter(x=>x.sql.includes('SELECT i.id,')||x.sql.includes('LEFT JOIN LATERAL')).every(x=>x.args[0]==='2026-09-01'));
+  const d300=await detailed.generateOfficialD300Xml(2026,9);
+  assert.ok(d300.includes('R22_1="24"')&&d300.includes('R22_2="5"'),'Round after aggregating purchase lines');
+  assert.ok(d300.includes('nr_facturi="1"')&&d300.includes('nr_facturi_primite="1"'),'Count documents, not rates or lines');
+  assert.equal((await detailed.getDeclarationPeriod(2026,8)).d300.ready,false);
+  fiscalType='S';assert.equal((await detailed.getDeclarationPeriod(2026,12)).period.fiscalStart,'2026-07-01');
+  fiscalType='A';assert.equal((await detailed.getDeclarationPeriod(2026,12)).period.fiscalStart,'2026-01-01');
+  fiscalType='T';eu=true;
+  const euReport=await detailed.getDeclarationPeriod(2026,9);
+  assert.equal(euReport.d390.operations.length,2,'D390 excludes purchases in earlier months of the quarter');
+  const d390=await detailed.generateOfficialD390Xml(2026,9);
+  assert.ok(d390.includes('baza="25"'),'D390 rounds after grouping partner operations');
+  const csv=await detailed.exportDeclarationWorkingPaper('D390',2026,9);
+  assert.ok(csv.includes('PURCHASE')&&csv.includes('DE12345')&&csv.includes('REF:-2'));
+  assert.ok(!csv.includes('REF:-1'));
+  await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1,allocatedInvoiceTo:Infinity}),/numere întregi/);
+  await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1.2,allocatedInvoiceTo:10}),/numere întregi/);
   console.log('Accounting flow regression tests passed: purchases, payments, refunds, FX REF and period locking. No real database writes.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
