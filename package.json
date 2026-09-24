@@ -14,6 +14,7 @@
     "test:anaf-workflow": "node scripts/test-anaf-workflow.cjs",
     "test:payroll": "node --experimental-strip-types scripts/test-payroll.ts",
     "test:saga-import": "node --experimental-strip-types scripts/test-saga-import.ts",
+    "test:saga-journal": "node --experimental-strip-types scripts/test-saga-journal-import.ts",
     "deer:assist": "node scripts/deer-assistant.mjs"
   },
   "prisma": {

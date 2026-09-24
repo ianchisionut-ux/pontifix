@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarClock, Landmark, ListTree, Plus, Scale } from "lucide-react";
+import { BookOpen, CalendarClock, FileUp, Landmark, ListTree, Plus, Scale } from "lucide-react";
 
 type Tab = "journal" | "balance" | "account" | "accounts" | "periods";
 type Account = { code: string; name: string; nature: string; allowPosting: number; active: number; system: number; used: boolean };
@@ -11,6 +11,7 @@ type BalanceRow = { code: string; name: string; initialDebit: string; initialCre
 type LedgerRow = { date: string; entryNumber: number; description: string; documentNumber: string; sourceType: string; debit: string; credit: string; balance: string };
 type Period = { month: number; status: "OPEN" | "CLOSED"; closedAt: string | null; closedBy: string; notes: string };
 type DraftLine = { accountCode: string; debit: string; credit: string; explanation: string };
+type SagaPreview = { total:number; errors:string[]; entries:Array<{date:string;documentNumber:string;description:string;lines:Array<{accountCode:string;debit:number;credit:number}>}> };
 
 const today = new Date().toISOString().slice(0, 10);
 const yearStart = `${today.slice(0, 4)}-01-01`;
@@ -31,7 +32,11 @@ export function LedgerWorkspace({ stats }: { stats: { accounts: number; entries:
   const [periodYear, setPeriodYear] = useState(Number(today.slice(0, 4)));
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const [notice,setNotice]=useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [sagaFile,setSagaFile]=useState<File|null>(null);
+  const [sagaPreview,setSagaPreview]=useState<SagaPreview|null>(null);
+  const [sagaBusy,setSagaBusy]=useState(false);
   const [analytic, setAnalytic] = useState({ parentCode: "4111", code: "4111.001", name: "" });
   const [entry, setEntry] = useState({ date: today, description: "", documentNumber: "", lines: [
     { accountCode: "", debit: "", credit: "", explanation: "" },
@@ -78,6 +83,14 @@ export function LedgerWorkspace({ stats }: { stats: { accounts: number; entries:
     await loadJournal();
   }
 
+  async function importSaga(commit=false){
+    if(!sagaFile)return setError("Selectează fișierul registrului-jurnal exportat din SAGA.");
+    setSagaBusy(true);setError("");setNotice("");const form=new FormData();form.set("file",sagaFile);if(commit)form.set("commit","1");
+    const response=await fetch("/api/accounting/ledger/saga-import",{method:"POST",body:form});const data=await response.json().catch(()=>({}));setSagaBusy(false);
+    if(!response.ok)return setError(data.error||"Importul SAGA a eșuat.");
+    if(commit){setSagaPreview(null);setSagaFile(null);setNotice(`Import SAGA finalizat: ${data.created} articole create, ${data.skipped} deja existente.`);await loadJournal();}else setSagaPreview(data);
+  }
+
   async function createAnalytic(event: React.FormEvent) {
     event.preventDefault(); setError("");
     const response = await fetch("/api/accounting/ledger/accounts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(analytic) });
@@ -115,13 +128,15 @@ export function LedgerWorkspace({ stats }: { stats: { accounts: number; entries:
     </div>
     <div className="ledger-tabs">{tabs.map(({ key, label, icon: Icon }) => <button key={key} className={tab === key ? "active" : ""} onClick={() => { setError(""); setTab(key); }}><Icon size={15}/>{label}</button>)}</div>
     {error && <div className="ref-error mb-4">{error}</div>}
+    {notice && <div className="ref-notice mb-4">{notice}</div>}
 
     {(tab === "journal" || tab === "balance" || tab === "account") && <div className="card ledger-filters"><label className="field-label">De la<input className="input" type="date" value={from} onChange={(e) => setFrom(e.target.value)}/></label><label className="field-label">Până la<input className="input" type="date" value={to} onChange={(e) => setTo(e.target.value)}/></label>{tab === "journal" && <button className="btn-secondary" onClick={() => void loadJournal()}>Aplică</button>}{tab === "balance" && <button className="btn-secondary" onClick={() => void loadBalance()}>Generează</button>}</div>}
 
     {tab === "journal" && <div className="ledger-two-columns"><div><div className="section-label">Articole postate</div><div className="card-table"><table><thead><tr><th>Nr.</th><th>Data</th><th>Document / explicație</th><th>Sursă</th><th className="text-right">Debit</th><th className="text-right">Credit</th></tr></thead><tbody>{journal.length === 0 ? <tr><td colSpan={6} className="empty-row">Nu există articole în perioada selectată.</td></tr> : journal.map((row) => <FragmentRow key={row.id} row={row} expanded={expanded === row.id} toggle={() => setExpanded(expanded === row.id ? null : row.id)}/>)}</tbody></table></div></div>
+      <div className="grid gap-4"><section className="card ledger-entry-form"><div className="section-label"><FileUp size={14}/>Import registru SAGA</div><p className="page-subtitle">XLSX, CSV sau TXT cu Data, Document, Explicație, Cont debitor, Cont creditor și Sumă. Reimportarea aceluiași fișier nu dublează articolele.</p><label className="field-label">Fișier registru-jurnal<input className="input" type="file" accept=".xlsx,.csv,.txt" onChange={event=>{setSagaFile(event.target.files?.[0]||null);setSagaPreview(null)}}/></label><button type="button" className="btn-secondary" disabled={!sagaFile||sagaBusy} onClick={()=>void importSaga(false)}>{sagaBusy?'Se verifică…':'Previzualizează importul'}</button>{sagaPreview&&<div className="ref-notice"><strong>{sagaPreview.total} articole identificate</strong>{sagaPreview.errors.length>0?<ul>{sagaPreview.errors.slice(0,10).map(error=><li key={error}>{error}</li>)}</ul>:<p>Fișier echilibrat și pregătit pentru import.</p>}<button type="button" className="btn-primary" disabled={sagaBusy||sagaPreview.errors.length>0} onClick={()=>void importSaga(true)}>Confirmă importul</button></div>}</section>
       <form className="card ledger-entry-form" onSubmit={postEntry}><div className="section-label"><Plus size={14}/>Articol manual</div><div className="ledger-form-row"><label className="field-label">Data<input className="input" type="date" required value={entry.date} onChange={(e) => setEntry({ ...entry, date: e.target.value })}/></label><label className="field-label">Document<input className="input" value={entry.documentNumber} onChange={(e) => setEntry({ ...entry, documentNumber: e.target.value })}/></label></div><label className="field-label">Explicație<input className="input" required value={entry.description} onChange={(e) => setEntry({ ...entry, description: e.target.value })}/></label>
       {entry.lines.map((line, index) => <div className="ledger-line" key={index}><select className="input" required value={line.accountCode} onChange={(e) => setEntry({ ...entry, lines: entry.lines.map((item, i) => i === index ? { ...item, accountCode: e.target.value } : item) })}><option value="">Cont</option>{postableAccounts.map((account) => <option key={account.code} value={account.code}>{account.code} · {account.name}</option>)}</select><input className="input" type="number" min="0" step="0.01" placeholder="Debit" value={line.debit} onChange={(e) => setEntry({ ...entry, lines: entry.lines.map((item, i) => i === index ? { ...item, debit: e.target.value, credit: e.target.value ? "" : item.credit } : item) })}/><input className="input" type="number" min="0" step="0.01" placeholder="Credit" value={line.credit} onChange={(e) => setEntry({ ...entry, lines: entry.lines.map((item, i) => i === index ? { ...item, credit: e.target.value, debit: e.target.value ? "" : item.debit } : item) })}/>{entry.lines.length > 2 && <button type="button" className="link-danger" onClick={() => setEntry({ ...entry, lines: entry.lines.filter((_, i) => i !== index) })}>×</button>}</div>)}
-      <div className="ledger-entry-actions"><button type="button" className="btn-secondary" onClick={() => setEntry({ ...entry, lines: [...entry.lines, { accountCode: "", debit: "", credit: "", explanation: "" }] })}>+ linie</button><button className="btn-primary" type="submit">Postează articolul</button></div></form></div>}
+      <div className="ledger-entry-actions"><button type="button" className="btn-secondary" onClick={() => setEntry({ ...entry, lines: [...entry.lines, { accountCode: "", debit: "", credit: "", explanation: "" }] })}>+ linie</button><button className="btn-primary" type="submit">Postează articolul</button></div></form></div></div>}
 
     {tab === "balance" && <div className="card-table ledger-wide"><table><thead><tr><th rowSpan={2}>Cont</th><th rowSpan={2}>Denumire</th><th colSpan={2}>Sold inițial</th><th colSpan={2}>Rulaje perioadă</th><th colSpan={2}>Total sume</th><th colSpan={2}>Sold final</th></tr><tr>{["D","C","D","C","D","C","D","C"].map((label, index) => <th className="text-right" key={index}>{label}</th>)}</tr></thead><tbody>{balance.map((row) => <tr key={row.code}><td className="num">{row.code}</td><td>{row.name}</td>{[row.initialDebit,row.initialCredit,row.debit,row.credit,row.totalDebit,row.totalCredit,row.finalDebit,row.finalCredit].map((value,index) => <td className="text-right num" key={index}>{Number(value) ? money(value) : "-"}</td>)}</tr>)}</tbody></table></div>}
 

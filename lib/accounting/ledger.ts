@@ -1,4 +1,5 @@
 import type { PoolClient } from "pg";
+import { createHash, randomUUID } from "node:crypto";
 import { ready } from "./db";
 
 export type AccountNature = "DEBIT" | "CREDIT" | "BOTH" | "GROUP";
@@ -204,6 +205,98 @@ export async function postPayrollToLedger(input: {
   }
 }
 
+const payrollPaymentAccounts = {
+  NET_SALARIES: "421",
+  CAS: "4315",
+  CASS: "4316",
+  INCOME_TAX: "444",
+  CAM: "436",
+  OTHER_DEDUCTIONS: "427",
+} as const;
+
+export type PayrollPaymentType = keyof typeof payrollPaymentAccounts;
+
+export async function postPayrollPayment(input: {
+  businessId: string;
+  month: string;
+  type: PayrollPaymentType;
+  method: "BANK" | "CASH";
+  paidAt: string;
+  createdBy?: string;
+}) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(input.month)) throw new Error("Luna statului nu este validă.");
+  if (!validDate(input.paidAt)) throw new Error("Data plății nu este validă.");
+  if (!(input.type in payrollPaymentAccounts)) throw new Error("Tipul plății salariale nu este valid.");
+  if (!(["BANK", "CASH"] as const).includes(input.method)) throw new Error("Metoda de plată nu este validă.");
+  if (input.method === "CASH" && input.type !== "NET_SALARIES") {
+    throw new Error("Obligațiile salariale către buget și terți se achită prin bancă.");
+  }
+
+  const connection = await (await ready()).connect();
+  try {
+    await connection.query("BEGIN");
+    const run = (await connection.query(
+      `SELECT id,status FROM "PayrollRun" WHERE "businessId"=$1 AND month=$2 FOR UPDATE`,
+      [input.businessId, input.month],
+    )).rows[0];
+    if (!run) throw new Error("Statul de salarii nu există.");
+    if (run.status !== "FINALIZED") throw new Error("Finalizează statul înainte de înregistrarea plăților.");
+    const existing = (await connection.query(
+      `SELECT id FROM "PayrollPayment" WHERE "payrollRunId"=$1 AND type=$2`,
+      [run.id, input.type],
+    )).rows[0];
+    if (existing) throw new Error("Această obligație salarială este deja achitată.");
+
+    const totals = (await connection.query(
+      `SELECT COALESCE(SUM("netSalary"),0)::float8 AS net,
+              COALESCE(SUM(cas),0)::float8 AS cas,
+              COALESCE(SUM(cass),0)::float8 AS cass,
+              COALESCE(SUM("incomeTax"),0)::float8 AS tax,
+              COALESCE(SUM(cam),0)::float8 AS cam,
+              COALESCE(SUM("otherDeductions"),0)::float8 AS other
+         FROM "PayrollLine" WHERE "payrollRunId"=$1`,
+      [run.id],
+    )).rows[0];
+    const amountByType: Record<PayrollPaymentType, number> = {
+      NET_SALARIES: Number(totals.net), CAS: Number(totals.cas), CASS: Number(totals.cass),
+      INCOME_TAX: Number(totals.tax), CAM: Number(totals.cam), OTHER_DEDUCTIONS: Number(totals.other),
+    };
+    const amount = round2(amountByType[input.type]);
+    if (amount <= 0) throw new Error("Obligația selectată nu are sold de plată.");
+
+    const labels: Record<PayrollPaymentType, string> = {
+      NET_SALARIES: "Salarii nete", CAS: "CAS", CASS: "CASS", INCOME_TAX: "Impozit salarii",
+      CAM: "CAM", OTHER_DEDUCTIONS: "Rețineri către terți",
+    };
+    const paymentId = randomUUID();
+    await connection.query(
+      `INSERT INTO "PayrollPayment" (id,"payrollRunId",type,method,amount,"paidAt","createdBy")
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [paymentId, run.id, input.type, input.method, amount, input.paidAt, input.createdBy || ""],
+    );
+    const entryId = await insertEntry(connection, {
+      date: input.paidAt,
+      description: `${labels[input.type]} achitate pentru ${input.month}`,
+      documentNumber: `PL-${input.month}-${input.type}`,
+      sourceType: "PAYROLL_PAYMENT",
+      sourceKey: `${run.id}:${input.type}`,
+      createdBy: input.createdBy,
+      lines: [
+        { accountCode: payrollPaymentAccounts[input.type], debit: amount, explanation: labels[input.type] },
+        { accountCode: input.method === "CASH" ? "5311" : "5121", credit: amount, explanation: input.method === "CASH" ? "Plată numerar" : "Plată bancă" },
+      ],
+    });
+    await connection.query(`UPDATE "PayrollPayment" SET "journalEntryId"=$2 WHERE id=$1`, [paymentId, entryId]);
+    await connection.query("COMMIT");
+    return { id: paymentId, type: input.type, method: input.method, amount, paidAt: input.paidAt, journalEntryId: entryId };
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 export async function createManualJournalEntry(input: JournalEntryInput) {
   const connection = await (await ready()).connect();
   try {
@@ -211,6 +304,35 @@ export async function createManualJournalEntry(input: JournalEntryInput) {
     const id = await insertEntry(connection, { ...input, sourceType: "MANUAL", sourceId: null });
     await connection.query("COMMIT");
     return id;
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+export async function importSagaJournalEntries(entries: JournalEntryInput[], importKey: string, createdBy?: string) {
+  if (!entries.length) throw new Error("Fișierul nu conține articole contabile.");
+  if (!/^[a-f0-9]{64}$/.test(importKey)) throw new Error("Identificatorul importului nu este valid.");
+  const connection = await (await ready()).connect();
+  try {
+    await connection.query("BEGIN");
+    await connection.query(`SELECT pg_advisory_xact_lock(hashtext('PONTIFIX_SAGA_JOURNAL_IMPORT'))`);
+    let created = 0, skipped = 0;
+    for (const [index, entry] of entries.entries()) {
+      const signature = JSON.stringify({ date: entry.date, documentNumber: entry.documentNumber || "", description: entry.description,
+        lines: entry.lines.map(line => ({ accountCode: line.accountCode, debit: round2(Number(line.debit || 0)), credit: round2(Number(line.credit || 0)) })) });
+      const sourceKey = createHash("sha256").update(signature).digest("hex");
+      const exists = (await connection.query(
+        `SELECT id FROM journal_entries WHERE "sourceType"='SAGA_IMPORT' AND "sourceKey"=$1`, [sourceKey],
+      )).rows[0];
+      if (exists) { skipped++; continue; }
+      await insertEntry(connection, { ...entry, sourceType: "SAGA_IMPORT", sourceKey, createdBy });
+      created++;
+    }
+    await connection.query("COMMIT");
+    return { created, skipped, total: entries.length };
   } catch (error) {
     await connection.query("ROLLBACK");
     throw error;

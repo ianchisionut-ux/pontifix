@@ -800,6 +800,20 @@ enum PayrollRunStatus {
   FINALIZED
 }
 
+enum PayrollPaymentType {
+  NET_SALARIES
+  CAS
+  CASS
+  INCOME_TAX
+  CAM
+  OTHER_DEDUCTIONS
+}
+
+enum PayrollPaymentMethod {
+  BANK
+  CASH
+}
+
 model PayrollRun {
   id               String           @id @default(cuid())
   businessId       String
@@ -818,9 +832,26 @@ model PayrollRun {
   createdAt        DateTime         @default(now())
   updatedAt        DateTime         @updatedAt
   lines            PayrollLine[]
+  payments         PayrollPayment[]
 
   @@unique([businessId, month])
   @@index([businessId, status])
+}
+
+model PayrollPayment {
+  id             String               @id @default(cuid())
+  payrollRunId   String
+  payrollRun     PayrollRun           @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  type           PayrollPaymentType
+  method         PayrollPaymentMethod @default(BANK)
+  amount         Float
+  paidAt         DateTime             @db.Date
+  journalEntryId Int?
+  createdBy      String?
+  createdAt      DateTime             @default(now())
+
+  @@unique([payrollRunId, type])
+  @@index([paidAt])
 }
 
 model PayrollLine {

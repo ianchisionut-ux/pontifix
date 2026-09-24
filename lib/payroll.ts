@@ -86,7 +86,10 @@ export async function getPayroll(businessId: string, month: string) {
   await ensurePayrollSchema()
   return prisma.payrollRun.findUnique({
     where: { businessId_month: { businessId, month } },
-    include: { lines: { include: { employee: true }, orderBy: [{ employee: { lastName: 'asc' } }, { employee: { firstName: 'asc' } }] } },
+    include: {
+      payments: { orderBy: { createdAt: 'asc' } },
+      lines: { include: { employee: true }, orderBy: [{ employee: { lastName: 'asc' } }, { employee: { firstName: 'asc' } }] },
+    },
   })
 }
 
