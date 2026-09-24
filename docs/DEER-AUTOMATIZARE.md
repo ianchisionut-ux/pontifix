@@ -1,6 +1,28 @@
-# Asistent local pentru portalul DEER
+# Automatizare pentru portalul DEER
 
-Asistentul completează automat prima etapă din `https://avize.distributie-energie.ro/solicitare`, așteaptă ca operatorul să rezolve CAPTCHA și să apese **Mai departe**, apoi atașează PDF-urile configurate. Trimiterea finală rămâne manuală, pentru verificare.
+Pontifix oferă autocompletarea directă a câmpurilor și un asistent local opțional pentru încărcarea PDF-urilor.
+
+## Autocompletarea directă a câmpurilor
+
+Butonul **Deschide și completează DEER** transmite datele dosarului în fragmentul URL, care nu este trimis serverului DEER. Extensia Elmont citește datele local și completează formularul.
+
+### Instalare unică în Chrome
+
+1. Din panoul **Depunere DEER**, apasă **Descarcă extensia Chrome**.
+2. Extrage arhiva ZIP într-un folder pe care nu îl vei șterge.
+3. Deschide `chrome://extensions`, activează **Modul pentru dezvoltatori**.
+4. Apasă **Încarcă extensia neîmpachetată** și selectează folderul extras.
+
+După instalare, pentru fiecare dosar:
+
+- deschide **Depunere DEER** în Pontifix;
+- verifică datele și apasă **Deschide și completează DEER**;
+- portalul se deschide cu numărul ATR, solicitantul, localitatea, strada, acțiunea și e-mailul completate;
+- completează CAPTCHA și verifică formularul înainte de trimitere.
+
+## Asistent local pentru încărcarea PDF-urilor
+
+Asistentul local așteaptă ca operatorul să rezolve CAPTCHA și să apese **Mai departe**, apoi atașează PDF-urile configurate. Trimiterea finală rămâne manuală, pentru verificare.
 
 ## Prima instalare
 

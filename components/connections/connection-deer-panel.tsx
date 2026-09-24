@@ -89,10 +89,29 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
 
   async function prepareAndOpen() {
     if (missing.length) return alert(`Completează înainte: ${missing.join(', ')}.`)
+    const payload = {
+      version: 1,
+      dossierNumber: draft.dossierNumber,
+      applicant,
+      locality,
+      street,
+      action: draft.action,
+      actionLabel: DEER_ACTIONS.find(([value]) => value === draft.action)?.[1] || draft.action,
+      email: DEER_CONTACT_EMAIL,
+    }
+    const portalUrl = `${DEER_PORTAL_URL}#elmont=${encodeURIComponent(JSON.stringify(payload))}`
+    const portalWindow = window.open('about:blank', '_blank')
+    if (!portalWindow) return alert('Browserul a blocat fereastra nouă. Permite ferestre pop-up pentru Pontifix și încearcă din nou.')
+    portalWindow.opener = null
+
     const next: DeerSubmission = { ...draft, status: draft.status === 'DRAFT' ? 'READY' : draft.status, lastPreparedAt: new Date().toISOString() }
-    if (canEdit && !(await save(next))) return
-    await copyData(next)
-    window.open(DEER_PORTAL_URL, '_blank', 'noopener,noreferrer')
+    if (canEdit && !(await save(next))) {
+      portalWindow.close()
+      return
+    }
+
+    portalWindow.location.href = portalUrl
+    setNotice('Portalul DEER a fost deschis. Extensia Elmont va completa automat câmpurile; tu completezi CAPTCHA.')
   }
 
   function downloadAutomationConfig() {
@@ -215,12 +234,13 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
 
           <section className="rounded-2xl border border-blue-100 bg-[#f3f9fd] p-4">
             <h3 className="font-black text-[#082b4d]">Finalizare pe portal</h3>
-            <p className="mt-1 text-xs leading-5 text-slate-600">Pentru acțiunile din această secțiune, informarea DEER precizează că nu este necesar cont. CAPTCHA și confirmarea finală se completează manual pe pagina oficială.</p>
-            <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[11px] font-semibold leading-5 text-slate-500">Elmont pregătește și copiază datele, dar nu ocolește CAPTCHA și nu transmite automat către un portal extern fără API oficial.</p>
+            <p className="mt-1 text-xs leading-5 text-slate-600">Butonul deschide portalul DEER și completează automat numărul ATR, solicitantul, adresa, acțiunea și e-mailul. Tu completezi CAPTCHA și verifici datele.</p>
+            <p className="mt-2 rounded-xl bg-white px-3 py-2 text-[11px] font-semibold leading-5 text-slate-500">La prima utilizare instalează extensia Elmont în Chrome: descarcă arhiva, extrage folderul, apoi deschide chrome://extensions, activează Modul pentru dezvoltatori și alege „Încarcă extensia neîmpachetată”.</p>
+            <a href="/elmont-deer-autofill.zip" download className="btn-secondary mt-3 inline-flex w-full items-center justify-center gap-2"><Download size={16}/> Descarcă extensia Chrome</a>
             <div className="mt-4 grid gap-2">
               <button type="button" onClick={() => copyData()} className="btn-secondary inline-flex items-center justify-center gap-2"><ClipboardCopy size={16}/> Copiază datele</button>
-              <button type="button" onClick={prepareAndOpen} disabled={!!busy} className="btn-primary inline-flex items-center justify-center gap-2">{busy ? <Loader2 size={16} className="animate-spin"/> : <ExternalLink size={16}/>} Deschide portalul DEER</button>
-              {canEdit && <button type="button" onClick={downloadAutomationConfig} className="btn-secondary inline-flex items-center justify-center gap-2"><Download size={16}/> Descarcă automatizarea</button>}
+              <button type="button" onClick={prepareAndOpen} disabled={!!busy} className="btn-primary inline-flex items-center justify-center gap-2">{busy ? <Loader2 size={16} className="animate-spin"/> : <ExternalLink size={16}/>} Deschide și completează DEER</button>
+              {canEdit && <button type="button" onClick={downloadAutomationConfig} className="btn-secondary inline-flex items-center justify-center gap-2"><Download size={16}/> Asistent PDF-uri (avansat)</button>}
               {canEdit && <button type="button" onClick={() => save()} disabled={!!busy} className="btn-secondary inline-flex items-center justify-center gap-2">{busy ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează în registru</button>}
             </div>
             {canEdit && item.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${item.id}/atr`} title={`ATR · ${fields.Beneficiar || item.nib}`} className="mt-3 flex w-full items-center justify-center gap-2 text-xs font-black text-[#0d5d8b]">Deschide ATR-ul salvat</SecurePdfViewerButton>}

@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Elmont DEER Autofill",
+  "version": "1.0.0",
+  "description": "Completează automat formularul DEER cu datele transmise din Pontifix. CAPTCHA rămâne manual.",
+  "content_scripts": [
+    {
+      "matches": ["https://avize.distributie-energie.ro/solicitare*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
