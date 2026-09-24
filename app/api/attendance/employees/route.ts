@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
+import { ensurePayrollSchema } from '@/lib/payroll-storage'
 
 const fields = {
   firstName: z.string().trim().min(1),
@@ -14,6 +15,15 @@ const fields = {
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACTOR']).default('FULL_TIME'),
   weeklyHours: z.coerce.number().min(1).max(80).default(40),
   dailyHours: z.coerce.number().min(0.5).max(24).default(8),
+  cnp: z.string().trim().regex(/^\d{13}$/).optional().or(z.literal('')),
+  contractNumber: z.string().trim().max(50).optional(),
+  contractDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
+  hiredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  grossSalary: z.coerce.number().min(0).max(1000000).default(0),
+  baseFunction: z.boolean().default(true),
+  dependents: z.coerce.number().int().min(0).max(20).default(0),
+  personalDeduction: z.coerce.number().min(0).max(100000).default(0),
+  iban: z.string().trim().max(34).optional(),
 }
 const employeeSchema = z.object(fields)
 const updateSchema = z.object({ id: z.string().min(1), ...fields, active: z.boolean().default(true) })
@@ -27,6 +37,7 @@ async function businessFromSession(write = false) {
 export async function GET() {
   const businessId = await businessFromSession()
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
+  await ensurePayrollSchema()
   const employees = await prisma.attendanceEmployee.findMany({ where: { businessId }, orderBy: [{ active: 'desc' }, { category: 'desc' }, { sortOrder: 'asc' }, { lastName: 'asc' }, { firstName: 'asc' }] })
   return NextResponse.json(employees)
 }
@@ -34,21 +45,28 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const businessId = await businessFromSession(true)
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
+  await ensurePayrollSchema()
   const parsed = employeeSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Datele angajatului sunt incomplete.' }, { status: 400 })
-  const employee = await prisma.attendanceEmployee.create({ data: { ...parsed.data, email: parsed.data.email || null, businessId } })
+  const { contractDate, hiredAt, ...data } = parsed.data
+  const employee = await prisma.attendanceEmployee.create({ data: { ...data, email: data.email || null,
+    cnp: data.cnp || null, contractDate: contractDate ? new Date(`${contractDate}T00:00:00Z`) : null,
+    hiredAt: hiredAt ? new Date(`${hiredAt}T00:00:00Z`) : undefined, businessId } })
   return NextResponse.json(employee, { status: 201 })
 }
 
 export async function PATCH(req: NextRequest) {
   const businessId = await businessFromSession(true)
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
+  await ensurePayrollSchema()
   const parsed = updateSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Datele angajatului sunt incomplete.' }, { status: 400 })
-  const { id, ...data } = parsed.data
+  const { id, contractDate, hiredAt, ...data } = parsed.data
   const result = await prisma.attendanceEmployee.updateMany({
     where: { id, businessId },
-    data: { ...data, email: data.email || null },
+    data: { ...data, email: data.email || null, cnp: data.cnp || null,
+      contractDate: contractDate ? new Date(`${contractDate}T00:00:00Z`) : null,
+      hiredAt: hiredAt ? new Date(`${hiredAt}T00:00:00Z`) : undefined },
   })
   if (!result.count) return NextResponse.json({ error: 'Angajatul nu există.' }, { status: 404 })
   return NextResponse.json({ success: true })
@@ -65,6 +83,7 @@ const reorderSchema = z.object({
 export async function PUT(req: NextRequest) {
   const businessId = await businessFromSession(true)
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
+  await ensurePayrollSchema()
   const parsed = reorderSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Ordinea nu este validă.' }, { status: 400 })
   const owned = await prisma.attendanceEmployee.count({ where: { businessId, id: { in: parsed.data.employees.map((item) => item.id) } } })

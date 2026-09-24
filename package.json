@@ -12,6 +12,7 @@
     "prisma:migrate": "prisma migrate dev",
     "test:accounting-xml": "node scripts/test-accounting-xml.cjs",
     "test:anaf-workflow": "node scripts/test-anaf-workflow.cjs",
+    "test:payroll": "node --experimental-strip-types scripts/test-payroll.ts",
     "deer:assist": "node scripts/deer-assistant.mjs"
   },
   "prisma": {

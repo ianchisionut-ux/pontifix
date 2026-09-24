@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/rapoarte', label: 'Rapoarte', icon: 'statistici' },
   { href: '/dashboard/pontaje', label: 'Pontaje', icon: 'calendar' },
   { href: '/dashboard/angajati', label: 'Angajați', icon: 'clienti' },
+  { href: '/dashboard/salarizare', label: 'Salarizare', icon: 'salarizare' },
   { href: '/dashboard/concedii', label: 'Concedii', icon: 'programari' },
   { href: '/dashboard/configurare', label: 'Configurare', icon: 'setari' },
 ]
@@ -29,7 +30,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const role = (session as any)?.role as string | undefined
   if (!businessId) redirect('/superadmin')
   const roleItems = canAccessAccounting(session) ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.href !== '/dashboard/contabilitate')
-  const navItems = role === 'STAFF' ? roleItems.filter((item) => !['/dashboard/pontaje', '/dashboard/angajati', '/dashboard/concedii', '/dashboard/configurare'].includes(item.href)) : roleItems
+  const navItems = role === 'STAFF' ? roleItems.filter((item) => !['/dashboard/pontaje', '/dashboard/angajati', '/dashboard/salarizare', '/dashboard/concedii', '/dashboard/configurare'].includes(item.href)) : roleItems
   return <ResponsiveShell logoHref="/dashboard" logoLabel="Elmont" navItems={navItems} accentColor={'#197fb5'} accountContent={<SidebarUserBlock label={session.user?.email ?? 'Cont'} />} enableLiveBadges>
     {children}
   </ResponsiveShell>

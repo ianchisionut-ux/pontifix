@@ -18,6 +18,7 @@ export type JournalEntryInput = {
   documentNumber?: string;
   sourceType?: string;
   sourceId?: number | null;
+  sourceKey?: string | null;
   createdBy?: string;
   lines: JournalLineInput[];
 };
@@ -95,8 +96,8 @@ async function insertEntry(client: PoolClient, input: JournalEntryInput) {
   );
   const { rows } = await client.query(
     `INSERT INTO journal_entries
-       ("entryNumber",year,date,description,"documentNumber","sourceType","sourceId","createdBy")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+       ("entryNumber",year,date,description,"documentNumber","sourceType","sourceId","sourceKey","createdBy")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
     [
       Number(numberRows[0].lastNumber),
       year,
@@ -105,6 +106,7 @@ async function insertEntry(client: PoolClient, input: JournalEntryInput) {
       String(input.documentNumber || "").trim(),
       String(input.sourceType || "MANUAL").trim().toUpperCase(),
       input.sourceId ?? null,
+      input.sourceKey ?? null,
       String(input.createdBy || "").trim(),
     ],
   );
@@ -118,6 +120,56 @@ async function insertEntry(client: PoolClient, input: JournalEntryInput) {
     );
   }
   return entryId;
+}
+
+export async function postPayrollToLedger(input: {
+  runId: string;
+  month: string;
+  gross: number;
+  cas: number;
+  cass: number;
+  incomeTax: number;
+  cam: number;
+  createdBy?: string;
+}) {
+  const connection = await (await ready()).connect();
+  try {
+    await connection.query("BEGIN");
+    const [year, month] = input.month.split("-").map(Number);
+    const lastDay = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+    await assertOpenPeriod(connection, lastDay);
+    await connection.query(
+      `DELETE FROM journal_entries WHERE "sourceType"='PAYROLL' AND "sourceKey"=$1`,
+      [input.runId],
+    );
+    const lines: JournalLineInput[] = [
+      { accountCode: "641", debit: round2(input.gross), explanation: `Cheltuieli salariale ${input.month}` },
+      { accountCode: "421", credit: round2(input.gross), explanation: `Salarii datorate ${input.month}` },
+      { accountCode: "421", debit: round2(input.cas), explanation: `CAS reținut ${input.month}` },
+      { accountCode: "4315", credit: round2(input.cas), explanation: `CAS datorat ${input.month}` },
+      { accountCode: "421", debit: round2(input.cass), explanation: `CASS reținut ${input.month}` },
+      { accountCode: "4316", credit: round2(input.cass), explanation: `CASS datorat ${input.month}` },
+      { accountCode: "421", debit: round2(input.incomeTax), explanation: `Impozit salarii ${input.month}` },
+      { accountCode: "444", credit: round2(input.incomeTax), explanation: `Impozit salarii datorat ${input.month}` },
+      { accountCode: "646", debit: round2(input.cam), explanation: `CAM ${input.month}` },
+      { accountCode: "436", credit: round2(input.cam), explanation: `CAM datorată ${input.month}` },
+    ].filter((line) => Number(line.debit || line.credit || 0) > 0);
+    await insertEntry(connection, {
+      date: lastDay,
+      description: `Stat salarii ${input.month}`,
+      documentNumber: `SAL-${input.month}`,
+      sourceType: "PAYROLL",
+      sourceKey: input.runId,
+      createdBy: input.createdBy,
+      lines,
+    });
+    await connection.query("COMMIT");
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 export async function createManualJournalEntry(input: JournalEntryInput) {

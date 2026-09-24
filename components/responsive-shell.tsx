@@ -22,6 +22,7 @@ import {
   Files,
   Zap,
   Calculator,
+  Banknote,
 } from 'lucide-react'
 import { SidebarClock } from './sidebar-clock'
 import { ElmontLogo } from './elmont-logo'
@@ -50,6 +51,7 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   bransamente: Zap,
   formulare: Files,
   contabilitate: Calculator,
+  salarizare: Banknote,
   'chat-intern': MessagesSquare,
 }
 

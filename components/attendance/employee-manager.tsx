@@ -5,8 +5,8 @@ import { GripVertical, Pencil, Plus, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
 type Category = 'TESA' | 'PRODUCTIE'
-type Employee = { id: string; firstName: string; lastName: string; email: string | null; phone: string | null; position: string | null; department: string | null; category: Category; employmentType: string; weeklyHours: number; dailyHours: number; sortOrder: number; active: boolean }
-const EMPTY = { firstName: '', lastName: '', email: '', phone: '', position: '', department: '', category: 'PRODUCTIE' as Category, employmentType: 'FULL_TIME', weeklyHours: 40, dailyHours: 8, active: true }
+type Employee = { id: string; firstName: string; lastName: string; email: string | null; phone: string | null; position: string | null; department: string | null; category: Category; employmentType: string; weeklyHours: number; dailyHours: number; sortOrder: number; active: boolean; cnp: string | null; contractNumber: string | null; contractDate: string | Date | null; hiredAt: string | Date; grossSalary: number; baseFunction: boolean; dependents: number; personalDeduction: number; iban: string | null }
+const EMPTY = { firstName: '', lastName: '', email: '', phone: '', position: '', department: '', category: 'PRODUCTIE' as Category, employmentType: 'FULL_TIME', weeklyHours: 40, dailyHours: 8, active: true, cnp: '', contractNumber: '', contractDate: '', hiredAt: new Date().toISOString().slice(0,10), grossSalary: 0, baseFunction: true, dependents: 0, personalDeduction: 0, iban: '' }
 const GROUPS: Array<{ key: Category; label: string; hint: string }> = [
   { key: 'TESA', label: 'TESA', hint: 'Personal tehnic, economic și administrativ' },
   { key: 'PRODUCTIE', label: 'PRODUCȚIE', hint: 'Personal direct productiv' },
@@ -54,7 +54,7 @@ export function EmployeeManager({ employees }: { employees: Employee[] }) {
   async function submit(formData: FormData) {
     setBusy(true)
     const values = Object.fromEntries(formData)
-    const payload = { ...values, weeklyHours: Number(values.weeklyHours), dailyHours: Number(values.dailyHours), active: formData.get('active') === 'on', ...(editing !== 'new' && editing ? { id: editing.id } : {}) }
+    const payload = { ...values, weeklyHours: Number(values.weeklyHours), dailyHours: Number(values.dailyHours), grossSalary: Number(values.grossSalary), dependents: Number(values.dependents), personalDeduction: Number(values.personalDeduction), baseFunction: formData.get('baseFunction') === 'on', active: editing === 'new' || formData.get('active') === 'on', ...(editing !== 'new' && editing ? { id: editing.id } : {}) }
     const response = await fetch('/api/attendance/employees', { method: editing === 'new' ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     setBusy(false)
     if (!response.ok) return alert((await response.json()).error || 'Angajatul nu a putut fi salvat.')
@@ -76,14 +76,19 @@ export function EmployeeManager({ employees }: { employees: Employee[] }) {
         </div>)}</div>
       </section>)}</div>}
 
-    {editing && <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onMouseDown={() => setEditing(null)}><form action={submit} onMouseDown={(event) => event.stopPropagation()} className="bg-white rounded-3xl p-6 w-full max-w-xl shadow-2xl"><h2 className="text-xl font-semibold mb-5">{editing === 'new' ? 'Angajat nou' : 'Editează angajatul'}</h2><div className="grid sm:grid-cols-2 gap-3">
+    {editing && <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onMouseDown={() => setEditing(null)}><form action={submit} onMouseDown={(event) => event.stopPropagation()} className="bg-white rounded-3xl p-6 w-full max-w-3xl max-h-[92vh] overflow-y-auto shadow-2xl"><h2 className="text-xl font-semibold mb-5">{editing === 'new' ? 'Angajat nou' : 'Editează angajatul'}</h2><div className="grid sm:grid-cols-2 gap-3">
       <input className="input-field" name="firstName" placeholder="Prenume" defaultValue={current.firstName} required/><input className="input-field" name="lastName" placeholder="Nume" defaultValue={current.lastName} required/>
       <select className="input-field sm:col-span-2" name="category" defaultValue={current.category}><option value="TESA">TESA — personal administrativ</option><option value="PRODUCTIE">PRODUCȚIE — personal productiv</option></select>
       <input className="input-field" name="email" type="email" placeholder="Email" defaultValue={current.email || ''}/><input className="input-field" name="phone" placeholder="Telefon" defaultValue={current.phone || ''}/>
       <input className="input-field" name="position" placeholder="Funcție" defaultValue={current.position || ''}/><input className="input-field" name="department" placeholder="Departament" defaultValue={current.department || ''}/>
+      <input className="input-field" name="cnp" inputMode="numeric" maxLength={13} placeholder="CNP (13 cifre)" defaultValue={current.cnp || ''}/><input className="input-field" name="iban" maxLength={34} placeholder="IBAN salariu" defaultValue={current.iban || ''}/>
+      <input className="input-field" name="contractNumber" placeholder="Număr contract" defaultValue={current.contractNumber || ''}/><label className="text-sm font-medium">Data contractului<input className="input-field w-full mt-1.5" name="contractDate" type="date" defaultValue={current.contractDate ? new Date(current.contractDate).toISOString().slice(0,10) : ''}/></label>
+      <label className="text-sm font-medium">Data angajării<input className="input-field w-full mt-1.5" name="hiredAt" type="date" defaultValue={new Date(current.hiredAt).toISOString().slice(0,10)}/></label><label className="text-sm font-medium">Salariu de bază brut<input className="input-field w-full mt-1.5" name="grossSalary" type="number" step="1" min="0" defaultValue={current.grossSalary}/></label>
       <select className="input-field" name="employmentType" defaultValue={current.employmentType}><option value="FULL_TIME">Normă întreagă</option><option value="PART_TIME">Part-time</option><option value="CONTRACTOR">Colaborator</option></select>
       <label className="text-sm font-medium">Ore pe săptămână<input className="input-field w-full mt-1.5" name="weeklyHours" type="number" step="0.5" defaultValue={current.weeklyHours} min="1" max="80"/></label>
       <label className="text-sm font-medium">Ore pe zi<input className="input-field w-full mt-1.5" name="dailyHours" type="number" step="0.5" defaultValue={current.dailyHours} min="0.5" max="24"/></label>
+      <label className="text-sm font-medium">Persoane în întreținere<input className="input-field w-full mt-1.5" name="dependents" type="number" min="0" max="20" defaultValue={current.dependents}/></label><label className="text-sm font-medium">Deducere personală lunară<input className="input-field w-full mt-1.5" name="personalDeduction" type="number" min="0" step="1" defaultValue={current.personalDeduction}/></label>
+      <label className="sm:col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" name="baseFunction" defaultChecked={current.baseFunction}/> Funcția de bază este la această societate</label>
       {editing !== 'new' && <label className="sm:col-span-2 flex items-center gap-2 text-sm"><input type="checkbox" name="active" defaultChecked={current.active}/> Angajat activ (apare în calendar)</label>}
     </div><div className="flex justify-end gap-2 mt-6"><button type="button" className="btn-secondary" onClick={() => setEditing(null)}>Renunță</button><button className="btn-primary" disabled={busy}>{busy ? 'Se salvează...' : 'Salvează'}</button></div></form></div>}
   </div>

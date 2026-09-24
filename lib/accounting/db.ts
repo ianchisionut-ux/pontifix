@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import chartOfAccounts from "./chart-of-accounts.ro.json";
 
-const ACCOUNTING_SCHEMA_VERSION = 16;
+const ACCOUNTING_SCHEMA_VERSION = 17;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -455,6 +455,8 @@ async function ensureSchema(pool: Pool) {
     );
     CREATE INDEX IF NOT EXISTS "journal_lines_account_idx" ON journal_lines ("accountCode", "entryId");
   `);
+  await pool.query(`ALTER TABLE journal_entries ADD COLUMN IF NOT EXISTS "sourceKey" TEXT;`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "journal_entries_external_source_key" ON journal_entries ("sourceType","sourceKey") WHERE "sourceKey" IS NOT NULL;`);
 
   // Planul general de conturi primit de la utilizator. Upsert-ul actualizeaza
   // denumirile oficiale, dar pastreaza conturile analitice create in aplicatie.

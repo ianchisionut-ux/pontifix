@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { EmployeeManager } from '@/components/attendance/employee-manager'
+import { ensurePayrollSchema } from '@/lib/payroll-storage'
 
 export const dynamic = 'force-dynamic'
 
@@ -10,6 +11,7 @@ export default async function EmployeesPage() {
   const businessId = (session as any)?.businessId
   if (!businessId) redirect('/login')
   if ((session as any)?.role === 'STAFF') redirect('/dashboard')
+  await ensurePayrollSchema()
   const employees = await prisma.attendanceEmployee.findMany({
     where: { businessId },
     orderBy: [{ active: 'desc' }, { category: 'desc' }, { lastName: 'asc' }, { firstName: 'asc' }],

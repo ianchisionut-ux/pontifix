@@ -85,6 +85,7 @@ model Business {
   timeEntries               TimeEntry[]
   leaveRequests             LeaveRequest[]
   dailyAttendances          DailyAttendance[]
+  payrollRuns               PayrollRun[]
   projects                  Project[]
 }
 
@@ -773,14 +774,93 @@ model AttendanceEmployee {
   sortOrder        Int               @default(0)
   active           Boolean           @default(true)
   hiredAt          DateTime          @default(now())
+  cnp              String?
+  contractNumber   String?
+  contractDate     DateTime?         @db.Date
+  grossSalary      Float             @default(0)
+  baseFunction     Boolean           @default(true)
+  dependents       Int               @default(0)
+  personalDeduction Float            @default(0)
+  iban             String?
+  sagaExternalId   String?
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
   timeEntries      TimeEntry[]
   leaveRequests    LeaveRequest[]
   dailyAttendances DailyAttendance[]
+  payrollLines     PayrollLine[]
 
   @@unique([businessId, email])
   @@index([businessId, active])
+}
+
+enum PayrollRunStatus {
+  DRAFT
+  FINALIZED
+}
+
+model PayrollRun {
+  id               String           @id @default(cuid())
+  businessId       String
+  business         Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  month            String
+  status           PayrollRunStatus @default(DRAFT)
+  minimumGross     Float
+  nonTaxableAmount Float            @default(0)
+  casRate          Float            @default(25)
+  cassRate         Float            @default(10)
+  incomeTaxRate    Float            @default(10)
+  camRate          Float            @default(2.25)
+  notes            String?
+  finalizedAt      DateTime?
+  finalizedBy      String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  lines            PayrollLine[]
+
+  @@unique([businessId, month])
+  @@index([businessId, status])
+}
+
+model PayrollLine {
+  id                String             @id @default(cuid())
+  payrollRunId      String
+  payrollRun        PayrollRun         @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employeeId        String
+  employee          AttendanceEmployee @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  workingDays       Int
+  workedDays        Float
+  vacationDays      Float              @default(0)
+  medicalDays       Float              @default(0)
+  unpaidDays        Float              @default(0)
+  workedHours       Float              @default(0)
+  overtimeHours     Float              @default(0)
+  baseGross         Float
+  attendanceGross   Float
+  overtimeAmount    Float              @default(0)
+  bonuses           Float              @default(0)
+  medicalAllowance  Float              @default(0)
+  taxableBenefits   Float              @default(0)
+  mealTickets       Float              @default(0)
+  nonTaxableAmount  Float              @default(0)
+  grossIncome       Float
+  cas               Float
+  cass              Float
+  personalDeduction Float              @default(0)
+  taxableBase       Float
+  incomeTax         Float
+  otherDeductions   Float              @default(0)
+  advancePaid       Float              @default(0)
+  netSalary         Float
+  cam               Float
+  employerCost      Float
+  source            String             @default("CALCULATED")
+  notes             String?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  @@unique([payrollRunId, employeeId])
+  @@index([employeeId])
 }
 
 model DailyAttendance {
