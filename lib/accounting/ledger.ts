@@ -130,6 +130,8 @@ export async function postPayrollToLedger(input: {
   cass: number;
   incomeTax: number;
   cam: number;
+  otherDeductions: number;
+  advancePaid: number;
   createdBy?: string;
 }) {
   const connection = await (await ready()).connect();
@@ -151,7 +153,11 @@ export async function postPayrollToLedger(input: {
       { accountCode: "4316", credit: round2(input.cass), explanation: `CASS datorat ${input.month}` },
       { accountCode: "421", debit: round2(input.incomeTax), explanation: `Impozit salarii ${input.month}` },
       { accountCode: "444", credit: round2(input.incomeTax), explanation: `Impozit salarii datorat ${input.month}` },
-      { accountCode: "646", debit: round2(input.cam), explanation: `CAM ${input.month}` },
+      { accountCode: "421", debit: round2(input.otherDeductions), explanation: `Alte rețineri salariale ${input.month}` },
+      { accountCode: "427", credit: round2(input.otherDeductions), explanation: `Rețineri datorate terților ${input.month}` },
+      { accountCode: "421", debit: round2(input.advancePaid), explanation: `Avansuri salariale reținute ${input.month}` },
+      { accountCode: "425", credit: round2(input.advancePaid), explanation: `Regularizare avansuri ${input.month}` },
+      { accountCode: "6461", debit: round2(input.cam), explanation: `CAM ${input.month}` },
       { accountCode: "436", credit: round2(input.cam), explanation: `CAM datorată ${input.month}` },
     ].filter((line) => Number(line.debit || line.credit || 0) > 0);
     await insertEntry(connection, {

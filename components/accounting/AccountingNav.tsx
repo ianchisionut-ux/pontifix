@@ -7,10 +7,10 @@ import { CurrentUserBox } from './CurrentUserBox'
 
 const items = [
   { href: '/dashboard/contabilitate', label: 'Panou', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/contabilitate/invoices', label: 'Facturi', icon: FileText },
+  { href: '/dashboard/contabilitate/invoices', label: 'Ieșiri / facturi', icon: FileText },
   { href: '/dashboard/contabilitate/invoices/new', label: 'Factură nouă', icon: FilePlus2 },
   { href: '/dashboard/contabilitate/ledger', label: 'Contabilitate', icon: Landmark },
-  { href: '/dashboard/contabilitate/purchases', label: 'Intrări', icon: ShoppingCart },
+  { href: '/dashboard/contabilitate/purchases', label: 'Intrări / achiziții', icon: ShoppingCart },
   { href: '/dashboard/contabilitate/suppliers', label: 'Furnizori', icon: ContactRound },
   { href: '/dashboard/contabilitate/clients', label: 'Clienți', icon: Users },
   { href: '/dashboard/contabilitate/products', label: 'Produse', icon: Package },
