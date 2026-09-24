@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import chartOfAccounts from "./chart-of-accounts.ro.json";
 
-const ACCOUNTING_SCHEMA_VERSION = 15;
+const ACCOUNTING_SCHEMA_VERSION = 16;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -183,6 +183,26 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "taxExemptionReasonCode" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "taxExemptionReason" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS "revenueAccount" TEXT NOT NULL DEFAULT '704';`);
+  // Contul de venit face parte din documentul contabil emis. Il memoram pe
+  // pozitie, astfel incat modificarile ulterioare ale produsului sa nu mute
+  // veniturile istorice intre conturi la o corectie sau la un backfill.
+  await pool.query(`
+    DO $migration$
+    BEGIN
+      ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "revenueAccount" TEXT;
+      UPDATE invoice_items ii
+         SET "revenueAccount"=COALESCE(NULLIF(p."revenueAccount",''),'704')
+        FROM products p
+       WHERE p.id=ii."productId"
+         AND (ii."revenueAccount" IS NULL OR ii."revenueAccount"='');
+      UPDATE invoice_items
+         SET "revenueAccount"='704'
+       WHERE "revenueAccount" IS NULL OR "revenueAccount"='';
+      ALTER TABLE invoice_items ALTER COLUMN "revenueAccount" SET DEFAULT '704';
+      ALTER TABLE invoice_items ALTER COLUMN "revenueAccount" SET NOT NULL;
+    END
+    $migration$;
+  `);
   await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "unitCode" TEXT NOT NULL DEFAULT 'H87';`);
   await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "vatCategoryCode" TEXT NOT NULL DEFAULT 'S';`);
   await pool.query(`ALTER TABLE invoice_items ADD COLUMN IF NOT EXISTS "taxExemptionReasonCode" TEXT NOT NULL DEFAULT '';`);
@@ -557,16 +577,20 @@ async function ensureSchema(pool: Pool) {
   `);
   await pool.query(`
     UPDATE ref_transactions r SET
-      "partnerName"=COALESCE(NULLIF(r."partnerName",''),c.name),
-      "partnerCif"=COALESCE(NULLIF(r."partnerCif",''),c.cif),
-      "partnerCountryCode"=COALESCE(NULLIF(r."partnerCountryCode",''),c."countryCode",'RO'),
-      "partnerVatPayer"=CASE WHEN r."partnerVatPayer"=-1 THEN c."vatPayer" ELSE r."partnerVatPayer" END,
-      "partnerRegCom"=COALESCE(NULLIF(r."partnerRegCom",''),c."regCom"),
-      "partnerAddress"=COALESCE(NULLIF(r."partnerAddress",''),c.address),
-      "partnerCounty"=COALESCE(NULLIF(r."partnerCounty",''),c.judet),
-      "partnerCity"=COALESCE(NULLIF(r."partnerCity",''),c.city),
-      "partnerPostalCode"=COALESCE(NULLIF(r."partnerPostalCode",''),c."postalCode"),
-      "partnerPhone"=COALESCE(NULLIF(r."partnerPhone",''),c.phone)
+      "partnerName"=COALESCE(NULLIF(i."clientSnapshot"->>'name',''),c.name,''),
+      "partnerCif"=COALESCE(i."clientSnapshot"->>'cif',c.cif,''),
+      "partnerCountryCode"=COALESCE(NULLIF(i."clientSnapshot"->>'countryCode',''),c."countryCode",'RO'),
+      "partnerVatPayer"=CASE
+        WHEN COALESCE(i."clientSnapshot"->>'vatPayer','') ~ '^[0-9]+$'
+          THEN (i."clientSnapshot"->>'vatPayer')::integer
+        ELSE COALESCE(c."vatPayer",0)
+      END,
+      "partnerRegCom"=COALESCE(i."clientSnapshot"->>'regCom',c."regCom",''),
+      "partnerAddress"=COALESCE(i."clientSnapshot"->>'address',c.address,''),
+      "partnerCounty"=COALESCE(i."clientSnapshot"->>'judet',c.judet,''),
+      "partnerCity"=COALESCE(i."clientSnapshot"->>'city',c.city,''),
+      "partnerPostalCode"=COALESCE(i."clientSnapshot"->>'postalCode',c."postalCode",''),
+      "partnerPhone"=COALESCE(i."clientSnapshot"->>'phone',c.phone,'')
     FROM invoices i JOIN clients c ON c.id=i."clientId"
     WHERE r."invoiceId"=i.id AND r.source='AUTO_PAYMENT';
   `);

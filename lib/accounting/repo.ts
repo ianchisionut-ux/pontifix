@@ -94,6 +94,7 @@ export type InvoiceItemInput = {
   vatCategoryCode?: string;
   taxExemptionReasonCode?: string;
   taxExemptionReason?: string;
+  revenueAccount?: string;
 };
 
 export type InvoiceItem = InvoiceItemInput & {
@@ -597,7 +598,7 @@ function computeTotals(items: InvoiceItemInput[], discountPercent = 0) {
   return { computed, subtotal: round2(subtotal), vatTotal: round2(vatTotal) };
 }
 
-export async function createInvoice(input: {
+type CreateInvoiceInput = {
   series: string;
   number?: number;
   clientId: number;
@@ -630,7 +631,16 @@ export async function createInvoice(input: {
   cashier?: string;
   integrationSource?: string;
   externalId?: string;
-}): Promise<number> {
+};
+
+export async function createInvoice(input: CreateInvoiceInput): Promise<number> {
+  return createInvoiceInTransaction(input);
+}
+
+async function createInvoiceInTransaction(
+  input: CreateInvoiceInput,
+  transactionClient?: PoolClient,
+): Promise<number> {
   const pool = await ready();
   const series = input.series.trim().toUpperCase();
   if (!series) throw new Error("Completează seria facturii.");
@@ -709,9 +719,10 @@ export async function createInvoice(input: {
     );
   }
 
-  const connection = await pool.connect();
+  const connection = transactionClient || await pool.connect();
+  const ownsTransaction = !transactionClient;
   try {
-    await connection.query("BEGIN");
+    if (ownsTransaction) await connection.query("BEGIN");
     const number = await takeInvoiceNumber(series, input.number, connection);
     const clientResult = await connection.query(
       `SELECT * FROM clients WHERE id=$1`,
@@ -786,10 +797,23 @@ export async function createInvoice(input: {
       ],
     );
 
+    const productIds = [...new Set(computed.flatMap((item) => item.productId ? [item.productId] : []))];
+    const productAccounts = productIds.length
+      ? new Map((await connection.query(
+          `SELECT id,COALESCE(NULLIF("revenueAccount",''),'704') AS "revenueAccount" FROM products WHERE id=ANY($1::int[])`,
+          [productIds],
+        )).rows.map((row) => [Number(row.id), String(row.revenueAccount)]))
+      : new Map<number, string>();
+
     for (const item of computed) {
+      const revenueAccount = String(
+        (invoiceType === "STORNO" ? item.revenueAccount : "") ||
+          (item.productId ? productAccounts.get(item.productId) : "") ||
+          "704",
+      ).trim();
       await connection.query(
-        `INSERT INTO invoice_items ("invoiceId", "productId", description, um, qty, "unitPrice", "vatRate", valoare, "vatValue", "unitCode", "vatCategoryCode", "taxExemptionReasonCode", "taxExemptionReason")
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+        `INSERT INTO invoice_items ("invoiceId", "productId", description, um, qty, "unitPrice", "vatRate", valoare, "vatValue", "unitCode", "vatCategoryCode", "taxExemptionReasonCode", "taxExemptionReason", "revenueAccount")
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
         [
           invoiceId,
           item.productId ?? null,
@@ -804,6 +828,7 @@ export async function createInvoice(input: {
           String(item.vatCategoryCode || (item.vatRate === 0 ? "Z" : "S")).trim().toUpperCase(),
           String(item.taxExemptionReasonCode || "").trim(),
           String(item.taxExemptionReason || "").trim(),
+          revenueAccount,
         ],
       );
     }
@@ -847,13 +872,13 @@ export async function createInvoice(input: {
       );
     }
 
-    await connection.query("COMMIT");
+    if (ownsTransaction) await connection.query("COMMIT");
     return invoiceId;
   } catch (error) {
-    await connection.query("ROLLBACK");
+    if (ownsTransaction) await connection.query("ROLLBACK");
     throw error;
   } finally {
-    connection.release();
+    if (ownsTransaction) connection.release();
   }
 }
 
@@ -874,64 +899,97 @@ export async function createStornoInvoice(input: {
 }): Promise<number> {
   if (!String(input.reason || "").trim())
     throw new Error("Completează motivul stornării.");
-  const original = await getInvoiceFull(input.originalInvoiceId);
-  if (!original?.client) throw new Error("Factura selectată nu există.");
-  if (
-    original.invoice.invoiceType === "STORNO" ||
-    ["storno", "stornoed", "canceled"].includes(original.invoice.status)
-  ) {
-    throw new Error("Factura selectată nu poate fi stornată.");
-  }
   const pool = await ready();
-  const duplicate = await pool.query(
-    `SELECT id FROM invoices WHERE "originalInvoiceId"=$1 AND "invoiceType"='STORNO' LIMIT 1`,
-    [input.originalInvoiceId],
-  );
-  if (duplicate.rows[0])
-    throw new Error("Factura selectată are deja o factură storno.");
+  const connection = await pool.connect();
+  try {
+    await connection.query("BEGIN");
+    const invoice = (await connection.query(
+      `SELECT * FROM invoices WHERE id=$1 FOR UPDATE`,
+      [input.originalInvoiceId],
+    )).rows[0] as Invoice | undefined;
+    if (!invoice) throw new Error("Factura selectată nu există.");
+    if (
+      invoice.invoiceType === "STORNO" ||
+      ["storno", "stornoed", "canceled"].includes(invoice.status)
+    ) {
+      throw new Error("Factura selectată nu poate fi stornată.");
+    }
+    const duplicate = await connection.query(
+      `SELECT id FROM invoices WHERE "originalInvoiceId"=$1 AND "invoiceType"='STORNO' LIMIT 1`,
+      [input.originalInvoiceId],
+    );
+    if (duplicate.rows[0])
+      throw new Error("Factura selectată are deja o factură storno.");
 
-  const reference = `${original.invoice.series} ${String(original.invoice.number).padStart(4, "0")}`;
-  const id = await createInvoice({
-    series: (input.series || "STO").toUpperCase(),
-    clientId: original.invoice.clientId,
-    userId: original.invoice.userId,
-    issueDate: input.issueDate,
-    dueDate: input.issueDate,
-    currency: original.invoice.currency,
-    exchangeRate: original.invoice.exchangeRate,
-    notes: `Storno pentru factura ${reference}. Motiv: ${input.reason}`,
-    delegateName: original.invoice.delegateName,
-    delegateCI: original.invoice.delegateCI,
-    delegateCNP: original.invoice.delegateCNP,
-    discountPercent: original.invoice.discountPercent,
-    invoiceType: "STORNO",
-    originalInvoiceId: original.invoice.id,
-    stornoReason: input.reason.trim(),
-    invoiceTypeCode: "381",
-    paymentMeansCode: original.invoice.paymentMeansCode,
-    paymentTerms: original.invoice.paymentTerms,
-    taxPointDate: input.issueDate,
-    buyerReference: original.invoice.buyerReference,
-    sellerSnapshot: original.company,
-    clientSnapshot: original.client,
-    initialStatus: "storno",
-    items: original.items.map((item) => ({
-      productId: item.productId,
-      description: `STORNO - ${item.description}`,
-      um: item.um,
-      qty: Math.abs(item.qty),
-      unitPrice: -Math.abs(item.unitPrice),
-      vatRate: item.vatRate,
-      unitCode: item.unitCode,
-      vatCategoryCode: item.vatCategoryCode,
-      taxExemptionReasonCode: item.taxExemptionReasonCode,
-      taxExemptionReason: item.taxExemptionReason,
-    })),
-  });
-  await pool.query(`UPDATE invoices SET status='stornoed' WHERE id=$1`, [
-    original.invoice.id,
-  ]);
-  return id;
+    const [itemResult, clientResult, companyResult] = await Promise.all([
+      connection.query(`SELECT * FROM invoice_items WHERE "invoiceId"=$1 ORDER BY id`, [invoice.id]),
+      connection.query(`SELECT * FROM clients WHERE id=$1`, [invoice.clientId]),
+      connection.query(`SELECT * FROM company WHERE id=1`),
+    ]);
+    const items = itemResult.rows as InvoiceItem[];
+    const liveClient = clientResult.rows[0] as Client | undefined;
+    const liveCompany = companyResult.rows[0] as Company | undefined;
+    const clientSnapshot = Object.keys(invoice.clientSnapshot || {}).length
+      ? invoice.clientSnapshot as Client
+      : liveClient;
+    const sellerSnapshot = Object.keys(invoice.sellerSnapshot || {}).length
+      ? invoice.sellerSnapshot as Company
+      : liveCompany;
+    if (!clientSnapshot || !sellerSnapshot || items.length === 0)
+      throw new Error("Factura originală nu are toate datele necesare stornării.");
+
+    const reference = `${invoice.series} ${String(invoice.number).padStart(4, "0")}`;
+    const id = await createInvoiceInTransaction({
+      series: (input.series || "STO").toUpperCase(),
+      clientId: invoice.clientId,
+      userId: invoice.userId,
+      issueDate: input.issueDate,
+      dueDate: input.issueDate,
+      currency: invoice.currency,
+      exchangeRate: invoice.exchangeRate,
+      notes: `Storno pentru factura ${reference}. Motiv: ${input.reason}`,
+      delegateName: invoice.delegateName,
+      delegateCI: invoice.delegateCI,
+      delegateCNP: invoice.delegateCNP,
+      discountPercent: invoice.discountPercent,
+      invoiceType: "STORNO",
+      originalInvoiceId: invoice.id,
+      stornoReason: input.reason.trim(),
+      invoiceTypeCode: "381",
+      paymentMeansCode: invoice.paymentMeansCode,
+      paymentTerms: invoice.paymentTerms,
+      taxPointDate: input.issueDate,
+      buyerReference: invoice.buyerReference,
+      sellerSnapshot,
+      clientSnapshot,
+      initialStatus: "storno",
+      items: items.map((item) => ({
+        productId: item.productId,
+        description: `STORNO - ${item.description}`,
+        um: item.um,
+        qty: Math.abs(item.qty),
+        unitPrice: -Math.abs(item.unitPrice),
+        vatRate: item.vatRate,
+        unitCode: item.unitCode,
+        vatCategoryCode: item.vatCategoryCode,
+        taxExemptionReasonCode: item.taxExemptionReasonCode,
+        taxExemptionReason: item.taxExemptionReason,
+        revenueAccount: item.revenueAccount,
+      })),
+    }, connection);
+    await connection.query(`UPDATE invoices SET status='stornoed' WHERE id=$1`, [invoice.id]);
+    await connection.query("COMMIT");
+    return id;
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    if ((error as { code?: string; constraint?: string }).code === "23505" &&
+        (error as { constraint?: string }).constraint === "invoices_one_storno_per_original") {
+      throw new Error("Factura selectată are deja o factură storno.");
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 export async function listInvoices(): Promise<
   (Invoice & {

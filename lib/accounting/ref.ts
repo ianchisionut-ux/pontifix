@@ -193,10 +193,15 @@ export async function createRefIncomeForPayment(input: {
     : gross;
   const vat = round2(gross - net);
   const fiscalAmount = vatPayer ? net : gross;
-  const partner = (await executor.query(
-    `SELECT c.* FROM invoices i JOIN clients c ON c.id=i."clientId" WHERE i.id=$1`,
+  const partnerRow = (await executor.query(
+    `SELECT c.*,i."clientSnapshot" AS "__clientSnapshot"
+       FROM invoices i JOIN clients c ON c.id=i."clientId" WHERE i.id=$1`,
     [input.invoiceId],
   )).rows[0] || {};
+  const snapshot = partnerRow.__clientSnapshot && typeof partnerRow.__clientSnapshot === "object"
+    ? partnerRow.__clientSnapshot as Record<string, unknown>
+    : {};
+  const partner = Object.keys(snapshot).length ? snapshot : partnerRow;
   await executor.query(
     `INSERT INTO ref_transactions
       (type, date, "documentType", "documentNumber", explanation, "grossAmount", "vatAmount", "netAmount",
@@ -205,8 +210,8 @@ export async function createRefIncomeForPayment(input: {
      VALUES ('INCOME',$1,'FACTURA',$2,$3,$4,$5,$6,'TAXABLE_INCOME',100,$7,$8,$9,'AUTO_PAYMENT',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
      ON CONFLICT ("paymentId") WHERE "paymentId" IS NOT NULL DO NOTHING`,
     [input.date, `${input.series} ${input.number}`, `Încasare factură – ${input.clientName}`, gross, vat, net,
-      fiscalAmount, input.invoiceId, input.paymentId, input.clientName, partner.cif || "", partner.countryCode || "RO", Number(partner.vatPayer || 0),
-      partner.regCom || "", partner.address || "", partner.judet || "", partner.city || "", partner.postalCode || "", partner.phone || ""]
+      fiscalAmount, input.invoiceId, input.paymentId, String(partner.name || input.clientName), String(partner.cif || ""), String(partner.countryCode || "RO"), Number(partner.vatPayer || 0),
+      String(partner.regCom || ""), String(partner.address || ""), String(partner.judet || ""), String(partner.city || ""), String(partner.postalCode || ""), String(partner.phone || "")]
   );
 }
 

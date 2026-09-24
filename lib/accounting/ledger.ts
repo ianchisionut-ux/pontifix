@@ -168,9 +168,7 @@ export async function postInvoiceToLedger(invoiceId: number, client: PoolClient)
   const invoice = invoices[0];
   if (!invoice) throw new Error("Factura nu există pentru contare.");
   const { rows: items } = await client.query(
-    `SELECT ii.*,COALESCE(NULLIF(p."revenueAccount",''),'704') AS "revenueAccount"
-       FROM invoice_items ii LEFT JOIN products p ON p.id=ii."productId"
-      WHERE ii."invoiceId"=$1 ORDER BY ii.id`,
+    `SELECT * FROM invoice_items WHERE "invoiceId"=$1 ORDER BY id`,
     [invoiceId],
   );
   const rate = Number(invoice.exchangeRate || 1);
