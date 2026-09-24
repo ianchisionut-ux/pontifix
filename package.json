@@ -12,6 +12,8 @@
     "prisma:migrate": "prisma migrate dev",
     "test:accounting-xml": "node scripts/test-accounting-xml.cjs",
     "test:accounting-flow": "node scripts/test-accounting-flow.cjs",
+    "test:tax-tools": "node scripts/test-tax-tools.cjs",
+    "test:d394-xsd": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-d394-xsd.ps1",
     "test:anaf-workflow": "node scripts/test-anaf-workflow.cjs",
     "test:payroll": "node --experimental-strip-types scripts/test-payroll.ts",
     "test:saga-import": "node --experimental-strip-types scripts/test-saga-import.ts",
