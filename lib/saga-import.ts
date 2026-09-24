@@ -48,6 +48,13 @@ function find(row: Record<string, unknown>, aliases: string[]) {
   return undefined
 }
 
+function looksLikeHeader(values: unknown[]) {
+  const keys = values.map(normalize)
+  const hasIdentity = keys.some((key) => ['cnp','codnumericpersonal','nrcontract','numarcontract','nrcim','email'].includes(key))
+  const hasPerson = keys.some((key) => ['nume','prenume','numesiprenume','salariat','angajat','fullname'].includes(key))
+  return hasIdentity && hasPerson
+}
+
 function canonical(row: Record<string, unknown>, index: number): SagaImportRow {
   let lastName = text(find(row, ['nume','lastname','namefamilie','nume salariat']))
   let firstName = text(find(row, ['prenume','firstname']))
@@ -76,8 +83,8 @@ function canonical(row: Record<string, unknown>, index: number): SagaImportRow {
 }
 
 function parseDelimited(content: string) {
-  const first = content.split(/\r?\n/, 1)[0] || ''
-  const delimiter = [';','\t',','].sort((a, b) => first.split(b).length - first.split(a).length)[0]
+  const sample = content.split(/\r?\n/).slice(0, 20).join('\n')
+  const delimiter = [';','\t',','].sort((a, b) => sample.split(b).length - sample.split(a).length)[0]
   const parseLine = (line: string) => {
     const cells: string[] = []; let value = ''; let quoted = false
     for (let i = 0; i < line.length; i++) {
@@ -90,8 +97,13 @@ function parseDelimited(content: string) {
     cells.push(value); return cells
   }
   const lines = content.split(/\r?\n/).filter((line) => line.trim())
-  const headers = parseLine(lines.shift() || '')
-  return lines.map((line) => Object.fromEntries(headers.map((header, i) => [header, parseLine(line)[i] || ''])))
+  const headerIndex = lines.slice(0, 20).findIndex((line) => looksLikeHeader(parseLine(line)))
+  const start = headerIndex >= 0 ? headerIndex : 0
+  const headers = parseLine(lines[start] || '')
+  return lines.slice(start + 1).map((line) => {
+    const cells = parseLine(line)
+    return Object.fromEntries(headers.map((header, i) => [header, cells[i] || '']))
+  })
 }
 
 function xmlRecords(value: unknown, output: Record<string, unknown>[] = []): Record<string, unknown>[] {
@@ -112,11 +124,18 @@ export async function parseSagaFile(file: File) {
     await workbook.xlsx.load(await file.arrayBuffer() as unknown as Parameters<typeof workbook.xlsx.load>[0])
     const sheet = workbook.worksheets[0]
     if (!sheet) throw new Error('Fișierul Excel nu conține foi de calcul.')
-    const headers = (sheet.getRow(1).values as ExcelJS.CellValue[]).slice(1).map((value) => text(value))
+    let headerRow = 1
+    for (let index = 1; index <= Math.min(20, sheet.rowCount); index++) {
+      const values = Array.from({ length: sheet.columnCount }, (_, column) => sheet.getRow(index).getCell(column + 1).text)
+      if (looksLikeHeader(values)) { headerRow = index; break }
+    }
+    const headers = Array.from({ length: sheet.columnCount }, (_, column) => sheet.getRow(headerRow).getCell(column + 1).text.trim())
     sheet.eachRow((row, index) => {
-      if (index === 1) return
-      const values = (row.values as ExcelJS.CellValue[]).slice(1)
-      rows.push(Object.fromEntries(headers.map((header, i) => [header, values[i] instanceof Date ? values[i] : text(values[i])])))
+      if (index <= headerRow) return
+      rows.push(Object.fromEntries(headers.map((header, i) => {
+        const cell = row.getCell(i + 1)
+        return [header, cell.value instanceof Date ? cell.value : cell.text]
+      })))
     })
   } else if (extension === 'xml') {
     const parsed = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '' }).parse(await file.text())

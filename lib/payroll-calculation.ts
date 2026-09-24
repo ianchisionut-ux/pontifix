@@ -1,6 +1,18 @@
 const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
 export function payrollRules(month: string) {
+  if (!/^202[56]-(0[1-9]|1[0-2])$/.test(month)) {
+    throw new Error('Calculul salarial este configurat fiscal doar pentru anii 2025–2026. Actualizează regulile fiscale înainte de a lucra în altă perioadă.')
+  }
+  if (month.startsWith('2025-')) return {
+    minimumGross: 4050,
+    nonTaxableAmount: 300,
+    grossEligibilityLimit: 4300,
+    casRate: 25,
+    cassRate: 10,
+    incomeTaxRate: 10,
+    camRate: 2.25,
+  }
   const secondHalf = month >= '2026-07'
   return {
     minimumGross: secondHalf ? 4325 : 4050,
@@ -45,6 +57,22 @@ export function workingDaysInMonth(month: string) {
   return count
 }
 
+export function workingDaysForEmployment(month: string, hiredAt: Date | string) {
+  const [year, number] = month.split('-').map(Number)
+  const monthStart = new Date(Date.UTC(year, number - 1, 1))
+  const monthEnd = new Date(Date.UTC(year, number, 1))
+  const hired = new Date(hiredAt)
+  const firstDay = hired > monthStart ? new Date(Date.UTC(hired.getUTCFullYear(), hired.getUTCMonth(), hired.getUTCDate())) : monthStart
+  if (firstDay >= monthEnd) return 0
+  const holidays = holidaySet(year)
+  let count = 0
+  for (const day = new Date(firstDay); day < monthEnd; day.setUTCDate(day.getUTCDate() + 1)) {
+    const weekday = day.getUTCDay()
+    if (weekday !== 0 && weekday !== 6 && !holidays.has(day.toISOString().slice(0, 10))) count++
+  }
+  return count
+}
+
 type CalculationInput = {
   month: string
   workingDays: number
@@ -80,7 +108,7 @@ export function calculatePayrollLine(input: CalculationInput) {
   const mealTickets = round(input.mealTickets || 0)
   const grossIncome = round(attendanceGross + overtimeAmount + bonuses + medicalAllowance)
   const eligibleRelief = input.employmentType === 'FULL_TIME' && input.baseFunction &&
-    Math.abs(input.baseGross - rules.minimumGross) < 0.01 && grossIncome <= rules.grossEligibilityLimit
+    Math.abs(input.baseGross - rules.minimumGross) < 0.01 && grossIncome + taxableBenefits <= rules.grossEligibilityLimit
   const nonTaxableAmount = eligibleRelief
     ? round(rules.nonTaxableAmount * Math.min(1, paidNormalDays / Math.max(1, input.workingDays)))
     : 0

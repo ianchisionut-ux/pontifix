@@ -65,7 +65,7 @@ export async function getEmailTransport(businessId?: string | null) {
       greetingTimeout: 15_000,
       socketTimeout: 30_000,
       auth: { user: fromEmail, pass: password },
-    }),
+    }, { disableFileAccess: true, disableUrlAccess: true }),
     from: { name: fromName, address: fromEmail },
     notificationEmail: stored.notificationEmail || null,
   }

@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
-import { calculatePayrollLine, payrollRules, workingDaysInMonth } from '../lib/payroll-calculation.ts'
+import { calculatePayrollLine, payrollRules, workingDaysForEmployment, workingDaysInMonth } from '../lib/payroll-calculation.ts'
 
 assert.deepEqual(payrollRules('2026-06'), { minimumGross:4050, nonTaxableAmount:300, grossEligibilityLimit:4300, casRate:25, cassRate:10, incomeTaxRate:10, camRate:2.25 })
 assert.equal(payrollRules('2026-07').minimumGross, 4325)
 assert.equal(payrollRules('2026-07').nonTaxableAmount, 200)
+assert.equal(payrollRules('2025-12').nonTaxableAmount, 300)
+assert.throws(() => payrollRules('2027-01'), /2025–2026/)
 
 const days = workingDaysInMonth('2026-01')
 assert.ok(days >= 18 && days <= 22, `Număr neașteptat de zile lucrătoare: ${days}`)
@@ -22,5 +24,13 @@ const noRelief = calculatePayrollLine({ month:'2026-01', workingDays:days, worke
   baseFunction:true, personalDeduction:0 })
 assert.equal(noRelief.nonTaxableAmount, 0)
 assert.equal(noRelief.cas, 1250)
+
+const hiredMidMonth = workingDaysForEmployment('2026-01', '2026-01-15')
+assert.ok(hiredMidMonth > 0 && hiredMidMonth < days)
+
+const benefitsRemoveRelief = calculatePayrollLine({ month:'2026-01', workingDays:days, workedDays:days, vacationDays:0, medicalDays:0,
+  unpaidDays:0, workedHours:days*8, overtimeHours:0, baseGross:4050, dailyHours:8, employmentType:'FULL_TIME',
+  baseFunction:true, personalDeduction:0, taxableBenefits:300 })
+assert.equal(benefitsRemoveRelief.nonTaxableAmount, 0)
 
 console.log('Payroll calculation tests passed.')

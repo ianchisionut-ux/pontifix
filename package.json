@@ -13,6 +13,7 @@
     "test:accounting-xml": "node scripts/test-accounting-xml.cjs",
     "test:anaf-workflow": "node scripts/test-anaf-workflow.cjs",
     "test:payroll": "node --experimental-strip-types scripts/test-payroll.ts",
+    "test:saga-import": "node --experimental-strip-types scripts/test-saga-import.ts",
     "deer:assist": "node scripts/deer-assistant.mjs"
   },
   "prisma": {

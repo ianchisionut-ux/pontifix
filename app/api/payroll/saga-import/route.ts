@@ -10,8 +10,8 @@ async function findEmployee(businessId: string, row: Awaited<ReturnType<typeof p
     ...(row.cnp ? [{ cnp: row.cnp }] : []), ...(row.contractNumber ? [{ contractNumber: row.contractNumber }] : []),
     ...(row.email ? [{ email: row.email }] : []),
   ]
-  if (!identities.length) return null
-  return prisma.attendanceEmployee.findFirst({ where: { businessId, OR: identities } })
+  if (!identities.length) return []
+  return prisma.attendanceEmployee.findMany({ where: { businessId, OR: identities }, take: 2, select: { id: true } })
 }
 
 export async function POST(req: NextRequest) {
@@ -28,13 +28,25 @@ export async function POST(req: NextRequest) {
     if (file.size > 10 * 1024 * 1024) throw new Error('Fișierul nu poate depăși 10 MB.')
     const records = await parseSagaFile(file)
     const invalid = records.filter((row) => (!row.cnp && !row.contractNumber && !row.email) || (row.cnp && row.cnp.length !== 13))
-    const preview = await Promise.all(records.map(async (row) => ({ ...row, match: (await findEmployee(businessId, row))?.id || null })))
+    const seen = new Map<string, number>()
+    const duplicateRows = new Set<number>()
+    for (const row of records) for (const key of [row.cnp && `cnp:${row.cnp}`, row.contractNumber && `contract:${row.contractNumber.toLowerCase()}`, row.email && `email:${row.email.toLowerCase()}`].filter(Boolean) as string[]) {
+      const previous = seen.get(key)
+      if (previous) { duplicateRows.add(previous); duplicateRows.add(row.row) } else seen.set(key, row.row)
+    }
+    const preview = await Promise.all(records.map(async (row) => {
+      const matches = await findEmployee(businessId, row)
+      return { ...row, match: matches[0]?.id || null, conflict: matches.length > 1 }
+    }))
+    const conflictRows = preview.filter((row) => row.conflict).map((row) => row.row)
     if (!commit) return NextResponse.json({ records: preview.slice(0, 500), total: records.length,
       existing: preview.filter((row) => row.match).length, newEmployees: preview.filter((row) => !row.match).length,
       salaryRows: preview.filter((row) => row.grossIncome != null || row.netSalary != null).length,
-      invalidRows: invalid.map((row) => row.row) })
+      invalidRows: invalid.map((row) => row.row), duplicateRows: [...duplicateRows].sort((a, b) => a - b), conflictRows })
 
     if (invalid.length) throw new Error(`Rândurile ${invalid.map((row) => row.row).join(', ')} nu au CNP valid, număr contract sau e-mail. Importul a fost oprit pentru a evita dublurile.`)
+    if (duplicateRows.size) throw new Error(`Rândurile ${[...duplicateRows].sort((a, b) => a - b).join(', ')} conțin CNP, contract sau e-mail repetat. Importul a fost oprit pentru a evita suprascrierile.`)
+    if (conflictRows.length) throw new Error(`Rândurile ${conflictRows.join(', ')} corespund mai multor angajați existenți. Corectează CNP-ul, contractul sau e-mailul înainte de import.`)
     if (month && records.some((row) => row.grossIncome != null || row.netSalary != null)) {
       const current = await prisma.payrollRun.findUnique({ where: { businessId_month: { businessId, month } } })
       if (current?.status === 'FINALIZED') throw new Error('Statul lunii selectate este finalizat și nu poate fi suprascris.')

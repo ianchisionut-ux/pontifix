@@ -1,9 +1,9 @@
 import { prisma } from './prisma'
 import { ensurePayrollSchema } from './payroll-storage'
 import { postPayrollToLedger } from './accounting/ledger'
-import { calculatePayrollLine, payrollRules, workingDaysInMonth } from './payroll-calculation'
+import { calculatePayrollLine, payrollRules, workingDaysForEmployment, workingDaysInMonth } from './payroll-calculation'
 
-export { calculatePayrollLine, payrollRules, workingDaysInMonth }
+export { calculatePayrollLine, payrollRules, workingDaysForEmployment, workingDaysInMonth }
 
 const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
@@ -42,8 +42,8 @@ export async function generatePayroll(businessId: string, month: string) {
       employmentType: employee.employmentType, baseFunction: employee.baseFunction, personalDeduction: employee.personalDeduction,
       bonuses: previous?.bonuses, medicalAllowance: previous?.medicalAllowance, taxableBenefits: previous?.taxableBenefits,
       mealTickets: previous?.mealTickets, otherDeductions: previous?.otherDeductions, advancePaid: previous?.advancePaid,
-      overtimeAmount: previous?.source === 'IMPORTED_SAGA' ? previous.overtimeAmount : undefined })
-    const financialValues = previous?.source === 'IMPORTED_SAGA' ? {
+      overtimeAmount: previous?.source.startsWith('IMPORTED_SAGA') ? previous.overtimeAmount : undefined })
+    const financialValues = previous?.source.startsWith('IMPORTED_SAGA') ? {
       attendanceGross: previous.attendanceGross, overtimeAmount: previous.overtimeAmount,
       bonuses: previous.bonuses, medicalAllowance: previous.medicalAllowance,
       taxableBenefits: previous.taxableBenefits, mealTickets: previous.mealTickets,
@@ -93,7 +93,8 @@ export async function updatePayrollLine(businessId: string, lineId: string, valu
     otherDeductions: values.otherDeductions ?? line.otherDeductions, advancePaid: values.advancePaid ?? line.advancePaid,
     overtimeAmount: values.overtimeAmount ?? line.overtimeAmount,
   })
-  return prisma.payrollLine.update({ where: { id: line.id }, data: { ...calculated, notes: values.notes ?? line.notes, source: 'MANUAL' } })
+  return prisma.payrollLine.update({ where: { id: line.id }, data: { ...calculated, notes: values.notes ?? line.notes,
+    source: line.source.startsWith('IMPORTED_SAGA') ? 'IMPORTED_SAGA_EDITED' : 'MANUAL' } })
 }
 
 export async function finalizePayroll(businessId: string, month: string, finalizedBy: string) {
@@ -106,6 +107,15 @@ export async function finalizePayroll(businessId: string, month: string, finaliz
   const missingMedicalAllowance = run.lines.filter((line) => line.medicalDays > 0 && line.medicalAllowance <= 0)
     .map((line) => `${line.employee.lastName} ${line.employee.firstName}`)
   if (missingMedicalAllowance.length) throw new Error(`Completează indemnizația pentru concediul medical: ${missingMedicalAllowance.join(', ')}.`)
+  const incompleteAttendance = run.lines.filter((line) => !line.source.startsWith('IMPORTED_SAGA') &&
+    line.workedDays + line.vacationDays + line.medicalDays + line.unpaidDays + 0.01 < workingDaysForEmployment(month, line.employee.hiredAt))
+    .map((line) => `${line.employee.lastName} ${line.employee.firstName}`)
+  if (incompleteAttendance.length) throw new Error(`Pontaj incomplet pentru: ${incompleteAttendance.join(', ')}.`)
+  const inconsistentNet = run.lines.filter((line) => {
+    const expected = round(line.grossIncome + line.taxableBenefits - line.cas - line.cass - line.incomeTax - line.otherDeductions - line.advancePaid)
+    return line.netSalary < -0.009 || Math.abs(expected - line.netSalary) > 0.02
+  }).map((line) => `${line.employee.lastName} ${line.employee.firstName}`)
+  if (inconsistentNet.length) throw new Error(`Net invalid sau import SAGA incomplet pentru: ${inconsistentNet.join(', ')}.`)
   const totals = run.lines.reduce((sum, line) => ({
     gross: sum.gross + line.grossIncome + line.taxableBenefits,
     cas: sum.cas + line.cas,
