@@ -143,6 +143,22 @@ export async function postPayrollToLedger(input: {
       await connection.query("COMMIT");
       return;
     }
+    const current = (await connection.query(
+      `SELECT COALESCE(SUM("grossIncome"),0)::float8 AS gross,
+              COALESCE(SUM(cas),0)::float8 AS cas,
+              COALESCE(SUM(cass),0)::float8 AS cass,
+              COALESCE(SUM("incomeTax"),0)::float8 AS "incomeTax",
+              COALESCE(SUM(cam),0)::float8 AS cam,
+              COALESCE(SUM("otherDeductions"),0)::float8 AS "otherDeductions",
+              COALESCE(SUM("advancePaid"),0)::float8 AS "advancePaid"
+         FROM "PayrollLine" WHERE "payrollRunId"=$1`,
+      [input.runId],
+    )).rows[0];
+    for (const key of ["gross", "cas", "cass", "incomeTax", "cam", "otherDeductions", "advancePaid"] as const) {
+      if (Math.abs(round2(Number(current[key])) - round2(input[key])) > 0.009) {
+        throw new Error("Statul a fost modificat în timpul finalizării. Verifică valorile și finalizează din nou.");
+      }
+    }
     const [year, month] = input.month.split("-").map(Number);
     const lastDay = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
     await assertOpenPeriod(connection, lastDay);

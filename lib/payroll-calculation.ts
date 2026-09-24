@@ -46,29 +46,36 @@ function holidaySet(year: number) {
   return result
 }
 
+export function isPayrollWorkingDay(value: Date | string) {
+  const day = new Date(value)
+  const weekday = day.getUTCDay()
+  return weekday !== 0 && weekday !== 6 && !holidaySet(day.getUTCFullYear()).has(day.toISOString().slice(0, 10))
+}
+
 export function workingDaysInMonth(month: string) {
   const [year, number] = month.split('-').map(Number)
-  const holidays = holidaySet(year)
   let count = 0
   for (let day = new Date(Date.UTC(year, number - 1, 1)); day.getUTCMonth() === number - 1; day.setUTCDate(day.getUTCDate() + 1)) {
-    const weekday = day.getUTCDay()
-    if (weekday !== 0 && weekday !== 6 && !holidays.has(day.toISOString().slice(0, 10))) count++
+    if (isPayrollWorkingDay(day)) count++
   }
   return count
 }
 
-export function workingDaysForEmployment(month: string, hiredAt: Date | string) {
+export function workingDaysForEmployment(month: string, hiredAt: Date | string, endedAt?: Date | string | null) {
   const [year, number] = month.split('-').map(Number)
   const monthStart = new Date(Date.UTC(year, number - 1, 1))
   const monthEnd = new Date(Date.UTC(year, number, 1))
   const hired = new Date(hiredAt)
   const firstDay = hired > monthStart ? new Date(Date.UTC(hired.getUTCFullYear(), hired.getUTCMonth(), hired.getUTCDate())) : monthStart
   if (firstDay >= monthEnd) return 0
-  const holidays = holidaySet(year)
+  const ended = endedAt ? new Date(endedAt) : null
+  const lastExclusive = ended && ended < monthEnd
+    ? new Date(Date.UTC(ended.getUTCFullYear(), ended.getUTCMonth(), ended.getUTCDate() + 1))
+    : monthEnd
+  if (lastExclusive <= firstDay) return 0
   let count = 0
-  for (const day = new Date(firstDay); day < monthEnd; day.setUTCDate(day.getUTCDate() + 1)) {
-    const weekday = day.getUTCDay()
-    if (weekday !== 0 && weekday !== 6 && !holidays.has(day.toISOString().slice(0, 10))) count++
+  for (const day = new Date(firstDay); day < lastExclusive; day.setUTCDate(day.getUTCDate() + 1)) {
+    if (isPayrollWorkingDay(day)) count++
   }
   return count
 }
@@ -120,9 +127,10 @@ export function calculatePayrollLine(input: CalculationInput) {
   const incomeTax = round(taxableBase * rules.incomeTaxRate / 100)
   const otherDeductions = round(input.otherDeductions || 0)
   const advancePaid = round(input.advancePaid || 0)
-  const netSalary = round(grossIncome + taxableBenefits - cas - cass - incomeTax - otherDeductions - advancePaid)
+  // Avantajele in natura sunt impozabile, dar nu reprezinta numerar de platit salariatului.
+  const netSalary = round(grossIncome - cas - cass - incomeTax - otherDeductions - advancePaid)
   const cam = round(socialBase * rules.camRate / 100)
   return { attendanceGross, overtimeAmount, bonuses, medicalAllowance, taxableBenefits, mealTickets,
     nonTaxableAmount, grossIncome, cas, cass, personalDeduction, taxableBase, incomeTax,
-    otherDeductions, advancePaid, netSalary, cam, employerCost: round(grossIncome + taxableBenefits + cam) }
+    otherDeductions, advancePaid, netSalary, cam, employerCost: round(grossIncome + cam) }
 }

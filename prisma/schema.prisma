@@ -774,6 +774,7 @@ model AttendanceEmployee {
   sortOrder        Int               @default(0)
   active           Boolean           @default(true)
   hiredAt          DateTime          @default(now())
+  endedAt          DateTime?         @db.Date
   cnp              String?
   contractNumber   String?
   contractDate     DateTime?         @db.Date

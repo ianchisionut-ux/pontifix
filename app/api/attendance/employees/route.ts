@@ -19,6 +19,7 @@ const fields = {
   contractNumber: z.string().trim().max(50).optional(),
   contractDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
   hiredAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal('')),
   grossSalary: z.coerce.number().min(0).max(1000000).default(0),
   baseFunction: z.boolean().default(true),
   dependents: z.coerce.number().int().min(0).max(20).default(0),
@@ -48,10 +49,12 @@ export async function POST(req: NextRequest) {
   await ensurePayrollSchema()
   const parsed = employeeSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Datele angajatului sunt incomplete.' }, { status: 400 })
-  const { contractDate, hiredAt, ...data } = parsed.data
+  const { contractDate, hiredAt, endedAt, ...data } = parsed.data
+  if (endedAt && hiredAt && endedAt < hiredAt) return NextResponse.json({ error: 'Data încetării nu poate fi anterioară angajării.' }, { status: 400 })
   const employee = await prisma.attendanceEmployee.create({ data: { ...data, email: data.email || null,
     cnp: data.cnp || null, contractDate: contractDate ? new Date(`${contractDate}T00:00:00Z`) : null,
-    hiredAt: hiredAt ? new Date(`${hiredAt}T00:00:00Z`) : undefined, businessId } })
+    hiredAt: hiredAt ? new Date(`${hiredAt}T00:00:00Z`) : undefined,
+    endedAt: endedAt ? new Date(`${endedAt}T00:00:00Z`) : null, businessId } })
   return NextResponse.json(employee, { status: 201 })
 }
 
@@ -61,12 +64,15 @@ export async function PATCH(req: NextRequest) {
   await ensurePayrollSchema()
   const parsed = updateSchema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Datele angajatului sunt incomplete.' }, { status: 400 })
-  const { id, contractDate, hiredAt, ...data } = parsed.data
+  const { id, contractDate, hiredAt, endedAt, ...data } = parsed.data
+  if (endedAt && hiredAt && endedAt < hiredAt) return NextResponse.json({ error: 'Data încetării nu poate fi anterioară angajării.' }, { status: 400 })
+  if (!data.active && !endedAt) return NextResponse.json({ error: 'Completează data încetării când marchezi angajatul inactiv.' }, { status: 400 })
   const result = await prisma.attendanceEmployee.updateMany({
     where: { id, businessId },
     data: { ...data, email: data.email || null, cnp: data.cnp || null,
       contractDate: contractDate ? new Date(`${contractDate}T00:00:00Z`) : null,
-      hiredAt: hiredAt ? new Date(`${hiredAt}T00:00:00Z`) : undefined },
+      hiredAt: hiredAt ? new Date(`${hiredAt}T00:00:00Z`) : undefined,
+      endedAt: endedAt ? new Date(`${endedAt}T00:00:00Z`) : null },
   })
   if (!result.count) return NextResponse.json({ error: 'Angajatul nu există.' }, { status: 404 })
   return NextResponse.json({ success: true })

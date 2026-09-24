@@ -10,6 +10,7 @@ async function createPayrollSchema() {
     `ALTER TABLE "AttendanceEmployee" ADD COLUMN IF NOT EXISTS "cnp" TEXT`,
     `ALTER TABLE "AttendanceEmployee" ADD COLUMN IF NOT EXISTS "contractNumber" TEXT`,
     `ALTER TABLE "AttendanceEmployee" ADD COLUMN IF NOT EXISTS "contractDate" DATE`,
+    `ALTER TABLE "AttendanceEmployee" ADD COLUMN IF NOT EXISTS "endedAt" DATE`,
     `ALTER TABLE "AttendanceEmployee" ADD COLUMN IF NOT EXISTS "grossSalary" DOUBLE PRECISION NOT NULL DEFAULT 0`,
     `ALTER TABLE "AttendanceEmployee" ADD COLUMN IF NOT EXISTS "baseFunction" BOOLEAN NOT NULL DEFAULT true`,
     `ALTER TABLE "AttendanceEmployee" ADD COLUMN IF NOT EXISTS "dependents" INTEGER NOT NULL DEFAULT 0`,

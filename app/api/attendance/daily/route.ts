@@ -20,10 +20,13 @@ export async function PUT(req: NextRequest) {
   const parsed = schema.safeParse(await req.json())
   if (!parsed.success) return NextResponse.json({ error: 'Date de pontaj invalide.' }, { status: 400 })
   const { employeeId, date, status, hours, note } = parsed.data
-  const employee = await prisma.attendanceEmployee.findFirst({ where: { id: employeeId, businessId, active: true }, select: { id: true } })
+  const workDate = new Date(`${date}T00:00:00.000Z`)
+  const employee = await prisma.attendanceEmployee.findFirst({ where: {
+    id: employeeId, businessId, hiredAt: { lte: workDate },
+    OR: [{ active: true, endedAt: null }, { endedAt: { gte: workDate } }],
+  }, select: { id: true } })
   if (!employee) return NextResponse.json({ error: 'Angajatul nu există.' }, { status: 404 })
 
-  const workDate = new Date(`${date}T00:00:00.000Z`)
   if (!status) {
     await prisma.dailyAttendance.deleteMany({ where: { businessId, employeeId, workDate } })
     return NextResponse.json({ deleted: true })

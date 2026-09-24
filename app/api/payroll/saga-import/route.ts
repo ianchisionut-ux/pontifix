@@ -27,6 +27,10 @@ export async function POST(req: NextRequest) {
     if (!(file instanceof File) || file.size === 0) throw new Error('Selectează fișierul exportat din SAGA.')
     if (file.size > 10 * 1024 * 1024) throw new Error('Fișierul nu poate depăși 10 MB.')
     const records = await parseSagaFile(file)
+    const containsPayroll = records.some((row) => row.grossIncome != null || row.netSalary != null)
+    if (containsPayroll && !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+      throw new Error('Selectează o lună validă pentru importul valorilor salariale.')
+    }
     const invalid = records.filter((row) => (!row.cnp && !row.contractNumber && !row.email) || (row.cnp && row.cnp.length !== 13))
     const seen = new Map<string, number>()
     const duplicateRows = new Set<number>()
@@ -47,7 +51,7 @@ export async function POST(req: NextRequest) {
     if (invalid.length) throw new Error(`Rândurile ${invalid.map((row) => row.row).join(', ')} nu au CNP valid, număr contract sau e-mail. Importul a fost oprit pentru a evita dublurile.`)
     if (duplicateRows.size) throw new Error(`Rândurile ${[...duplicateRows].sort((a, b) => a - b).join(', ')} conțin CNP, contract sau e-mail repetat. Importul a fost oprit pentru a evita suprascrierile.`)
     if (conflictRows.length) throw new Error(`Rândurile ${conflictRows.join(', ')} corespund mai multor angajați existenți. Corectează CNP-ul, contractul sau e-mailul înainte de import.`)
-    if (month && records.some((row) => row.grossIncome != null || row.netSalary != null)) {
+    if (containsPayroll) {
       const current = await prisma.payrollRun.findUnique({ where: { businessId_month: { businessId, month } } })
       if (current?.status === 'FINALIZED') throw new Error('Statul lunii selectate este finalizat și nu poate fi suprascris.')
     }
@@ -75,7 +79,7 @@ export async function POST(req: NextRequest) {
         imported.push({ employeeId: employee.id, row })
       }
     })
-    if (month && imported.some(({ row }) => row.grossIncome != null || row.netSalary != null)) {
+    if (containsPayroll) {
       const run = await generatePayroll(businessId, month)
       if (!run || run.status === 'FINALIZED') throw new Error('Statul lunii selectate este finalizat și nu poate fi suprascris.')
       for (const { employeeId, row } of imported) {
