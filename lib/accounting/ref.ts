@@ -1,5 +1,6 @@
 import type { PoolClient } from "pg";
 import { ready } from "@/lib/accounting/db";
+import { defaultVatRegimeReason, isVatRegimeCode, suggestVatRegime, vatRegimeNeedsReason, type VatRegimeCode } from "@/lib/accounting/vat-regime";
 
 export type RefTransactionType = "INCOME" | "EXPENSE";
 export type RefFiscalCategory =
@@ -19,6 +20,9 @@ export type RefTransaction = {
   grossAmount: number;
   vatAmount: number;
   vatRate: number | null;
+  vatCategoryCode: VatRegimeCode;
+  taxExemptionReasonCode: string;
+  taxExemptionReason: string;
   netAmount: number;
   fiscalCategory: RefFiscalCategory;
   deductibilityPercent: number;
@@ -59,6 +63,9 @@ export type RefTransactionInput = {
   grossAmount: number;
   vatAmount?: number;
   vatRate?: number | null;
+  vatCategoryCode?: VatRegimeCode;
+  taxExemptionReasonCode?: string;
+  taxExemptionReason?: string;
   fiscalCategory: RefFiscalCategory;
   deductibilityPercent?: number;
   notes?: string;
@@ -129,6 +136,7 @@ function validateInput(input: RefTransactionInput) {
   if (!Number.isFinite(input.grossAmount) || input.grossAmount <= 0) throw new Error("Suma brută trebuie să fie pozitivă.");
   const vat = Number(input.vatAmount || 0);
   if (!Number.isFinite(vat) || vat < 0 || vat > input.grossAmount) throw new Error("Valoarea TVA este invalidă.");
+  if (input.vatCategoryCode && !isVatRegimeCode(input.vatCategoryCode)) throw new Error("Regimul TVA selectat nu este valid.");
   if (input.vatRate != null && (![0,5,9,11,19,20,21,24].includes(Number(input.vatRate)))) throw new Error("Cota TVA nu este acceptată de formularele ANAF.");
   if (input.partnerCountryCode && !/^[A-Za-z]{2}$/.test(input.partnerCountryCode.trim())) throw new Error("Codul țării partenerului trebuie să aibă două litere.");
   const incomeCategories = ["TAXABLE_INCOME", "NON_TAXABLE_INCOME"];
@@ -145,6 +153,12 @@ export async function createRefTransaction(input: RefTransactionInput): Promise<
   const vat = round2(Number(input.vatAmount || 0));
   const net = round2(gross - vat);
   const vatRate = input.vatRate == null ? null : Number(input.vatRate);
+  const vatCategoryCode = input.vatCategoryCode || suggestVatRegime({ type: input.type, companyVatPayer: vatPayer, vatAmount: vat, vatRate: vatRate || 0 });
+  const taxExemptionReasonCode = input.taxExemptionReasonCode?.trim() || "";
+  const taxExemptionReason = input.taxExemptionReason?.trim() || defaultVatRegimeReason(vatCategoryCode);
+  if (vatCategoryCode === "S" && vat <= 0) throw new Error("Regimul standard necesită o valoare TVA pozitivă.");
+  if (vatCategoryCode !== "S" && vat > 0) throw new Error("Pentru regimul TVA selectat, valoarea TVA trebuie să fie zero.");
+  if (vatRegimeNeedsReason(vatCategoryCode) && !taxExemptionReason && !taxExemptionReasonCode) throw new Error("Completează motivul legal pentru regimul TVA selectat.");
   if (vat > 0 && vatRate == null) throw new Error("Cota TVA este obligatorie când documentul conține TVA.");
   if (vatRate != null && Math.abs(vat - round2(net * vatRate / 100)) > Math.max(1, net * 0.01)) throw new Error("TVA-ul nu corespunde cotei selectate și bazei documentului.");
   const percent = input.fiscalCategory === "PARTIAL_EXPENSE"
@@ -162,13 +176,15 @@ export async function createRefTransaction(input: RefTransactionInput): Promise<
     `INSERT INTO ref_transactions
       (type, date, "documentType", "documentNumber", explanation, "grossAmount", "vatAmount", "netAmount",
        "fiscalCategory", "deductibilityPercent", "fiscalAmount", source, notes, "partnerName", "partnerCif", "partnerCountryCode", "vatRate", "partnerVatPayer",
-       "partnerRegCom","partnerAddress","partnerCounty","partnerCity","partnerPostalCode","partnerPhone","partnerRegistrationStatus","partnerInactive")
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'MANUAL',$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25) RETURNING id`,
+       "partnerRegCom","partnerAddress","partnerCounty","partnerCity","partnerPostalCode","partnerPhone","partnerRegistrationStatus","partnerInactive",
+       "vatCategoryCode","taxExemptionReasonCode","taxExemptionReason")
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'MANUAL',$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28) RETURNING id`,
     [input.type, input.date, input.documentType.trim(), input.documentNumber?.trim() || "", input.explanation.trim(),
       gross, vat, net, input.fiscalCategory, percent, fiscalAmount, input.notes?.trim() || "",
       input.partnerName?.trim() || "", input.partnerCif?.trim().toUpperCase() || "", input.partnerCountryCode?.trim().toUpperCase() || "RO", vatRate, Number(input.partnerVatPayer??-1),
       input.partnerRegCom?.trim() || "", input.partnerAddress?.trim() || "", input.partnerCounty?.trim() || "", input.partnerCity?.trim() || "",
-      input.partnerPostalCode?.trim() || "", input.partnerPhone?.trim() || "", input.partnerRegistrationStatus?.trim() || "", Number(input.partnerInactive || 0)]
+      input.partnerPostalCode?.trim() || "", input.partnerPhone?.trim() || "", input.partnerRegistrationStatus?.trim() || "", Number(input.partnerInactive || 0),
+      vatCategoryCode, taxExemptionReasonCode, taxExemptionReason]
   );
   return Number(rows[0].id);
 }
@@ -208,12 +224,14 @@ export async function createRefIncomeForPayment(input: {
     `INSERT INTO ref_transactions
       (type, date, "documentType", "documentNumber", explanation, "grossAmount", "vatAmount", "netAmount",
        "fiscalCategory", "deductibilityPercent", "fiscalAmount", "invoiceId", "paymentId", source,
-       "partnerName","partnerCif","partnerCountryCode","partnerVatPayer","partnerRegCom","partnerAddress","partnerCounty","partnerCity","partnerPostalCode","partnerPhone")
-     VALUES ('INCOME',$1,'FACTURA',$2,$3,$4,$5,$6,'TAXABLE_INCOME',100,$7,$8,$9,'AUTO_PAYMENT',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       "partnerName","partnerCif","partnerCountryCode","partnerVatPayer","partnerRegCom","partnerAddress","partnerCounty","partnerCity","partnerPostalCode","partnerPhone",
+       "vatCategoryCode","taxExemptionReasonCode","taxExemptionReason")
+     VALUES ('INCOME',$1,'FACTURA',$2,$3,$4,$5,$6,'TAXABLE_INCOME',100,$7,$8,$9,'AUTO_PAYMENT',$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
      ON CONFLICT ("paymentId") WHERE "paymentId" IS NOT NULL DO NOTHING`,
     [input.date, `${input.series} ${input.number}`, `Încasare factură – ${input.clientName}`, gross, vat, net,
       fiscalAmount, input.invoiceId, input.paymentId, String(partner.name || input.clientName), String(partner.cif || ""), String(partner.countryCode || "RO"), Number(partner.vatPayer || 0),
-      String(partner.regCom || ""), String(partner.address || ""), String(partner.judet || ""), String(partner.city || ""), String(partner.postalCode || ""), String(partner.phone || "")]
+      String(partner.regCom || ""), String(partner.address || ""), String(partner.judet || ""), String(partner.city || ""), String(partner.postalCode || ""), String(partner.phone || ""),
+      suggestVatRegime({ type: "INCOME", companyVatPayer: vatPayer, vatAmount: vat }), "", defaultVatRegimeReason(suggestVatRegime({ type: "INCOME", companyVatPayer: vatPayer, vatAmount: vat }))]
   );
 }
 

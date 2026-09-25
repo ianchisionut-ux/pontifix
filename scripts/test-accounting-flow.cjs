@@ -37,7 +37,8 @@ async function main() {
   assert.ok(calls.includes('COMMIT'));
 
   const amounts=[];
-  const ref=load('lib/accounting/ref.ts',{'@/lib/accounting/db':{}});
+  const vatRegime=load('lib/accounting/vat-regime.ts',{});
+  const ref=load('lib/accounting/ref.ts',{'@/lib/accounting/db':{},'@/lib/accounting/vat-regime':vatRegime});
   const refClient={async query(sql,args=[]) {
     if(sql.includes('SELECT "exchangeRate"'))return {rows:[{exchangeRate:5}]};
     if(sql.includes('SELECT "vatPayer"'))return {rows:[{vatPayer:1}]};
@@ -119,7 +120,7 @@ async function main() {
   await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1,allocatedInvoiceTo:Infinity}),/numere întregi/);
   await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1.2,allocatedInvoiceTo:10}),/numere întregi/);
   const purchaseQueries=[];
-  const purchases=load('lib/accounting/purchases.ts',{'./db':{ready:async()=>({query:async(sql,args)=>{purchaseQueries.push({sql,args});return {rows:[]};},connect:async()=>{throw new Error('Invalid input reached database');}})},'./ledger':{}});
+  const purchases=load('lib/accounting/purchases.ts',{'./db':{ready:async()=>({query:async(sql,args)=>{purchaseQueries.push({sql,args});return {rows:[]};},connect:async()=>{throw new Error('Invalid input reached database');}})},'./ledger':{},'./vat-regime':vatRegime});
   for(const amount of [NaN,Infinity,-1,0,.001])await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-09-25',amount}),/suma plății/);
   await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-02-30',amount:10}),/Data/);
   await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-09-25',amount:10,method:'INVALID'}),/Metoda/);

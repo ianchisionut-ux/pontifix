@@ -45,7 +45,8 @@
 .ledger-search { margin-bottom:12px; }
 .ledger-period-year { width:180px; margin-bottom:15px; }
 .purchase-lines { overflow-x:auto; }
-.purchase-line { display:grid; grid-template-columns:minmax(190px,1.5fr) minmax(190px,1.3fr) 65px 80px 115px 82px 90px 28px; gap:7px; align-items:center; min-width:980px; margin-bottom:7px; }
+.purchase-line { display:grid; grid-template-columns:minmax(190px,1.5fr) minmax(190px,1.3fr) 65px 80px 115px minmax(210px,1fr) 90px 28px; gap:7px; align-items:start; min-width:1120px; margin-bottom:7px; }
+.purchase-vat-cell { display:grid; gap:6px; }
 .purchase-line-head { margin-bottom:5px; color:var(--text-faint); font-size:10px; font-weight:900; letter-spacing:.04em; text-transform:uppercase; }
 .modal-backdrop { position:fixed; inset:0; z-index:70; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(0,26,61,.42); backdrop-filter:blur(3px); }
 .accounting-root .modal-card { width:min(560px,100%); box-shadow:0 28px 70px rgba(0,26,61,.25); }

@@ -69,6 +69,7 @@ export const deerSubmissionSchema = z.object({
   email: z.string().trim().max(320).default(DEER_CONTACT_EMAIL),
   registrationNumber: z.string().trim().max(300).default(''),
   documents: z.array(z.string().trim().max(200)).max(30).default([]),
+  submittedDocuments: z.array(z.string().trim().max(200)).max(30).default([]),
   notes: z.string().trim().max(4000).default(''),
   lastPreparedAt: z.string().datetime().nullable().default(null),
 })

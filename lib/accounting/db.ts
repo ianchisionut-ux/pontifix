@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import chartOfAccounts from "./chart-of-accounts.ro.json";
 
-const ACCOUNTING_SCHEMA_VERSION = 18;
+const ACCOUNTING_SCHEMA_VERSION = 19;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -329,6 +329,10 @@ async function ensureSchema(pool: Pool) {
   await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerCif" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerCountryCode" TEXT NOT NULL DEFAULT 'RO';`);
   await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "vatRate" NUMERIC(5,2);`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "vatCategoryCode" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "taxExemptionReasonCode" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "taxExemptionReason" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`UPDATE ref_transactions SET "vatCategoryCode"=CASE WHEN "vatAmount">0 THEN 'S' WHEN type='INCOME' AND (SELECT COALESCE("vatPayer",0) FROM company WHERE id=1)=0 THEN 'O' ELSE 'Z' END WHERE "vatCategoryCode"='';`);
   await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerVatPayer" INTEGER NOT NULL DEFAULT -1;`);
   await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerRegCom" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "partnerAddress" TEXT NOT NULL DEFAULT '';`);
@@ -555,6 +559,10 @@ async function ensureSchema(pool: Pool) {
     );
     ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS "supplierId" INTEGER REFERENCES suppliers(id) ON DELETE SET NULL;
   `);
+  await pool.query(`ALTER TABLE purchase_invoice_items ADD COLUMN IF NOT EXISTS "vatCategoryCode" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE purchase_invoice_items ADD COLUMN IF NOT EXISTS "taxExemptionReasonCode" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`ALTER TABLE purchase_invoice_items ADD COLUMN IF NOT EXISTS "taxExemptionReason" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`UPDATE purchase_invoice_items pi SET "vatCategoryCode"=CASE WHEN p."reverseCharge"=1 THEN 'AE' WHEN pi."vatRate">0 THEN 'S' ELSE 'Z' END, "taxExemptionReason"=CASE WHEN p."reverseCharge"=1 THEN 'Taxare inversă conform Codului fiscal.' ELSE pi."taxExemptionReason" END FROM purchase_invoices p WHERE p.id=pi."purchaseInvoiceId" AND pi."vatCategoryCode"='';`);
   // Populam idempotent registrul cu incasarile deja existente in Facturare.
   await pool.query(`
     INSERT INTO ref_transactions
@@ -596,6 +604,7 @@ async function ensureSchema(pool: Pool) {
     FROM invoices i JOIN clients c ON c.id=i."clientId"
     WHERE r."invoiceId"=i.id AND r.source='AUTO_PAYMENT';
   `);
+  await pool.query(`UPDATE ref_transactions SET "vatCategoryCode"=CASE WHEN "vatAmount">0 THEN 'S' WHEN type='INCOME' AND (SELECT COALESCE("vatPayer",0) FROM company WHERE id=1)=0 THEN 'O' ELSE 'Z' END, "taxExemptionReason"=CASE WHEN type='INCOME' AND "vatAmount"=0 AND (SELECT COALESCE("vatPayer",0) FROM company WHERE id=1)=0 THEN 'Operațiune în afara sferei TVA.' ELSE "taxExemptionReason" END WHERE "vatCategoryCode"='';`);
 }
 
 async function ensureSchemaVersion(pool: Pool) {

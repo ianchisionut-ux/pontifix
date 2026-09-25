@@ -1,5 +1,6 @@
 import { ready } from "./db";
 import { postPurchaseInvoiceToLedger, postSupplierPaymentToLedger } from "./ledger";
+import { defaultVatRegimeReason, isVatRegimeCode, suggestVatRegime, vatRegimeNeedsReason, type VatRegimeCode } from "./vat-regime";
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const text = (value: unknown) => String(value ?? "").trim();
@@ -86,7 +87,7 @@ export async function updateSupplier(id: number, input: SupplierInput) {
   } finally { connection.release(); }
 }
 
-type PurchaseItemInput = { description?: string; expenseAccount?: string; unit?: string; quantity?: number; unitPrice?: number; vatRate?: number; deductibilityPercent?: number };
+type PurchaseItemInput = { description?: string; expenseAccount?: string; unit?: string; quantity?: number; unitPrice?: number; vatRate?: number; vatCategoryCode?: VatRegimeCode; taxExemptionReasonCode?: string; taxExemptionReason?: string; deductibilityPercent?: number };
 type PurchaseInput = { supplierId?: number; documentType?: string; documentNumber?: string; issueDate?: string; dueDate?: string;
   currency?: string; exchangeRate?: number; reverseCharge?: boolean; vatOnCollection?: boolean; notes?: string; items?: PurchaseItemInput[] };
 
@@ -110,14 +111,21 @@ export async function createPurchase(input: PurchaseInput) {
   if (!documentNumber) throw new Error("Completează numărul documentului.");
   if (!validDate(issueDate) || !validDate(dueDate)) throw new Error("Data documentului sau scadența nu este validă.");
   if (!items.length) throw new Error("Adaugă cel puțin o poziție în factură.");
-  const normalized = items.map((item, index) => {
-    const quantity = Number(item.quantity || 0), unitPrice = Number(item.unitPrice || 0), vatRate = Number(item.vatRate || 0);
-    const deductibility = Math.max(0, Math.min(100, Number(item.deductibilityPercent ?? 100)));
-    if (!text(item.description) || !Number.isFinite(quantity) || !Number.isFinite(unitPrice) || !Number.isFinite(vatRate) || !Number.isFinite(deductibility) || quantity <= 0 || unitPrice < 0 || vatRate < 0 || vatRate > 100) throw new Error(`Poziția ${index + 1} nu este completată corect.`);
-    return { description: text(item.description), expenseAccount: text(item.expenseAccount || "628"), unit: text(item.unit || "buc"), quantity,
-      unitPrice, vatRate, deductibility, net: round2(quantity * unitPrice), vat: round2(quantity * unitPrice * vatRate / 100) };
-  });
   const reverseCharge = flag(input.reverseCharge);
+  const normalized = items.map((item, index) => {
+    const quantity = Number(item.quantity || 0), unitPrice = Number(item.unitPrice || 0), enteredVatRate = Number(item.vatRate || 0);
+    const deductibility = Math.max(0, Math.min(100, Number(item.deductibilityPercent ?? 100)));
+    if (!text(item.description) || !Number.isFinite(quantity) || !Number.isFinite(unitPrice) || !Number.isFinite(enteredVatRate) || !Number.isFinite(deductibility) || quantity <= 0 || unitPrice < 0 || enteredVatRate < 0 || enteredVatRate > 100) throw new Error(`Poziția ${index + 1} nu este completată corect.`);
+    if (item.vatCategoryCode && !isVatRegimeCode(item.vatCategoryCode)) throw new Error(`Regimul TVA al poziției ${index + 1} nu este valid.`);
+    const vatCategoryCode = item.vatCategoryCode || suggestVatRegime({ type: "EXPENSE", vatRate: enteredVatRate, reverseCharge: Boolean(reverseCharge) });
+    const vatRate = vatCategoryCode === "S" ? enteredVatRate : 0;
+    const taxExemptionReasonCode = text(item.taxExemptionReasonCode);
+    const taxExemptionReason = text(item.taxExemptionReason) || defaultVatRegimeReason(vatCategoryCode);
+    if (vatCategoryCode === "S" && vatRate <= 0) throw new Error(`Poziția ${index + 1}: regimul standard necesită o cotă TVA pozitivă.`);
+    if (vatRegimeNeedsReason(vatCategoryCode) && !taxExemptionReason && !taxExemptionReasonCode) throw new Error(`Poziția ${index + 1}: completează motivul legal al regimului TVA.`);
+    return { description: text(item.description), expenseAccount: text(item.expenseAccount || "628"), unit: text(item.unit || "buc"), quantity,
+      unitPrice, vatRate, vatCategoryCode, taxExemptionReasonCode, taxExemptionReason, deductibility, net: round2(quantity * unitPrice), vat: round2(quantity * unitPrice * vatRate / 100) };
+  });
   const exchangeRate = Number(input.exchangeRate || 1);
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new Error("Cursul valutar nu este valid.");
   const subtotal = round2(normalized.reduce((sum, item) => sum + item.net, 0));
@@ -142,8 +150,8 @@ export async function createPurchase(input: PurchaseInput) {
     );
     const id = Number(rows[0].id);
     for (const item of normalized) await connection.query(
-      `INSERT INTO purchase_invoice_items ("purchaseInvoiceId",description,"expenseAccount",unit,quantity,"unitPrice","vatRate","netAmount","vatAmount","deductibilityPercent")
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, [id,item.description,item.expenseAccount,item.unit,item.quantity,item.unitPrice,item.vatRate,item.net,item.vat,item.deductibility],
+      `INSERT INTO purchase_invoice_items ("purchaseInvoiceId",description,"expenseAccount",unit,quantity,"unitPrice","vatRate","netAmount","vatAmount","deductibilityPercent","vatCategoryCode","taxExemptionReasonCode","taxExemptionReason")
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [id,item.description,item.expenseAccount,item.unit,item.quantity,item.unitPrice,item.vatRate,item.net,item.vat,item.deductibility,item.vatCategoryCode,item.taxExemptionReasonCode,item.taxExemptionReason],
     );
     await postPurchaseInvoiceToLedger(id, connection);
     await connection.query("COMMIT");

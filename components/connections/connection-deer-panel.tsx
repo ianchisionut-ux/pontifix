@@ -37,6 +37,7 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
   const dossierNumberValid = isValidDeerDossierNumber(draft.dossierNumber)
   const recommendedDocuments = useMemo(() => getDeerDocumentsForAction(draft.action), [draft.action])
   const visibleDocuments = useMemo(() => Array.from(new Set([...recommendedDocuments, ...draft.documents])), [recommendedDocuments, draft.documents])
+  const trackingDocuments = useMemo(() => Array.from(new Set([...recommendedDocuments, ...draft.documents, ...draft.submittedDocuments])), [recommendedDocuments, draft.documents, draft.submittedDocuments])
   const missing = useMemo(() => [
     !dossierNumberValid && 'numărul ATR / solicitării (exact 13 cifre)',
     !applicant && 'numele solicitantului',
@@ -54,7 +55,8 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
       `Stradă: ${street || '—'}`,
       `E-mail: ${next.email || '—'}`,
       `Acțiune: ${actionLabel}`,
-      `Documente: ${next.documents.length ? next.documents.join(', ') : '—'}`,
+      `Documente pregătite: ${next.documents.length ? next.documents.join(', ') : '—'}`,
+      `Documente depuse: ${next.submittedDocuments.length ? next.submittedDocuments.join(', ') : '—'}`,
       `NIB intern: ${item.nib}`,
       next.registrationNumber && `Nr. înregistrare DEER: ${next.registrationNumber}`,
       next.notes && `Observații: ${next.notes}`,
@@ -148,6 +150,16 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
     }))
   }
 
+  function toggleSubmittedDocument(document: string) {
+    if (!canEdit) return
+    setDraft((current) => ({
+      ...current,
+      submittedDocuments: current.submittedDocuments.includes(document)
+        ? current.submittedDocuments.filter((entry) => entry !== document)
+        : [...current.submittedDocuments, document],
+    }))
+  }
+
   const statusMeta = DEER_STATUS_META[draft.status]
 
   return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 p-3 lg:p-6" role="dialog" aria-modal="true">
@@ -227,6 +239,15 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
             <label className="mt-3 block text-xs font-bold text-slate-500">Număr înregistrare DEER
               <input disabled={!canEdit} value={draft.registrationNumber} onChange={(event) => setDraft({ ...draft, registrationNumber: event.target.value })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50"/>
             </label>
+            <div className="mt-3">
+              <div className="text-xs font-bold text-slate-500">Ce ai depus efectiv</div>
+              <p className="mt-1 text-[11px] leading-4 text-slate-400">Bifează documentele încărcate pe portal. Lista rămâne salvată în dosar.</p>
+              <div className="mt-2 grid gap-2">{trackingDocuments.map((document) => {
+                const checked = draft.submittedDocuments.includes(document)
+                return <button key={document} type="button" disabled={!canEdit} onClick={() => toggleSubmittedDocument(document)} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold transition ${checked ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"} disabled:cursor-default`}><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${checked ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white"}`}>{checked && <CheckCircle2 size={13}/>}</span>{document}</button>
+              })}</div>
+              {draft.submittedDocuments.length === 0 && <div className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] font-bold text-amber-800">Nu ai marcat încă niciun document ca depus.</div>}
+            </div>
             <label className="mt-3 block text-xs font-bold text-slate-500">Observații
               <textarea disabled={!canEdit} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} className="input-field mt-1.5 min-h-28 w-full resize-y bg-white disabled:bg-slate-50"/>
             </label>
