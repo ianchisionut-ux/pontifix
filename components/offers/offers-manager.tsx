@@ -22,7 +22,7 @@ export function OffersManager({initialOffers,canManage}:{initialOffers:Offer[];c
   async function changeOfferStatus(offer: Offer, status: OfferStatus) {
     if (status !== 'ACCEPTED' || offer.status === 'ACCEPTED') return patchOffer(offer.id, { status })
     if (offer.connectionNib) return patchOffer(offer.id, { status })
-    const contractNumber = window.prompt('Introdu Numărul contractului. Acesta va stabili și NIB-ul branșamentului:')?.trim()
+    const contractNumber = window.prompt('Introdu numărul contractului (de exemplu 68). Dacă există deja în Branșamente, dosarul va fi asociat automat:')?.trim()
     if (!contractNumber) return
     if (!/\d/.test(contractNumber)) return alert('Numărul contractului trebuie să conțină cel puțin o cifră.')
     return patchOffer(offer.id, { status, contractNumber })
@@ -32,7 +32,7 @@ export function OffersManager({initialOffers,canManage}:{initialOffers:Offer[];c
       window.location.assign('/dashboard/bransamente')
       return
     }
-    const contractNumber = window.prompt('Introdu Numărul contractului. ATR-ul și datele procesate vor fi preluate automat în Branșamente:')?.trim()
+    const contractNumber = window.prompt('Introdu numărul contractului (de exemplu 68). Dacă există deja în Branșamente, dosarul va fi asociat automat:')?.trim()
     if (!contractNumber) return
     if (!/\d/.test(contractNumber)) return alert('Numărul contractului trebuie să conțină cel puțin o cifră.')
     await patchOffer(offer.id, { status: 'ACCEPTED', contractNumber })

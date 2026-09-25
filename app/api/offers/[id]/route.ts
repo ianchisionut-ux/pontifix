@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { getOfferAccess } from '@/lib/offer-access'
 import { defaultConnectionFields } from '@/lib/connection-fields'
-import { createConnectionCase } from '@/lib/connection-store'
+import { connectionIdentityFromContract, createConnectionCase } from '@/lib/connection-store'
 import { sendBusinessEmail } from '@/lib/email-settings'
 import { parseRomanianAddress } from '@/lib/romanian-address'
 
@@ -46,6 +46,15 @@ async function findExistingConnection(businessId: string, quoteRequestId: string
   return matches.length === 1 ? matches[0] : null
 }
 
+async function findConnectionByContract(businessId: string, contractNumber: string) {
+  const { nib } = connectionIdentityFromContract(contractNumber)
+  const matches = await prisma.$queryRawUnsafe<ExistingConnection[]>(
+    'SELECT "id", "nib", "quoteRequestId" FROM "ConnectionCase" WHERE "businessId"=$1 AND "nib"=$2 LIMIT 1',
+    businessId, nib,
+  )
+  return matches[0] || null
+}
+
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await getOfferAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
@@ -63,9 +72,19 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const quote = current[0]
   const { contractNumber, ...quotePatch } = parsed.data
   const next = { ...quote, ...quotePatch }
-  const existingConnection = next.status === 'ACCEPTED'
+  let existingConnection = next.status === 'ACCEPTED'
     ? await findExistingConnection(access.businessId, id, quote.atrOcrData || {})
     : null
+  if (!existingConnection && next.status === 'ACCEPTED' && contractNumber) {
+    try {
+      existingConnection = await findConnectionByContract(access.businessId, contractNumber)
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : 'Numărul contractului este invalid.' }, { status: 400 })
+    }
+    if (existingConnection?.quoteRequestId && existingConnection.quoteRequestId !== id) {
+      return NextResponse.json({ error: 'Dosarul ' + existingConnection.nib + ' este deja asociat altei oferte.' }, { status: 409 })
+    }
+  }
   if (next.status === 'ACCEPTED' && quote.status !== 'ACCEPTED' && !contractNumber && !existingConnection) {
     return NextResponse.json({ error: 'Introdu Numărul contractului pentru a genera NIB-ul.' }, { status: 400 })
   }
