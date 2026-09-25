@@ -67,9 +67,12 @@ const deerActionValues: [string, ...string[]] = [
   'instiintareMontareBlocMasura',
 ]
 
+const deerActionSchema = z.enum(deerActionValues)
+const deerActionHistoryEntrySchema = z.object({ action: deerActionSchema, submittedAt: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) })
 export const deerSubmissionSchema = z.object({
   dossierNumber: z.string().trim().max(200).default(''),
-  action: z.enum(deerActionValues).default('completareDocumentatie'),
+  action: deerActionSchema.default('completareDocumentatie'),
+  actionHistory: z.array(deerActionHistoryEntrySchema).max(50).default([]),
   status: z.enum(DEER_STATUSES).default('DRAFT'),
   email: z.string().trim().max(320).default(DEER_CONTACT_EMAIL),
   registrationNumber: z.string().trim().max(300).default(''),
