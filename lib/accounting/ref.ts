@@ -158,7 +158,6 @@ export async function createRefTransaction(input: RefTransactionInput): Promise<
   const taxExemptionReasonCode = input.taxExemptionReasonCode?.trim() || "";
   const taxExemptionReason = input.taxExemptionReason?.trim() || defaultVatRegimeReason(vatCategoryCode);
   if (vatCategoryCode === "S" && vat <= 0) throw new Error("Regimul standard necesită o valoare TVA pozitivă.");
-  if (domesticNonVatSupplier && (vatCategoryCode === "S" || vat > 0)) throw new Error("Un furnizor român neînregistrat în scopuri de TVA nu poate factura TVA.");
   if (vatCategoryCode !== "S" && vat > 0) throw new Error("Pentru regimul TVA selectat, valoarea TVA trebuie să fie zero.");
   if (vatRegimeNeedsReason(vatCategoryCode) && !taxExemptionReason && !taxExemptionReasonCode) throw new Error("Completează motivul legal pentru regimul TVA selectat.");
   if (vat > 0 && vatRate == null) throw new Error("Cota TVA este obligatorie când documentul conține TVA.");

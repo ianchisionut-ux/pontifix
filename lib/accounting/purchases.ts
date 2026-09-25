@@ -127,7 +127,6 @@ export async function createPurchase(input: PurchaseInput) {
     const taxExemptionReason = text(item.taxExemptionReason) || defaultVatRegimeReason(vatCategoryCode);
     if (vatCategoryCode === "S" && vatRate <= 0) throw new Error(`Poziția ${index + 1}: regimul standard necesită o cotă TVA pozitivă.`);
     if (vatCategoryCode === "S" && !isVatRateAllowedForDate(vatRate, issueDate)) throw new Error(`Poziția ${index + 1}: cota TVA nu este valabilă la data documentului.`);
-    if (domesticNonVatSupplier && (vatCategoryCode === "S" || vatRate > 0)) throw new Error(`Poziția ${index + 1}: furnizorul român neînregistrat în scopuri de TVA nu poate factura TVA.`);
     if (vatRegimeNeedsReason(vatCategoryCode) && !taxExemptionReason && !taxExemptionReasonCode) throw new Error(`Poziția ${index + 1}: completează motivul legal al regimului TVA.`);
     return { description: text(item.description), expenseAccount: text(item.expenseAccount || "628"), unit: text(item.unit || "buc"), quantity,
       unitPrice, vatRate, vatCategoryCode, taxExemptionReasonCode, taxExemptionReason, deductibility, net: round2(quantity * unitPrice), vat: round2(quantity * unitPrice * vatRate / 100) };
@@ -145,7 +144,6 @@ export async function createPurchase(input: PurchaseInput) {
     const supplier = (await connection.query(`SELECT blocked,"vatPayer","countryCode" FROM suppliers WHERE id=$1`, [supplierId])).rows[0];
     if (!supplier) throw new Error("Furnizorul selectat nu există.");
     if (supplier.blocked) throw new Error("Furnizorul este blocat. Deblochează-l înainte de operare.");
-    if (String(supplier.countryCode || "RO").toUpperCase() === "RO" && !Number(supplier.vatPayer) && normalized.some(item => item.vatCategoryCode === "S" || item.vatRate > 0)) throw new Error("Furnizorul român neînregistrat în scopuri de TVA nu poate factura TVA.");
     const accountCodes = [...new Set(normalized.map((item) => item.expenseAccount))];
     const accounts = await connection.query(`SELECT code FROM accounting_accounts WHERE code=ANY($1::text[]) AND active=1 AND "allowPosting"=1`, [accountCodes]);
     if (accounts.rowCount !== accountCodes.length) throw new Error("Unul dintre conturile de cheltuială este inexistent, inactiv sau sintetic.");

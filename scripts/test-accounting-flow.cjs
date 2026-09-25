@@ -57,9 +57,9 @@ async function main() {
   }};
   for(const amount of [121,-121])await ref.createRefIncomeForPayment({invoiceId:1,paymentId:1,amount,invoiceTotal:121,invoiceSubtotal:100,date:'2026-09-24'},refClient);
   assert.deepEqual(amounts,[[605,105,500,500],[-605,-105,-500,-500]]);
-  const guardedRef=load('lib/accounting/ref.ts',{'@/lib/accounting/db':{ready:async()=>({async query(sql){if(sql.includes('SELECT "vatPayer"'))return {rows:[{vatPayer:1}]};throw new Error('Invalid REF reached INSERT');}})},'@/lib/accounting/vat-regime':vatRegime});
+  const guardedRef=load('lib/accounting/ref.ts',{'@/lib/accounting/db':{ready:async()=>({async query(sql){if(sql.includes('SELECT "vatPayer"'))return {rows:[{vatPayer:1}]};if(sql.includes('INSERT INTO ref_transactions'))return {rows:[{id:77}]};throw new Error('Unexpected REF query');}})},'@/lib/accounting/vat-regime':vatRegime});
   const refInput={type:'EXPENSE',date:'2026-09-25',documentType:'FACTURA',explanation:'Test',grossAmount:121,vatAmount:21,vatRate:21,vatCategoryCode:'S',fiscalCategory:'DEDUCTIBLE_EXPENSE',partnerCountryCode:'RO',partnerVatPayer:0};
-  await assert.rejects(()=>guardedRef.createRefTransaction(refInput),/neînregistrat/);
+  assert.equal(await guardedRef.createRefTransaction(refInput),77,'Manual S remains available after an ANAF non-VAT suggestion');
   await assert.rejects(()=>guardedRef.createRefTransaction({...refInput,partnerVatPayer:1,vatRate:24}),/nu este valabilă/);
 
   let paid=100, savedAmount, status;
@@ -143,7 +143,7 @@ async function main() {
   assert.ok(situationQuery.sql.includes('sp.date<=COALESCE'));
   assert.ok(!situationQuery.sql.includes('p."paidAmount"'));
   assert.equal(situationQuery.args[0],'2026-09-01');
-  await assert.rejects(()=>purchases.createPurchase({supplierId:1,documentNumber:'F1',issueDate:'2026-09-25',dueDate:'2026-09-25',items:[{description:'Servicii',quantity:1,unitPrice:100,vatRate:21,vatCategoryCode:'S'}]}),/neînregistrat/);
+  await assert.rejects(()=>purchases.createPurchase({supplierId:1,documentNumber:'F1',issueDate:'2026-09-25',dueDate:'2026-09-25',items:[{description:'Servicii',quantity:1,unitPrice:100,vatRate:21,vatCategoryCode:'S'}]}),/Invalid input reached database/,'Manual S passes validation and reaches persistence');
   const receiptRepo=load('lib/accounting/repo.ts',{'./db':{ready:async()=>({connect:async()=>({release(){},async query(sql){
     if(sql.includes('SELECT * FROM invoices'))return {rows:[{id:1,status:'issued',invoiceType:'STANDARD',currency:'RON'}]};
     if(sql.includes('SUM(amount)'))return {rows:[{amount:sql.includes('FROM payments')?10:0}]};
