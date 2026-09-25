@@ -38,6 +38,9 @@ async function main() {
 
   const amounts=[];
   const vatRegime=load('lib/accounting/vat-regime.ts',{});
+  assert.equal(vatRegime.calculateIncludedVat(500,21),86.78);
+  assert.equal(vatRegime.calculateIncludedVat(111,11),11);
+  assert.equal(vatRegime.calculateIncludedVat(0,21),0);
   const ref=load('lib/accounting/ref.ts',{'@/lib/accounting/db':{},'@/lib/accounting/vat-regime':vatRegime});
   const refClient={async query(sql,args=[]) {
     if(sql.includes('SELECT "exchangeRate"'))return {rows:[{exchangeRate:5}]};

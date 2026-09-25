@@ -35,3 +35,8 @@ export function defaultVatRegimeReason(code: VatRegimeCode) {
   if (code === "O") return "Operațiune în afara sferei TVA.";
   return "";
 }
+
+export function calculateIncludedVat(grossAmount: number, vatRate: number) {
+  if (!Number.isFinite(grossAmount) || !Number.isFinite(vatRate) || grossAmount <= 0 || vatRate <= 0) return 0;
+  return Math.round((grossAmount * vatRate / (100 + vatRate) + Number.EPSILON) * 100) / 100;
+}
