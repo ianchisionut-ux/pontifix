@@ -192,9 +192,6 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
             {missing.length > 0 && <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800">Lipsesc: {missing.join(', ')}.</p>}
           </section>
 
-        </div>
-
-        <aside className="space-y-4">
           <section className="rounded-2xl border border-slate-200 p-4">
             <h3 className="font-black text-[#082b4d]">Urmărire depunere</h3>
             <div className="mt-4">
@@ -218,6 +215,9 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
               <textarea disabled={!canEdit} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} className="input-field mt-1.5 min-h-28 w-full resize-y bg-white disabled:bg-slate-50"/>
             </label>
           </section>
+        </div>
+
+        <aside className="space-y-4">
 
           <section className="rounded-2xl border border-blue-100 bg-[#f3f9fd] p-4">
             <h3 className="font-black text-[#082b4d]">Finalizare pe portal</h3>

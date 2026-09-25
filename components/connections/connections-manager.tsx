@@ -323,7 +323,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
               <td className="px-4 py-3 font-semibold">{item.fields.Beneficiar || '—'}</td>
               <td className="px-4 py-3">{item.fields.CnpCif || '—'}</td>
               <td className="max-w-[220px] truncate px-4 py-3" title={item.fields.ATR}>{item.fields.ATR || '—'}</td>
-              <td className="px-4 py-3"><span className="rounded-full px-2 py-1 text-[10px] font-black text-white" style={{ backgroundColor: CONNECTION_STATUS_META[item.status].color }}>{CONNECTION_STATUS_META[item.status].label}</span></td>
+              <td className="px-4 py-3"><span className="inline-flex shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-[10px] font-black text-white" style={{ backgroundColor: CONNECTION_STATUS_META[item.status].color }}>{CONNECTION_STATUS_META[item.status].label}</span></td>
               <td className="whitespace-nowrap px-4 py-3">{new Date(item.createdAt).toLocaleDateString('ro-RO')}</td>
               <td className="whitespace-nowrap px-4 py-3">{item.deerSubmittedAt ? new Date(`${item.deerSubmittedAt}T00:00:00`).toLocaleDateString('ro-RO') : 'Nepredat'}</td>
               <td className="px-4 py-3">
