@@ -4,6 +4,11 @@ import { postPurchaseInvoiceToLedger, postSupplierPaymentToLedger } from "./ledg
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 const text = (value: unknown) => String(value ?? "").trim();
 const flag = (value: unknown) => value === true || value === 1 || value === "1" ? 1 : 0;
+const validDate = (value:string) => {
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const date=new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime())&&date.toISOString().slice(0,10)===value;
+};
 
 export type SupplierInput = {
   name?: string; cif?: string; regCom?: string; countryCode?: string; county?: string; city?: string;
@@ -103,7 +108,7 @@ export async function createPurchase(input: PurchaseInput) {
   const items = Array.isArray(input.items) ? input.items : [];
   if (!supplierId) throw new Error("Selectează furnizorul.");
   if (!documentNumber) throw new Error("Completează numărul documentului.");
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(issueDate) || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) throw new Error("Data documentului sau scadența nu este validă.");
+  if (!validDate(issueDate) || !validDate(dueDate)) throw new Error("Data documentului sau scadența nu este validă.");
   if (!items.length) throw new Error("Adaugă cel puțin o poziție în factură.");
   const normalized = items.map((item, index) => {
     const quantity = Number(item.quantity || 0), unitPrice = Number(item.unitPrice || 0), vatRate = Number(item.vatRate || 0);
@@ -152,7 +157,9 @@ export async function createPurchase(input: PurchaseInput) {
 
 export async function addSupplierPayment(purchaseInvoiceId: number, input: { date?: string; amount?: number; method?: string; reference?: string; notes?: string }) {
   const date = text(input.date), amount = round2(Number(input.amount || 0));
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || amount <= 0) throw new Error("Data sau suma plății nu este validă.");
+  if (!validDate(date) || !Number.isFinite(amount) || amount <= 0) throw new Error("Data sau suma plății nu este validă.");
+  const method=text(input.method || "BANK").toUpperCase();
+  if(!["BANK","CASH","CARD","NUMERAR","TRANSFER"].includes(method))throw new Error("Metoda de plată nu este validă.");
   const connection = await (await ready()).connect();
   try {
     await connection.query("BEGIN");
@@ -162,7 +169,7 @@ export async function addSupplierPayment(purchaseInvoiceId: number, input: { dat
     if (amount > outstanding + 0.009) throw new Error(`Suma depășește restul de plată (${outstanding.toFixed(2)}).`);
     const { rows } = await connection.query(
       `INSERT INTO supplier_payments ("purchaseInvoiceId",date,amount,method,reference,notes) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [purchaseInvoiceId,date,amount,text(input.method || "BANK").toUpperCase(),text(input.reference),text(input.notes)],
+      [purchaseInvoiceId,date,amount,method,text(input.reference),text(input.notes)],
     );
     const newPaid = round2(Number(invoice.paidAmount) + amount);
     await connection.query(`UPDATE purchase_invoices SET "paidAmount"=$2,status=$3 WHERE id=$1`, [purchaseInvoiceId,newPaid,newPaid >= Number(invoice.total)-0.009 ? "PAID" : "PARTIAL"]);
@@ -173,13 +180,17 @@ export async function addSupplierPayment(purchaseInvoiceId: number, input: { dat
 }
 
 export async function supplierSituation(asOf = "") {
+  if(asOf&&!validDate(asOf))throw new Error("Data situației furnizorilor nu este validă.");
   const pool = await ready();
   return (await pool.query(
     `SELECT s.id,s.code,s.name,s.cif,s."analyticAccount",COUNT(p.id)::int AS documents,
-            COALESCE(SUM(p.total*p."exchangeRate"),0) AS total,COALESCE(SUM(p."paidAmount"*p."exchangeRate"),0) AS paid,
-            COALESCE(SUM((p.total-p."paidAmount")*p."exchangeRate"),0) AS outstanding,
-            COALESCE(SUM(CASE WHEN p."dueDate"<COALESCE(NULLIF($1,'')::date,CURRENT_DATE) THEN (p.total-p."paidAmount")*p."exchangeRate" ELSE 0 END),0) AS overdue
+            COALESCE(SUM(p.total*p."exchangeRate"),0) AS total,COALESCE(SUM(paid.amount*p."exchangeRate"),0) AS paid,
+            COALESCE(SUM((p.total-paid.amount)*p."exchangeRate"),0) AS outstanding,
+            COALESCE(SUM(CASE WHEN p."dueDate"<COALESCE(NULLIF($1,'')::date,CURRENT_DATE) THEN (p.total-paid.amount)*p."exchangeRate" ELSE 0 END),0) AS overdue
        FROM suppliers s LEFT JOIN purchase_invoices p ON p."supplierId"=s.id AND p.status<>'CANCELED'
-        AND ($1='' OR p."issueDate"<=$1::date) GROUP BY s.id ORDER BY s.name`, [asOf],
+        AND p."issueDate"<=COALESCE(NULLIF($1,'')::date,CURRENT_DATE)
+       LEFT JOIN LATERAL (SELECT COALESCE(SUM(sp.amount),0) AS amount FROM supplier_payments sp
+         WHERE sp."purchaseInvoiceId"=p.id AND sp.date<=COALESCE(NULLIF($1,'')::date,CURRENT_DATE)) paid ON true
+       GROUP BY s.id ORDER BY s.name`, [asOf],
   )).rows;
 }

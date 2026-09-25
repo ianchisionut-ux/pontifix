@@ -1243,6 +1243,7 @@ export async function addPayment(
     if (round2(amount) > outstanding)
       throw new Error(`Suma depășește restul de plată de ${outstanding.toFixed(2)} ${invoice.currency}.`);
     amount = round2(amount);
+    if (amount <= 0) throw new Error("Suma încasată trebuie să fie de cel puțin 0,01.");
     if (refund) amount = -amount;
 
     const { rows: paymentRows } = await connection.query(
@@ -1336,6 +1337,7 @@ export async function createReceipt(
     )).rows[0].amount));
     const available = round2(cashPaid - receipted);
     amount = round2(amount);
+    if (amount <= 0) throw new Error("Valoarea chitanței trebuie să fie de cel puțin 0,01 RON.");
     if (available <= 0)
       throw new Error("Nu există o încasare în numerar fără chitanță pentru această factură.");
     if (amount > available)

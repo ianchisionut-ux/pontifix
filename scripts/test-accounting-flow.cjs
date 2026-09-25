@@ -59,6 +59,7 @@ async function main() {
     return {rows:[]};
   }};
   const repo=load('lib/accounting/repo.ts',{'./db':{ready:async()=>({connect:async()=>refundClient})},'./ref':{createRefIncomeForPayment:async()=>{}},'./ledger':{postPaymentToLedger:async()=>{}},'./date':{bucharestDate:()=> '2026-09-24'}});
+  await assert.rejects(()=>repo.addPayment(1,.001,'2026-09-24','bank','',true),/0,01/);
   await repo.addPayment(1,40,'2026-09-24','bank','',true);
   assert.equal(savedAmount,-40);assert.equal(paid,60);assert.equal(status,'stornoed');
   await assert.rejects(()=>repo.addPayment(1,61,'2026-09-24','bank','',true),/depășește/);
@@ -117,6 +118,24 @@ async function main() {
   assert.ok(!csv.includes('REF:-1'));
   await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1,allocatedInvoiceTo:Infinity}),/numere întregi/);
   await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1.2,allocatedInvoiceTo:10}),/numere întregi/);
+  const purchaseQueries=[];
+  const purchases=load('lib/accounting/purchases.ts',{'./db':{ready:async()=>({query:async(sql,args)=>{purchaseQueries.push({sql,args});return {rows:[]};},connect:async()=>{throw new Error('Invalid input reached database');}})},'./ledger':{}});
+  for(const amount of [NaN,Infinity,-1,0,.001])await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-09-25',amount}),/suma plății/);
+  await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-02-30',amount:10}),/Data/);
+  await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-09-25',amount:10,method:'INVALID'}),/Metoda/);
+  await assert.rejects(()=>purchases.supplierSituation('2026-02-30'),/Data/);
+  await purchases.supplierSituation('2026-09-01');
+  assert.ok(purchaseQueries[0].sql.includes('sp.date<=COALESCE'));
+  assert.ok(purchaseQueries[0].sql.includes('LEFT JOIN LATERAL'));
+  assert.ok(!purchaseQueries[0].sql.includes('p."paidAmount"'));
+  assert.equal(purchaseQueries[0].args[0],'2026-09-01');
+  const receiptRepo=load('lib/accounting/repo.ts',{'./db':{ready:async()=>({connect:async()=>({release(){},async query(sql){
+    if(sql.includes('SELECT * FROM invoices'))return {rows:[{id:1,status:'issued',invoiceType:'STANDARD',currency:'RON'}]};
+    if(sql.includes('SUM(amount)'))return {rows:[{amount:sql.includes('FROM payments')?10:0}]};
+    if(sql.includes('INSERT'))throw new Error('Zero receipt reached INSERT');
+    return {rows:[]};
+  }})})},'./ref':{},'./ledger':{},'./date':{}});
+  await assert.rejects(()=>receiptRepo.createReceipt(1,'2026-09-25',.001),/0,01/);
   console.log('Accounting flow regression tests passed: purchases, payments, refunds, FX REF and period locking. No real database writes.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
