@@ -42,6 +42,11 @@ async function main() {
   assert.equal(vatRegime.calculateIncludedVat(111,11),11);
   assert.equal(vatRegime.calculateIncludedVat(0,21),0);
   assert.equal(vatRegime.suggestVatRegime({type:'EXPENSE',vatAmount:0,vatRate:21}),'S');
+  assert.equal(vatRegime.suggestVatRegime({type:'EXPENSE',partnerVatPayer:false,vatRate:21}),'Z');
+  assert.deepEqual(vatRegime.vatRatesForDate('2026-09-25'),[21,11]);
+  assert.deepEqual(vatRegime.vatRatesForDate('2026-07-31'),[21,11,9]);
+  assert.deepEqual(vatRegime.vatRatesForDate('2025-07-31'),[19,9,5]);
+  assert.deepEqual(vatRegime.vatRatesForDate('2016-06-01'),[20,9,5]);
   const ref=load('lib/accounting/ref.ts',{'@/lib/accounting/db':{},'@/lib/accounting/vat-regime':vatRegime});
   const refClient={async query(sql,args=[]) {
     if(sql.includes('SELECT "exchangeRate"'))return {rows:[{exchangeRate:5}]};
@@ -52,6 +57,10 @@ async function main() {
   }};
   for(const amount of [121,-121])await ref.createRefIncomeForPayment({invoiceId:1,paymentId:1,amount,invoiceTotal:121,invoiceSubtotal:100,date:'2026-09-24'},refClient);
   assert.deepEqual(amounts,[[605,105,500,500],[-605,-105,-500,-500]]);
+  const guardedRef=load('lib/accounting/ref.ts',{'@/lib/accounting/db':{ready:async()=>({async query(sql){if(sql.includes('SELECT "vatPayer"'))return {rows:[{vatPayer:1}]};throw new Error('Invalid REF reached INSERT');}})},'@/lib/accounting/vat-regime':vatRegime});
+  const refInput={type:'EXPENSE',date:'2026-09-25',documentType:'FACTURA',explanation:'Test',grossAmount:121,vatAmount:21,vatRate:21,vatCategoryCode:'S',fiscalCategory:'DEDUCTIBLE_EXPENSE',partnerCountryCode:'RO',partnerVatPayer:0};
+  await assert.rejects(()=>guardedRef.createRefTransaction(refInput),/neînregistrat/);
+  await assert.rejects(()=>guardedRef.createRefTransaction({...refInput,partnerVatPayer:1,vatRate:24}),/nu este valabilă/);
 
   let paid=100, savedAmount, status;
   const refundClient={release(){},async query(sql,args=[]) {
@@ -124,16 +133,17 @@ async function main() {
   await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1,allocatedInvoiceTo:Infinity}),/numere întregi/);
   await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1.2,allocatedInvoiceTo:10}),/numere întregi/);
   const purchaseQueries=[];
-  const purchases=load('lib/accounting/purchases.ts',{'./db':{ready:async()=>({query:async(sql,args)=>{purchaseQueries.push({sql,args});return {rows:[]};},connect:async()=>{throw new Error('Invalid input reached database');}})},'./ledger':{},'./vat-regime':vatRegime});
+  const purchases=load('lib/accounting/purchases.ts',{'./db':{ready:async()=>({query:async(sql,args)=>{purchaseQueries.push({sql,args});if(sql.includes('SELECT blocked,"vatPayer"'))return {rows:[{blocked:0,vatPayer:0,countryCode:'RO'}]};return {rows:[]};},connect:async()=>{throw new Error('Invalid input reached database');}})},'./ledger':{},'./vat-regime':vatRegime});
   for(const amount of [NaN,Infinity,-1,0,.001])await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-09-25',amount}),/suma plății/);
   await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-02-30',amount:10}),/Data/);
   await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-09-25',amount:10,method:'INVALID'}),/Metoda/);
   await assert.rejects(()=>purchases.supplierSituation('2026-02-30'),/Data/);
   await purchases.supplierSituation('2026-09-01');
-  assert.ok(purchaseQueries[0].sql.includes('sp.date<=COALESCE'));
-  assert.ok(purchaseQueries[0].sql.includes('LEFT JOIN LATERAL'));
-  assert.ok(!purchaseQueries[0].sql.includes('p."paidAmount"'));
-  assert.equal(purchaseQueries[0].args[0],'2026-09-01');
+  const situationQuery=purchaseQueries.find(call=>call.sql.includes('LEFT JOIN LATERAL'));
+  assert.ok(situationQuery.sql.includes('sp.date<=COALESCE'));
+  assert.ok(!situationQuery.sql.includes('p."paidAmount"'));
+  assert.equal(situationQuery.args[0],'2026-09-01');
+  await assert.rejects(()=>purchases.createPurchase({supplierId:1,documentNumber:'F1',issueDate:'2026-09-25',dueDate:'2026-09-25',items:[{description:'Servicii',quantity:1,unitPrice:100,vatRate:21,vatCategoryCode:'S'}]}),/neînregistrat/);
   const receiptRepo=load('lib/accounting/repo.ts',{'./db':{ready:async()=>({connect:async()=>({release(){},async query(sql){
     if(sql.includes('SELECT * FROM invoices'))return {rows:[{id:1,status:'issued',invoiceType:'STANDARD',currency:'RON'}]};
     if(sql.includes('SUM(amount)'))return {rows:[{amount:sql.includes('FROM payments')?10:0}]};

@@ -17,13 +17,27 @@ export function isVatRegimeCode(value: unknown): value is VatRegimeCode {
 export function suggestVatRegime(input: {
   type?: "INCOME" | "EXPENSE";
   companyVatPayer?: boolean;
+  partnerVatPayer?: boolean;
   vatAmount?: number;
   vatRate?: number;
   reverseCharge?: boolean;
 }): VatRegimeCode {
   if (input.reverseCharge) return "AE";
   if (input.type === "INCOME" && input.companyVatPayer === false) return "O";
+  if (input.type === "EXPENSE" && input.partnerVatPayer === false) return "Z";
   return Number(input.vatAmount || 0) > 0 || Number(input.vatRate || 0) > 0 ? "S" : "Z";
+}
+
+export function vatRatesForDate(date: string) {
+  if (date >= "2026-08-01") return [21, 11];
+  if (date >= "2025-08-01") return [21, 11, 9];
+  if (date >= "2017-01-01") return [19, 9, 5];
+  if (date >= "2016-01-01") return [20, 9, 5];
+  return [24, 9, 5];
+}
+
+export function isVatRateAllowedForDate(rate: number, date: string) {
+  return vatRatesForDate(date).includes(rate);
 }
 
 export function vatRegimeNeedsReason(code: VatRegimeCode) {

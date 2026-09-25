@@ -1,6 +1,6 @@
 import type { PoolClient } from "pg";
 import { ready } from "@/lib/accounting/db";
-import { defaultVatRegimeReason, isVatRegimeCode, suggestVatRegime, vatRegimeNeedsReason, type VatRegimeCode } from "@/lib/accounting/vat-regime";
+import { defaultVatRegimeReason, isVatRateAllowedForDate, isVatRegimeCode, suggestVatRegime, vatRegimeNeedsReason, type VatRegimeCode } from "@/lib/accounting/vat-regime";
 
 export type RefTransactionType = "INCOME" | "EXPENSE";
 export type RefFiscalCategory =
@@ -137,7 +137,7 @@ function validateInput(input: RefTransactionInput) {
   const vat = Number(input.vatAmount || 0);
   if (!Number.isFinite(vat) || vat < 0 || vat > input.grossAmount) throw new Error("Valoarea TVA este invalidă.");
   if (input.vatCategoryCode && !isVatRegimeCode(input.vatCategoryCode)) throw new Error("Regimul TVA selectat nu este valid.");
-  if (input.vatRate != null && (![0,5,9,11,19,20,21,24].includes(Number(input.vatRate)))) throw new Error("Cota TVA nu este acceptată de formularele ANAF.");
+  if (input.vatRate != null && Number(input.vatRate) !== 0 && !isVatRateAllowedForDate(Number(input.vatRate), input.date)) throw new Error("Cota TVA nu este valabilă la data documentului.");
   if (input.partnerCountryCode && !/^[A-Za-z]{2}$/.test(input.partnerCountryCode.trim())) throw new Error("Codul țării partenerului trebuie să aibă două litere.");
   const incomeCategories = ["TAXABLE_INCOME", "NON_TAXABLE_INCOME"];
   const expenseCategories = ["DEDUCTIBLE_EXPENSE", "PARTIAL_EXPENSE", "NON_DEDUCTIBLE_EXPENSE"];
@@ -153,10 +153,12 @@ export async function createRefTransaction(input: RefTransactionInput): Promise<
   const vat = round2(Number(input.vatAmount || 0));
   const net = round2(gross - vat);
   const vatRate = input.vatRate == null ? null : Number(input.vatRate);
-  const vatCategoryCode = input.vatCategoryCode || suggestVatRegime({ type: input.type, companyVatPayer: vatPayer, vatAmount: vat, vatRate: vatRate || 0 });
+  const domesticNonVatSupplier = input.type === "EXPENSE" && (input.partnerCountryCode?.trim().toUpperCase() || "RO") === "RO" && Number(input.partnerVatPayer) === 0;
+  const vatCategoryCode = input.vatCategoryCode || suggestVatRegime({ type: input.type, companyVatPayer: vatPayer, partnerVatPayer: domesticNonVatSupplier ? false : undefined, vatAmount: vat, vatRate: vatRate || 0 });
   const taxExemptionReasonCode = input.taxExemptionReasonCode?.trim() || "";
   const taxExemptionReason = input.taxExemptionReason?.trim() || defaultVatRegimeReason(vatCategoryCode);
   if (vatCategoryCode === "S" && vat <= 0) throw new Error("Regimul standard necesită o valoare TVA pozitivă.");
+  if (domesticNonVatSupplier && (vatCategoryCode === "S" || vat > 0)) throw new Error("Un furnizor român neînregistrat în scopuri de TVA nu poate factura TVA.");
   if (vatCategoryCode !== "S" && vat > 0) throw new Error("Pentru regimul TVA selectat, valoarea TVA trebuie să fie zero.");
   if (vatRegimeNeedsReason(vatCategoryCode) && !taxExemptionReason && !taxExemptionReasonCode) throw new Error("Completează motivul legal pentru regimul TVA selectat.");
   if (vat > 0 && vatRate == null) throw new Error("Cota TVA este obligatorie când documentul conține TVA.");
