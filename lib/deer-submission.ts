@@ -4,17 +4,17 @@ export const DEER_CONTACT_EMAIL = 'elmont_zalau@yahoo.com'
 
 export const DEER_ACTIONS = [
   ['completareDocumentatie', 'Completare documentație'],
-  ['incarcareDIU', 'Încărcare documentație instalație utilizare'],
-  ['incarcareInstiintareBMP', 'Înștiințare bloc de măsură și protecție'],
   ['cerereNotificareIncheiereContractRacordare', 'Cerere / notificare încheiere contract de racordare'],
-  ['incarcareDosarReceptie', 'Încărcare dosar recepție'],
-  ['incarcarePVProbe', 'Încărcare proces-verbal probe'],
-  ['incarcareDosarRestituire', 'Încărcare dosar restituire'],
-  ['incarcareDosarReceptieBMP', 'Încărcare dosar recepție BMP'],
   ['alteDocumenteRacordare', 'Alte documente racordare'],
+  ['incarcareDIU', 'Încărcare DIU'],
+  ['incarcareInstiintareBMP', 'Încărcare înștiințare – în vederea montării BMP'],
+  ['incarcareDosarReceptie', 'Încărcare dosar recepție branșament'],
+  ['incarcareDosarReceptieBMP', 'Încărcare dosar recepție BMP (constructor AC)'],
+  ['incarcareDosarRestituire', 'Încărcare dosar restituire'],
+  ['incarcarePVProbe', 'Încărcare PV probe și PIF'],
   ['alteDocumenteCOR', 'Alte documente COR'],
   ['alteDocumenteCMI', 'Alte documente CMI'],
-  ['instiintareMontareBlocMasura', 'Înștiințare montare bloc de măsură'],
+  ['alteDocumenteProsumator', 'Alte documente prosumator'],
 ] as const
 
 export const DEER_STATUSES = ['DRAFT', 'READY', 'SUBMITTED', 'REGISTERED', 'COMPLETED'] as const
@@ -29,7 +29,7 @@ export const DEER_STATUS_META = {
 
 export const DEER_DOCUMENTS = ['ATR', 'Cerere', 'CI / CUI', 'Act proprietate', 'Certificat de urbanism', 'Plan de încadrare', 'Plan de situație', 'Alte documente'] as const
 
-export const DEER_DOCUMENTS_BY_ACTION: Record<(typeof DEER_ACTIONS)[number][0], readonly string[]> = {
+export const DEER_DOCUMENTS_BY_ACTION: Record<string, readonly string[]> = {
   completareDocumentatie: DEER_DOCUMENTS,
   cerereNotificareIncheiereContractRacordare: ['Cerere / notificare încheiere contract de racordare', 'Alte documente solicitate'],
   alteDocumenteRacordare: ['Alte documente racordare'],
@@ -41,6 +41,7 @@ export const DEER_DOCUMENTS_BY_ACTION: Record<(typeof DEER_ACTIONS)[number][0], 
   incarcarePVProbe: ['Proces-verbal probe', 'Proces-verbal punere în funcțiune (PIF)'],
   alteDocumenteCOR: ['Alte documente COR'],
   alteDocumenteCMI: ['Alte documente CMI'],
+  alteDocumenteProsumator: ['Alte documente prosumator'],
   instiintareMontareBlocMasura: ['Înștiințare pentru montarea blocului de măsură și protecție'],
 }
 
@@ -60,7 +61,11 @@ export function isValidDeerDossierNumber(value: string) {
   return /^\d{13}$/.test(value.trim())
 }
 
-const deerActionValues = DEER_ACTIONS.map(([value]) => value) as [string, ...string[]]
+const deerActionValues: [string, ...string[]] = [
+  DEER_ACTIONS[0][0],
+  ...DEER_ACTIONS.slice(1).map(([value]) => value),
+  'instiintareMontareBlocMasura',
+]
 
 export const deerSubmissionSchema = z.object({
   dossierNumber: z.string().trim().max(200).default(''),

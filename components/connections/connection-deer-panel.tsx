@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CheckCircle2, ClipboardCopy, Download, ExternalLink, FileCheck2, Loader2, Save, X } from 'lucide-react'
 import type { ConnectionCaseDto, ConnectionFields } from '@/lib/connection-fields'
-import { DEER_ACTIONS, DEER_CONTACT_EMAIL, DEER_STATUSES, DEER_STATUS_META, defaultDeerSubmission, extractDeerDossierNumber, getDeerDocumentsForAction, isValidDeerDossierNumber, type DeerSubmission } from '@/lib/deer-submission'
+import { DEER_ACTIONS, DEER_CONTACT_EMAIL, DEER_STATUS_META, defaultDeerSubmission, extractDeerDossierNumber, getDeerDocumentsForAction, isValidDeerDossierNumber, type DeerSubmission } from '@/lib/deer-submission'
 import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
 const DEER_PORTAL_URL = 'https://avize.distributie-energie.ro/solicitare'
@@ -37,7 +37,6 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
   const dossierNumberValid = isValidDeerDossierNumber(draft.dossierNumber)
   const recommendedDocuments = useMemo(() => getDeerDocumentsForAction(draft.action), [draft.action])
   const visibleDocuments = useMemo(() => Array.from(new Set([...recommendedDocuments, ...draft.documents])), [recommendedDocuments, draft.documents])
-  const trackingDocuments = useMemo(() => Array.from(new Set([...recommendedDocuments, ...draft.documents, ...draft.submittedDocuments])), [recommendedDocuments, draft.documents, draft.submittedDocuments])
   const missing = useMemo(() => [
     !dossierNumberValid && 'numărul ATR / solicitării (exact 13 cifre)',
     !applicant && 'numele solicitantului',
@@ -56,7 +55,6 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
       `E-mail: ${next.email || '—'}`,
       `Acțiune: ${actionLabel}`,
       `Documente pregătite: ${next.documents.length ? next.documents.join(', ') : '—'}`,
-      `Documente depuse: ${next.submittedDocuments.length ? next.submittedDocuments.join(', ') : '—'}`,
       `NIB intern: ${item.nib}`,
       next.registrationNumber && `Nr. înregistrare DEER: ${next.registrationNumber}`,
       next.notes && `Observații: ${next.notes}`,
@@ -70,11 +68,17 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
 
   async function save(next = draft, nextSubmittedAt = submittedAt) {
     if (!canEdit) return false
+    const automaticStatus: DeerSubmission['status'] = next.status === 'COMPLETED'
+      ? 'COMPLETED'
+      : next.registrationNumber.trim() ? 'REGISTERED'
+        : nextSubmittedAt ? 'SUBMITTED'
+          : next.lastPreparedAt ? 'READY' : 'DRAFT'
+    const trackedNext = { ...next, status: automaticStatus }
     setBusy('save')
     const response = await fetch(`/api/bransamente/${item.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ deerSubmission: next, deerSubmittedAt: nextSubmittedAt || null }),
+      body: JSON.stringify({ deerSubmission: trackedNext, deerSubmittedAt: nextSubmittedAt || null }),
     })
     const body = await response.json().catch(() => ({}))
     setBusy('')
@@ -82,10 +86,10 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
       alert(body.error || 'Depunerea DEER nu a putut fi salvată.')
       return false
     }
-    setDraft(next)
+    setDraft(trackedNext)
     setSubmittedAt(nextSubmittedAt)
-    onSaved(next, nextSubmittedAt || null)
-    setNotice('Datele depunerii DEER au fost salvate.')
+    onSaved(trackedNext, nextSubmittedAt || null)
+    setNotice('Acțiunea și datele depunerii DEER au fost salvate în registru.')
     return true
   }
 
@@ -150,16 +154,6 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
     }))
   }
 
-  function toggleSubmittedDocument(document: string) {
-    if (!canEdit) return
-    setDraft((current) => ({
-      ...current,
-      submittedDocuments: current.submittedDocuments.includes(document)
-        ? current.submittedDocuments.filter((entry) => entry !== document)
-        : [...current.submittedDocuments, document],
-    }))
-  }
-
   const statusMeta = DEER_STATUS_META[draft.status]
 
   return <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-950/50 p-3 lg:p-6" role="dialog" aria-modal="true">
@@ -193,11 +187,6 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
                 <input readOnly type="email" value={DEER_CONTACT_EMAIL} className="input-field mt-1.5 w-full bg-slate-50 text-slate-600"/>
                 <span className="mt-1.5 block text-[11px] font-bold text-slate-400">Adresă fixă pentru toate depunerile Elmont.</span>
               </label>
-              <label className="text-xs font-bold text-slate-500 md:col-span-2">Acțiune
-                <select disabled={!canEdit} value={draft.action} onChange={(event) => setDraft({ ...draft, action: event.target.value as DeerSubmission['action'] })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50">
-                  {DEER_ACTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </label>
             </div>
             <dl className="mt-4 grid gap-3 rounded-2xl bg-slate-50 p-4 text-sm md:grid-cols-2">
               <div><dt className="text-xs font-bold text-slate-400">Solicitant</dt><dd className="mt-1 font-bold text-slate-700">{applicant || 'Necompletat'}</dd></div>
@@ -228,10 +217,11 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
         <aside className="space-y-4">
           <section className="rounded-2xl border border-slate-200 p-4">
             <h3 className="font-black text-[#082b4d]">Urmărire depunere</h3>
-            <label className="mt-4 block text-xs font-bold text-slate-500">Stare
-              <select disabled={!canEdit} value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as DeerSubmission['status'] })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50">
-                {DEER_STATUSES.map((status) => <option key={status} value={status}>{DEER_STATUS_META[status].label}</option>)}
+            <label className="mt-4 block text-xs font-bold text-slate-500">Acțiune efectuată / depusă
+              <select disabled={!canEdit} value={draft.action} onChange={(event) => setDraft({ ...draft, action: event.target.value as DeerSubmission['action'] })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50">
+                {DEER_ACTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
+              <span className="mt-1.5 block text-[11px] font-semibold text-slate-400">Acțiunea aleasă va apărea în Registrul DEER după salvare.</span>
             </label>
             <label className="mt-3 block text-xs font-bold text-slate-500">Data depunerii
               <input disabled={!canEdit} type="date" value={submittedAt} onChange={(event) => setSubmittedAt(event.target.value)} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50"/>
@@ -239,15 +229,6 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
             <label className="mt-3 block text-xs font-bold text-slate-500">Număr înregistrare DEER
               <input disabled={!canEdit} value={draft.registrationNumber} onChange={(event) => setDraft({ ...draft, registrationNumber: event.target.value })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50"/>
             </label>
-            <div className="mt-3">
-              <div className="text-xs font-bold text-slate-500">Ce ai depus efectiv</div>
-              <p className="mt-1 text-[11px] leading-4 text-slate-400">Bifează documentele încărcate pe portal. Lista rămâne salvată în dosar.</p>
-              <div className="mt-2 grid gap-2">{trackingDocuments.map((document) => {
-                const checked = draft.submittedDocuments.includes(document)
-                return <button key={document} type="button" disabled={!canEdit} onClick={() => toggleSubmittedDocument(document)} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-xs font-bold transition ${checked ? "border-blue-300 bg-blue-50 text-blue-800" : "border-slate-200 text-slate-600 hover:bg-slate-50"} disabled:cursor-default`}><span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${checked ? "border-blue-600 bg-blue-600 text-white" : "border-slate-300 bg-white"}`}>{checked && <CheckCircle2 size={13}/>}</span>{document}</button>
-              })}</div>
-              {draft.submittedDocuments.length === 0 && <div className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[11px] font-bold text-amber-800">Nu ai marcat încă niciun document ca depus.</div>}
-            </div>
             <label className="mt-3 block text-xs font-bold text-slate-500">Observații
               <textarea disabled={!canEdit} value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} className="input-field mt-1.5 min-h-28 w-full resize-y bg-white disabled:bg-slate-50"/>
             </label>
