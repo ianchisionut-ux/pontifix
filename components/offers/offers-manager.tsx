@@ -21,6 +21,7 @@ export function OffersManager({initialOffers,canManage}:{initialOffers:Offer[];c
   async function patchOffer(id:string,patch:Partial<Pick<Offer,'status'|'internalNotes'|'estimatedValue'>> & {contractNumber?:string}){setBusyId(id);const response=await fetch(`/api/offers/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});const body=await response.json().catch(()=>({}));setBusyId(null);if(!response.ok){alert(body.error||'Modificarea nu a putut fi salvată.');return false}if(body.nib)alert('Dosarul a fost aprobat și a primit '+body.nib+'. '+(body.notificationSent?'NIB-ul a fost trimis clientului prin e-mail.':'NIB-ul este disponibil în Branșamente.'));setOffers(current=>current.map(o=>o.id===id?{...o,...patch,connectionNib:body.nib||o.connectionNib,updatedAt:new Date().toISOString()}:o));return true}
   async function changeOfferStatus(offer: Offer, status: OfferStatus) {
     if (status !== 'ACCEPTED' || offer.status === 'ACCEPTED') return patchOffer(offer.id, { status })
+    if (offer.connectionNib) return patchOffer(offer.id, { status })
     const contractNumber = window.prompt('Introdu Numărul contractului. Acesta va stabili și NIB-ul branșamentului:')?.trim()
     if (!contractNumber) return
     if (!/\d/.test(contractNumber)) return alert('Numărul contractului trebuie să conțină cel puțin o cifră.')

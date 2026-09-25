@@ -23,6 +23,29 @@ type QuoteRow = {
   offerData: Record<string, unknown> | null
 }
 
+type ExistingConnection = { id: string; nib: string; quoteRequestId: string | null }
+
+function digits(value: unknown) {
+  return String(value || '').replace(/\D/g, '')
+}
+
+async function findExistingConnection(businessId: string, quoteRequestId: string, ocr: Record<string, unknown>) {
+  const linked = await prisma.$queryRawUnsafe<ExistingConnection[]>(
+    'SELECT "id", "nib", "quoteRequestId" FROM "ConnectionCase" WHERE "businessId"=$1 AND "quoteRequestId"=$2 LIMIT 1',
+    businessId, quoteRequestId,
+  )
+  if (linked[0]) return linked[0]
+
+  const customerId = digits(ocr.customerId)
+  if (customerId.length < 6) return null
+  const atrNumber = digits(ocr.atrNumber)
+  const matches = await prisma.$queryRawUnsafe<ExistingConnection[]>(
+    'SELECT "id", "nib", "quoteRequestId" FROM "ConnectionCase" WHERE "businessId"=$1 AND "quoteRequestId" IS NULL AND regexp_replace(COALESCE("fields"->>\'CnpCif\', \'\'), \'[^0-9]\', \'\', \'g\')=$2 AND ($3=\'\' OR POSITION($3 IN regexp_replace(COALESCE("fields"->>\'ATR\', \'\'), \'[^0-9]\', \'\', \'g\')) > 0) ORDER BY "updatedAt" DESC LIMIT 2',
+    businessId, customerId, atrNumber,
+  )
+  return matches.length === 1 ? matches[0] : null
+}
+
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await getOfferAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
@@ -40,11 +63,25 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const quote = current[0]
   const { contractNumber, ...quotePatch } = parsed.data
   const next = { ...quote, ...quotePatch }
-  if (next.status === 'ACCEPTED' && quote.status !== 'ACCEPTED' && !contractNumber) return NextResponse.json({ error: 'Introdu Numărul contractului pentru a genera NIB-ul.' }, { status: 400 })
+  const existingConnection = next.status === 'ACCEPTED'
+    ? await findExistingConnection(access.businessId, id, quote.atrOcrData || {})
+    : null
+  if (next.status === 'ACCEPTED' && quote.status !== 'ACCEPTED' && !contractNumber && !existingConnection) {
+    return NextResponse.json({ error: 'Introdu Numărul contractului pentru a genera NIB-ul.' }, { status: 400 })
+  }
 
   let nib: string | null = null
   let notificationSent = false
   if (next.status === 'ACCEPTED') {
+    if (existingConnection) {
+      nib = existingConnection.nib
+      if (!existingConnection.quoteRequestId) {
+        await prisma.$executeRawUnsafe(
+          'UPDATE "ConnectionCase" SET "quoteRequestId"=$1, "updatedAt"=NOW() WHERE "id"=$2 AND "businessId"=$3 AND "quoteRequestId" IS NULL',
+          id, existingConnection.id, access.businessId,
+        )
+      }
+    } else {
     const ocr = quote.atrOcrData || {}
     const offer = quote.offerData || {}
     const fields = defaultConnectionFields()
@@ -83,6 +120,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         subject: `Dosarul branșamentului a fost aprobat – ${nib}`,
         html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#082b4d"><h2>Oferta a fost acceptată</h2><p>Bună ziua, <strong>${fields.Beneficiar}</strong>,</p><p>Dosarul branșamentului dumneavoastră a fost aprobat și a primit numărul de identificare:</p><p style="font-size:24px;font-weight:800;color:#197fb5">${nib}</p><p>Păstrați acest număr. Puteți verifica oricând stadiul branșamentului pe site-ul Elmont:</p><p><a href="${appUrl}/#verifica-bransament" style="display:inline-block;background:#0d5d8b;color:white;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:bold">Verifică stadiul</a></p><p>Cu stimă,<br><strong>Elmont S.A.</strong></p></div>`,
       }).then(() => true).catch(() => false)
+    }
     }
   }
 
