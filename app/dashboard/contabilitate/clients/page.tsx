@@ -172,7 +172,7 @@ export default function ClientsPage() {
         </div>
       )}
 
-      <div className="card mb-4"><label className="field-label">Caută client după nume, CUI sau CNP</label><div className="relative"><Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2" style={{color:"var(--text-faint)"}}/><input className="input pl-9" value={clientSearch} onChange={(event)=>setClientSearch(event.target.value)} placeholder="Ex. beneficiar, 9710508 sau CNP"/></div></div>
+      <div className="card mb-4"><label className="field-label">Caută client după nume, CUI sau CNP</label><div className="relative"><Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{color:"var(--text-faint)"}} aria-hidden="true"/><input className="input accounting-search-input" value={clientSearch} onChange={(event)=>setClientSearch(event.target.value)} placeholder="Ex. beneficiar, 9710508 sau CNP"/></div></div>
 
       <div className="card-table"><table><thead><tr><th>Beneficiar</th><th>Identificare</th><th>Adresă</th><th>Contact</th><th>Status</th><th></th></tr></thead>
         <tbody>{visibleClients.length===0&&<tr><td colSpan={6} className="empty-row">Niciun client înregistrat încă.</td></tr>}

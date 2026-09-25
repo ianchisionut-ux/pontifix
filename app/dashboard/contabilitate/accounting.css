@@ -127,6 +127,7 @@
 .accounting-root .pill.active { border-color:var(--cyan); background:var(--cyan); color:#fff; }
 .accounting-root .field-label { display:block; margin-bottom:5px; color:var(--text-dim); font-size:11px; font-weight:800; }
 .accounting-root .input { width:100%; border:1px solid var(--border); border-radius:10px; background:#fff; padding:9px 11px; color:var(--text); font-size:13px; outline:none; }
+.accounting-root .input.accounting-search-input { padding-left:2.5rem; }
 .accounting-root .input:focus { border-color:#278fff; box-shadow:0 0 0 3px rgba(8,127,245,.14); }
 .accounting-root input[type=number].input::-webkit-inner-spin-button, .accounting-root input[type=number].input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
 .accounting-root input[type=number].input { -moz-appearance:textfield; }
