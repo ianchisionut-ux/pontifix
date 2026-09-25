@@ -39,7 +39,7 @@ export default function RefPage() {
   }, [year]);
   useEffect(() => { load(); }, [load]);
 
-  const suggestedVatCategory = suggestVatRegime({ type: form.type, companyVatPayer: vatPayer, vatAmount: Number(form.vatAmount || 0), vatRate: Number(form.vatAmount || 0) > 0 ? Number(form.vatRate || 0) : 0 });
+  const suggestedVatCategory = suggestVatRegime({ type: form.type, companyVatPayer: vatPayer, vatAmount: Number(form.vatAmount || 0), vatRate: Number(form.vatRate || 0) });
   const effectiveVatCategory = form.vatCategoryOverride || suggestedVatCategory;
   const effectiveVatReason = form.taxExemptionReason || defaultVatRegimeReason(effectiveVatCategory);
 
