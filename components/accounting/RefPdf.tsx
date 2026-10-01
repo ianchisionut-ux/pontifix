@@ -1,7 +1,7 @@
 import React from "react";
 import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 import type { Company } from "@/lib/accounting/repo";
-import type { RefSummary, RefTransaction } from "@/lib/accounting/ref";
+import type { RefAccountSummary, RefSummary } from "@/lib/accounting/ref";
 import { pdfText } from "@/components/accounting/InvoicePdf";
 
 const styles = StyleSheet.create({
@@ -28,17 +28,15 @@ function categoryLabel(value: string) {
   return ({ TAXABLE_INCOME: "Venit impozabil", NON_TAXABLE_INCOME: "Venit neimpozabil", DEDUCTIBLE_EXPENSE: "Cheltuiala deductibila", PARTIAL_EXPENSE: "Partial deductibila", NON_DEDUCTIBLE_EXPENSE: "Nedeductibila" } as Record<string, string>)[value] || value;
 }
 
-export function RefPdf({ company, year, transactions, summary, vatPayer }: { company: Company; year: number; transactions: RefTransaction[]; summary: RefSummary; vatPayer: boolean }) {
+export function RefPdf({ company, year, accountSummary, summary, vatPayer }: { company: Company; year: number; accountSummary: RefAccountSummary[]; summary: RefSummary; vatPayer: boolean }) {
   return <Document title={`Registrul de evidenta fiscala ${year}`}>
     <Page size="A4" orientation="landscape" style={styles.page}>
       <View style={styles.heading} fixed><Text style={styles.title}>REGISTRUL DE EVIDENTA FISCALA</Text><Text style={styles.subtitle}>An fiscal {year} · document generat electronic</Text></View>
       <View style={styles.entity}><View><Text style={styles.strong}>{pdfText(company.name)}</Text><Text>CIF/CUI: {company.cif || "-"} · Reg. com.: {company.regCom || "-"}</Text><Text>{pdfText(company.address || "-")}</Text></View><View><Text style={styles.strong}>Regim TVA</Text><Text>{vatPayer ? "Platitor de TVA – baza fiscala fara TVA" : "Neplatitor de TVA – baza fiscala la valoarea bruta"}</Text></View></View>
-      <View style={styles.table}>
-        <View style={[styles.row, styles.head]} fixed><Text style={[styles.cell, styles.nr]}>Nr.</Text><Text style={[styles.cell, styles.date]}>Data</Text><Text style={[styles.cell, styles.doc]}>Document</Text><Text style={[styles.cell, styles.explanation]}>Explicatie</Text><Text style={[styles.cell, styles.amount]}>Venit incasat</Text><Text style={[styles.cell, styles.amount]}>Cheltuiala</Text><Text style={[styles.cell, styles.category]}>Categorie fiscala</Text></View>
-        {transactions.map((row, index) => <View key={row.id} style={styles.row} wrap={false}>
-          <Text style={[styles.cell, styles.nr]}>{index + 1}</Text><Text style={[styles.cell, styles.date]}>{row.date}</Text><Text style={[styles.cell, styles.doc]}>{pdfText(`${row.documentType} ${row.documentNumber}`)}</Text><Text style={[styles.cell, styles.explanation]}>{pdfText(`${row.explanation}${row.partnerName ? `\n${row.type === "EXPENSE" ? "Furnizor" : "Client"}: ${row.partnerName}${row.partnerCif ? ` · ${row.partnerCif}` : ""}${row.partnerCity ? ` · ${row.partnerCity}` : ""}` : ""}`)}</Text><Text style={[styles.cell, styles.amount]}>{row.type === "INCOME" ? money(row.fiscalAmount) : "-"}</Text><Text style={[styles.cell, styles.amount]}>{row.type === "EXPENSE" ? money(row.fiscalAmount) : "-"}</Text><Text style={[styles.cell, styles.category]}>{categoryLabel(row.fiscalCategory)}{"\n"}TVA: {row.vatCategoryCode}</Text>
-        </View>)}
-        {!transactions.length && <View style={styles.row}><Text style={{ padding: 10 }}>Nu exista inregistrari pentru anul selectat.</Text></View>}
+            <View style={styles.table}>
+        <View style={[styles.row, styles.head]} fixed><Text style={[styles.cell,{width:"12%"}]}>Cont</Text><Text style={[styles.cell,{width:"38%"}]}>Denumire cont</Text><Text style={[styles.cell,{width:"12%"}]}>Tip</Text><Text style={[styles.cell,styles.amount]}>Rulaj debit</Text><Text style={[styles.cell,styles.amount]}>Rulaj credit</Text><Text style={[styles.cell,styles.amount]}>Total fiscal</Text></View>
+        {accountSummary.map((row) => <View key={row.accountCode} style={styles.row} wrap={false}><Text style={[styles.cell,{width:"12%"}]}>{row.accountCode}</Text><Text style={[styles.cell,{width:"38%"}]}>{pdfText(row.accountName)}</Text><Text style={[styles.cell,{width:"12%"}]}>{row.type==="INCOME"?"VENIT":"CHELTUIALA"}</Text><Text style={[styles.cell,styles.amount]}>{money(row.debit)}</Text><Text style={[styles.cell,styles.amount]}>{money(row.credit)}</Text><Text style={[styles.cell,styles.amount]}>{money(row.fiscalAmount)}</Text></View>)}
+        {!accountSummary.length && <View style={styles.row}><Text style={{ padding: 10 }}>Nu exista rulaje pe conturi pentru anul selectat.</Text></View>}
       </View>
       <View style={styles.totals} wrap={false}>
         <View style={styles.totalBox}><Text style={styles.totalLabel}>TOTAL VENITURI INCASATE</Text><Text style={styles.totalValue}>{money(summary.totalIncome)} RON</Text></View>

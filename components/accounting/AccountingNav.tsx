@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, BookOpenCheck, Building2, CloudCog, ContactRound, FilePlus2, FileSpreadsheet, FileText, Landmark, LayoutDashboard, Package, ShoppingCart, Users, UserRoundCog } from 'lucide-react'
+import { BarChart3, BookOpenCheck, Building2, CloudCog, ContactRound, FilePlus2, FileSpreadsheet, FileText, Landmark, WalletCards, LayoutDashboard, Package, ShoppingCart, Users, UserRoundCog } from 'lucide-react'
 import { CurrentUserBox } from './CurrentUserBox'
 
 const items = [
@@ -11,6 +11,7 @@ const items = [
   { href: '/dashboard/contabilitate/invoices/new', label: 'Factură nouă', icon: FilePlus2 },
   { href: '/dashboard/contabilitate/ledger', label: 'Contabilitate', icon: Landmark },
   { href: '/dashboard/contabilitate/purchases', label: 'Intrări / achiziții', icon: ShoppingCart },
+  { href: '/dashboard/contabilitate/registers', label: 'Casă / bancă', icon: WalletCards },
   { href: '/dashboard/contabilitate/suppliers', label: 'Furnizori', icon: ContactRound },
   { href: '/dashboard/contabilitate/clients', label: 'Clienți', icon: Users },
   { href: '/dashboard/contabilitate/products', label: 'Produse', icon: Package },

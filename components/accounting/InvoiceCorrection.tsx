@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Correction = { clientId: number; dueDate: string; paymentTerms: string; notes: string; items: { id: number; description: string; qty: number; unitPrice: number }[] };
 export function InvoiceCorrection({ invoiceId }: { invoiceId: number }) {
@@ -18,6 +18,7 @@ export function InvoiceCorrection({ invoiceId }: { invoiceId: number }) {
       if (clientResponse.ok) setClients(await clientResponse.json());
     } catch { setMessage("Factura nu a putut fi încărcată."); } finally { setBusy(false); }
   }
+  useEffect(() => { if (window.location.hash === "#editare-factura") void open(); }, [invoiceId]);
   async function save() {
     setBusy(true); setMessage("");
     try {
@@ -27,8 +28,8 @@ export function InvoiceCorrection({ invoiceId }: { invoiceId: number }) {
       window.location.reload();
     } catch (error) { setMessage(error instanceof Error ? error.message : "Salvarea a eșuat."); } finally { setBusy(false); }
   }
-  return <div className="card mb-4">
-    <button className="btn-secondary" disabled={busy} onClick={open}>Corectează detaliile înainte de transmitere</button>
+  return <div id="editare-factura" className="card mb-4">
+    <button className="btn-secondary" disabled={busy} onClick={open}>Editează factura</button>
     <p className="text-xs mt-2">Corectezi detaliile, beneficiarul, cantitățile și prețurile înainte de transmitere sau după respingerea exclusiv în Test. După încasare, beneficiarul și valorile sunt protejate. TVA-ul, plățile și chitanțele nu sunt modificate.</p>
     {message && <p role="alert" className="text-red-600 mt-2">{message}</p>}
     {value && <div className="space-y-3 mt-3">

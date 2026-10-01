@@ -265,9 +265,34 @@ export function summarizeRefTransactions(rows: RefTransaction[]): RefSummary {
   };
 }
 
+export type RefAccountSummary = {
+  accountCode: string;
+  accountName: string;
+  type: "INCOME" | "EXPENSE";
+  debit: number;
+  credit: number;
+  fiscalAmount: number;
+  entries: number;
+};
+
+export async function listRefAccountSummary(year: number): Promise<RefAccountSummary[]> {
+  const pool = await ready();
+  const { rows } = await pool.query(
+    `SELECT a.code AS "accountCode",a.name AS "accountName",
+            CASE WHEN a.code LIKE '7%' THEN 'INCOME' ELSE 'EXPENSE' END AS type,
+            ROUND(SUM(l.debit)::numeric,2) AS debit,ROUND(SUM(l.credit)::numeric,2) AS credit,
+            ROUND(CASE WHEN a.code LIKE '7%' THEN SUM(l.credit-l.debit) ELSE SUM(l.debit-l.credit) END::numeric,2) AS "fiscalAmount",
+            COUNT(DISTINCT e.id)::int AS entries
+       FROM journal_lines l JOIN journal_entries e ON e.id=l."entryId"
+       JOIN accounting_accounts a ON a.code=l."accountCode"
+      WHERE e.status='POSTED' AND EXTRACT(YEAR FROM e.date)=$1 AND (a.code LIKE '6%' OR a.code LIKE '7%')
+      GROUP BY a.code,a.name ORDER BY a.code`, [year]
+  );
+  return rows.map((row)=>({...row,debit:Number(row.debit),credit:Number(row.credit),fiscalAmount:Number(row.fiscalAmount),entries:Number(row.entries)}));
+}
 export async function getRefReport(year: number) {
   const transactions = await listRefTransactions(year);
-  return { transactions, summary: summarizeRefTransactions(transactions), vatPayer: await getRefVatPayer() };
+  return { transactions, accountSummary: await listRefAccountSummary(year), summary: summarizeRefTransactions(transactions), vatPayer: await getRefVatPayer() };
 }
 
 export async function deleteRefTransaction(id: number) {

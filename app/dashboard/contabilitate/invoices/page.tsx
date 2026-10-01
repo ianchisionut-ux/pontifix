@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { StatusBadge } from "@/components/accounting/StatusBadge";
-import { Plus, Download, Eye, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
+import { Plus, Download, Eye, Pencil, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
 
 type InvoiceRow = {
   id: number;
@@ -186,7 +186,7 @@ export default function InvoicesPage() {
                 <td><Link href={`/dashboard/contabilitate/invoices/${inv.id}#e-factura`}><AnafStatus status={inv.eFacturaStatus} message={inv.eFacturaMessage} uploadId={inv.eFacturaUploadId} /></Link></td>
                 <td className="text-right">
                   <span className="ef-row-actions">
-                    <Link href={`/dashboard/contabilitate/invoices/${inv.id}#e-factura`} className="link-action" title="Vezi statusul și identificatorii ANAF"><Eye size={15}/></Link>
+                    <Link href={`/dashboard/contabilitate/invoices/${inv.id}#editare-factura`} className="link-action" title="Editează factura"><Pencil size={15}/></Link><Link href={`/dashboard/contabilitate/invoices/${inv.id}#e-factura`} className="link-action" title="Vezi statusul și identificatorii ANAF"><Eye size={15}/></Link>
                     {(!inv.eFacturaStatus || (inv.eFacturaStatus === "ERROR" && !inv.eFacturaUploadId)) && <button type="button" onClick={() => removeInvoice(inv)} className="link-danger" title="Șterge factura"><Trash2 size={15}/></button>}
                   </span>
                 </td>

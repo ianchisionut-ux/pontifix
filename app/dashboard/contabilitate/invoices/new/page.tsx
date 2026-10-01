@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAnafChoice } from "@/components/accounting/useAnafChoice";
 import { useRouter } from "next/navigation";
 import { CURRENT_USER_KEY } from "@/components/accounting/CurrentUserBox";
@@ -15,7 +15,8 @@ type AccountingOffer = {
   executionNet: number; projectNet: number; panelIncluded: boolean; panelDescription: string;
   panelNet: number; vatRate: number; hasExecution: boolean; hasProject: boolean; hasPanel: boolean;
 };
-type Product = { id: number; name: string; um: string; price: number; vatRate: number; unitCode: string; vatCategoryCode: string; taxExemptionReasonCode: string; taxExemptionReason: string };
+type Product = { id: number; name: string; um: string; price: number; vatRate: number; unitCode: string; vatCategoryCode: string; taxExemptionReasonCode: string; taxExemptionReason: string; revenueAccount: string };
+type Account = { code:string; name:string; active:number; allowPosting:number };
 type UserT = { id: number; name: string; ci: string; cnp: string };
 type Company = { vatPayer: number };
 
@@ -31,11 +32,12 @@ type Item = {
   vatCategoryCode: string;
   taxExemptionReasonCode: string;
   taxExemptionReason: string;
+  revenueAccount: string;
 };
 
 let keySeq = 1;
 function newItem(): Item {
-  return { key: keySeq++, productId: null, description: "", um: "buc", qty: 1, unitPrice: 0, vatRate: 21, unitCode: "H87", vatCategoryCode: "S", taxExemptionReasonCode: "", taxExemptionReason: "" };
+  return { key: keySeq++, productId: null, description: "", um: "buc", qty: 1, unitPrice: 0, vatRate: 21, unitCode: "H87", vatCategoryCode: "S", taxExemptionReasonCode: "", taxExemptionReason: "", revenueAccount: "704" };
 }
 
 function fmt(n: number) {
@@ -47,6 +49,7 @@ export default function NewInvoicePage() {
   const { ask, dialog } = useAnafChoice();
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [users, setUsers] = useState<UserT[]>([]);
   const [clientId, setClientId] = useState<number | "">("");
   const [userId, setUserId] = useState<number | "">("");
@@ -86,6 +89,7 @@ export default function NewInvoicePage() {
     fetch("/api/accounting/connection-beneficiaries").then((r) => r.json()).then(setConnections);
     fetch("/api/accounting/offer-invoice-data").then((r) => r.json()).then(setOffers);
     fetch("/api/accounting/products").then((r) => r.json()).then(setProducts);
+    fetch("/api/accounting/ledger/accounts").then((r) => r.json()).then(setAccounts);
     fetch("/api/accounting/company").then((r) => r.json()).then((company: Company) => {
       const vatPayer = Boolean(company.vatPayer);
       setCompanyVatPayer(vatPayer);
@@ -196,6 +200,17 @@ export default function NewInvoicePage() {
     if (u) applyUser(u);
   }
 
+  const suggestionTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  function suggestItemAccount(key:number, description:string) {
+    updateItem(key,{description,productId:null});
+    const old=suggestionTimers.current.get(key); if(old) clearTimeout(old);
+    if(description.trim().length<2)return;
+    suggestionTimers.current.set(key,setTimeout(async()=>{
+      const response=await fetch(`/api/accounting/account-suggestions?direction=INCOME&q=${encodeURIComponent(description)}`);
+      if(!response.ok)return;const suggestions=await response.json();
+      if(suggestions[0]?.confidence>=70)updateItem(key,{revenueAccount:suggestions[0].code});
+    },280));
+  }
   function updateItem(key: number, patch: Partial<Item>) {
     setItems((its) => its.map((it) => (it.key === key ? { ...it, ...patch } : it)));
   }
@@ -212,7 +227,7 @@ export default function NewInvoicePage() {
   function pickProduct(key: number, productId: number) {
     const p = products.find((x) => x.id === productId);
     if (!p) return;
-    updateItem(key, { productId: p.id, description: p.name, um: p.um, unitPrice: p.price, vatRate: companyVatPayer ? p.vatRate : 0, unitCode: p.unitCode || "H87", vatCategoryCode: companyVatPayer ? (p.vatCategoryCode || "S") : "O", taxExemptionReasonCode: companyVatPayer ? (p.taxExemptionReasonCode || "") : "", taxExemptionReason: companyVatPayer ? (p.taxExemptionReason || "") : "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." });
+    updateItem(key, { productId: p.id, description: p.name, um: p.um, unitPrice: p.price, vatRate: companyVatPayer ? p.vatRate : 0, unitCode: p.unitCode || "H87", vatCategoryCode: companyVatPayer ? (p.vatCategoryCode || "S") : "O", taxExemptionReasonCode: companyVatPayer ? (p.taxExemptionReasonCode || "") : "", taxExemptionReason: companyVatPayer ? (p.taxExemptionReason || "") : "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal.", revenueAccount: p.revenueAccount || "704" });
   }
 
   const rawSubtotal = items.reduce((s, it) => s + it.qty * it.unitPrice, 0);
@@ -285,6 +300,7 @@ export default function NewInvoicePage() {
           vatCategoryCode: it.vatCategoryCode,
           taxExemptionReasonCode: it.taxExemptionReasonCode,
           taxExemptionReason: it.taxExemptionReason,
+          revenueAccount: it.revenueAccount,
         })),
       }),
     });
@@ -475,6 +491,7 @@ export default function NewInvoicePage() {
             <tr>
               <th style={{ width: 28 }}>Nr.</th>
               <th>Produs/Serviciu</th>
+              <th style={{ width: 210 }}>Cont venit</th>
               <th style={{ width: 112 }}>U.M. / UBL</th>
               <th className="text-right" style={{ width: 90 }}>Cant.</th>
               <th className="text-right" style={{ width: 110 }}>Pret unitar</th>
@@ -495,10 +512,15 @@ export default function NewInvoicePage() {
                     onChange={(e) => {
                       const match = products.find((p) => p.name === e.target.value);
                       if (match) pickProduct(it.key, match.id);
-                      else updateItem(it.key, { description: e.target.value, productId: null });
+                      else suggestItemAccount(it.key, e.target.value);
                     }}
                     placeholder="Denumire produs/serviciu"
                   />
+                </td>
+                <td>
+                  <select className="input" value={it.revenueAccount} onChange={(e)=>updateItem(it.key,{revenueAccount:e.target.value})}>
+                    {accounts.filter((a)=>a.active&&a.allowPosting&&/^7/.test(a.code)).map((a)=><option key={a.code} value={a.code}>{a.code} · {a.name}</option>)}
+                  </select>
                 </td>
                 <td>
                   <input className="input" value={it.um} onChange={(e) => updateItem(it.key, { um: e.target.value })} />

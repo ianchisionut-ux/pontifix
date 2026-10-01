@@ -87,8 +87,8 @@ export async function updateSupplier(id: number, input: SupplierInput) {
   } finally { connection.release(); }
 }
 
-type PurchaseItemInput = { description?: string; expenseAccount?: string; unit?: string; quantity?: number; unitPrice?: number; vatRate?: number; vatCategoryCode?: VatRegimeCode; taxExemptionReasonCode?: string; taxExemptionReason?: string; deductibilityPercent?: number };
-type PurchaseInput = { supplierId?: number; documentType?: string; documentNumber?: string; issueDate?: string; dueDate?: string;
+export type PurchaseItemInput = { description?: string; expenseAccount?: string; unit?: string; quantity?: number; unitPrice?: number; vatRate?: number; vatCategoryCode?: VatRegimeCode; taxExemptionReasonCode?: string; taxExemptionReason?: string; deductibilityPercent?: number };
+export type PurchaseInput = { supplierId?: number; documentType?: string; documentNumber?: string; issueDate?: string; dueDate?: string;
   currency?: string; exchangeRate?: number; reverseCharge?: boolean; vatOnCollection?: boolean; notes?: string; items?: PurchaseItemInput[] };
 
 export async function listPurchases(from = "", to = "", supplierId = 0) {
@@ -101,6 +101,13 @@ export async function listPurchases(from = "", to = "", supplierId = 0) {
   )).rows;
 }
 
+export async function getPurchase(id: number) {
+  const pool = await ready();
+  const invoice = (await pool.query(`SELECT p.*,s.name AS "supplierName",s.cif AS "supplierCif" FROM purchase_invoices p JOIN suppliers s ON s.id=p."supplierId" WHERE p.id=$1`, [id])).rows[0];
+  if (!invoice) throw new Error("Factura de intrare nu există.");
+  const items = (await pool.query(`SELECT * FROM purchase_invoice_items WHERE "purchaseInvoiceId"=$1 ORDER BY id`, [id])).rows;
+  return { invoice, items };
+}
 export async function createPurchase(input: PurchaseInput) {
   const supplierId = Number(input.supplierId || 0);
   const documentNumber = text(input.documentNumber);
@@ -168,6 +175,28 @@ export async function createPurchase(input: PurchaseInput) {
   } finally { connection.release(); }
 }
 
+export async function updatePurchase(id: number, input: PurchaseInput) {
+  const supplierId=Number(input.supplierId||0),documentNumber=text(input.documentNumber),issueDate=text(input.issueDate),dueDate=text(input.dueDate||issueDate),items=Array.isArray(input.items)?input.items:[];
+  if(!supplierId||!documentNumber||!validDate(issueDate)||!validDate(dueDate)||!items.length) throw new Error("Completează corect furnizorul, documentul, datele și pozițiile.");
+  const reverseCharge=flag(input.reverseCharge);
+  const normalized=items.map((item,index)=>{const quantity=Number(item.quantity||0),unitPrice=Number(item.unitPrice||0),enteredVatRate=Number(item.vatRate||0),deductibility=Math.max(0,Math.min(100,Number(item.deductibilityPercent??100)));
+    if(!text(item.description)||quantity<=0||unitPrice<0||enteredVatRate<0||enteredVatRate>100) throw new Error(`Poziția ${index+1} nu este completată corect.`);
+    const vatCategoryCode=item.vatCategoryCode||suggestVatRegime({type:"EXPENSE",vatRate:enteredVatRate,reverseCharge:Boolean(reverseCharge)}),vatRate=vatCategoryCode==="S"?enteredVatRate:0,taxExemptionReasonCode=text(item.taxExemptionReasonCode),taxExemptionReason=text(item.taxExemptionReason)||defaultVatRegimeReason(vatCategoryCode);
+    if(vatRegimeNeedsReason(vatCategoryCode)&&!taxExemptionReason&&!taxExemptionReasonCode) throw new Error(`Poziția ${index+1}: completează motivul regimului TVA.`);
+    return {description:text(item.description),expenseAccount:text(item.expenseAccount||"628"),unit:text(item.unit||"buc"),quantity,unitPrice,vatRate,vatCategoryCode,taxExemptionReasonCode,taxExemptionReason,deductibility,net:round2(quantity*unitPrice),vat:round2(quantity*unitPrice*vatRate/100)};});
+  const exchangeRate=Number(input.exchangeRate||1);if(!Number.isFinite(exchangeRate)||exchangeRate<=0) throw new Error("Cursul valutar nu este valid.");
+  const subtotal=round2(normalized.reduce((s,x)=>s+x.net,0)),vatTotal=round2(normalized.reduce((s,x)=>s+x.vat,0)),total=reverseCharge?subtotal:round2(subtotal+vatTotal),connection=await(await ready()).connect();
+  try { await connection.query("BEGIN"); const old=(await connection.query(`SELECT * FROM purchase_invoices WHERE id=$1 FOR UPDATE`,[id])).rows[0]; if(!old||old.status==="CANCELED") throw new Error("Factura de intrare nu poate fi editată.");
+    const paymentCount=Number((await connection.query(`SELECT COUNT(*) count FROM supplier_payments WHERE "purchaseInvoiceId"=$1`,[id])).rows[0].count);
+    const financialChanged=Number(old.supplierId)!==supplierId||Number(old.total)!==total||Number(old.exchangeRate)!==exchangeRate||String(old.currency)!==text(input.currency||"RON").toUpperCase()||String(old.issueDate).slice(0,10)!==issueDate;
+    if(paymentCount&&financialChanged) throw new Error("Factura are plăți. Poți corecta numai numărul, scadența, observațiile și descrierile fără modificarea valorilor.");
+    const codes=[...new Set(normalized.map(x=>x.expenseAccount))],validAccounts=await connection.query(`SELECT code FROM accounting_accounts WHERE code=ANY($1::text[]) AND active=1 AND "allowPosting"=1`,[codes]); if(validAccounts.rowCount!==codes.length) throw new Error("Un cont de cheltuială este inexistent sau inactiv.");
+    await connection.query(`UPDATE purchase_invoices SET "supplierId"=$2,"documentType"=$3,"documentNumber"=$4,"issueDate"=$5,"dueDate"=$6,currency=$7,"exchangeRate"=$8,subtotal=$9,"vatTotal"=$10,total=$11,"reverseCharge"=$12,"vatOnCollection"=$13,notes=$14 WHERE id=$1`,[id,supplierId,text(input.documentType||"FACTURA"),documentNumber,issueDate,dueDate,text(input.currency||"RON").toUpperCase(),exchangeRate,subtotal,vatTotal,total,reverseCharge,flag(input.vatOnCollection),text(input.notes)]);
+    await connection.query(`DELETE FROM purchase_invoice_items WHERE "purchaseInvoiceId"=$1`,[id]);
+    for(const x of normalized) await connection.query(`INSERT INTO purchase_invoice_items ("purchaseInvoiceId",description,"expenseAccount",unit,quantity,"unitPrice","vatRate","netAmount","vatAmount","deductibilityPercent","vatCategoryCode","taxExemptionReasonCode","taxExemptionReason") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,[id,x.description,x.expenseAccount,x.unit,x.quantity,x.unitPrice,x.vatRate,x.net,x.vat,x.deductibility,x.vatCategoryCode,x.taxExemptionReasonCode,x.taxExemptionReason]);
+    await postPurchaseInvoiceToLedger(id,connection); await connection.query("COMMIT");
+  } catch(error) { await connection.query("ROLLBACK"); if((error as {code?:string}).code==="23505") throw new Error("Documentul este deja înregistrat pentru acest furnizor."); throw error; } finally { connection.release(); }
+}
 export async function addSupplierPayment(purchaseInvoiceId: number, input: { date?: string; amount?: number; method?: string; reference?: string; notes?: string }) {
   const date = text(input.date), amount = round2(Number(input.amount || 0));
   if (!validDate(date) || !Number.isFinite(amount) || amount <= 0) throw new Error("Data sau suma plății nu este validă.");

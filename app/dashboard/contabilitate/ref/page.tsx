@@ -11,6 +11,7 @@ type RefRow = {
   partnerName: string; partnerCif: string; partnerCountryCode: string; partnerVatPayer:number;
   partnerRegCom:string; partnerAddress:string; partnerCounty:string; partnerCity:string; partnerPostalCode:string; partnerPhone:string; partnerRegistrationStatus:string; partnerInactive:number;
 };
+type AccountSummary = { accountCode:string; accountName:string; type:"INCOME"|"EXPENSE"; debit:number; credit:number; fiscalAmount:number; entries:number };
 type Summary = { totalIncome: number; taxableIncome: number; totalExpenses: number; deductibleExpenses: number; fiscalResult: number };
 const emptySummary: Summary = { totalIncome: 0, taxableIncome: 0, totalExpenses: 0, deductibleExpenses: 0, fiscalResult: 0 };
 const currentYear = new Date().getFullYear();
@@ -20,6 +21,7 @@ const categoryLabels: Record<string, string> = { TAXABLE_INCOME: "Venit impozabi
 export default function RefPage() {
   const [year, setYear] = useState(currentYear);
   const [rows, setRows] = useState<RefRow[]>([]);
+  const [accountSummary, setAccountSummary] = useState<AccountSummary[]>([]);
   const [summary, setSummary] = useState<Summary>(emptySummary);
   const [vatPayer, setVatPayer] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -34,7 +36,7 @@ export default function RefPage() {
     const response = await fetch(`/api/accounting/ref/transactions?year=${year}`);
     const data = await response.json();
     if (!response.ok) setError(data.error || "Registrul nu a putut fi încărcat.");
-    else { setRows(data.transactions); setSummary(data.summary); setVatPayer(data.vatPayer); }
+    else { setRows(data.transactions); setAccountSummary(data.accountSummary || []); setSummary(data.summary); setVatPayer(data.vatPayer); }
     setLoading(false);
   }, [year]);
   useEffect(() => { load(); }, [load]);
@@ -132,8 +134,8 @@ export default function RefPage() {
       {[['Venituri încasate', summary.totalIncome, 'var(--cyan)'], ['Venituri impozabile', summary.taxableIncome, 'var(--emerald)'], ['Cheltuieli efectuate', summary.totalExpenses, 'var(--amber)'], ['Cheltuieli deductibile', summary.deductibleExpenses, 'var(--purple)'], ['Rezultat fiscal', summary.fiscalResult, summary.fiscalResult >= 0 ? 'var(--emerald)' : 'var(--red)']].map(([label, value, color]) => <div className="stat-card" style={{ '--accent': color } as React.CSSProperties} key={String(label)}><div className="stat-label">{label}</div><div className="stat-value">{money(Number(value))} RON</div></div>)}
     </div>
     <div className="ref-layout">
-      <div><div className="section-label">Poziții REF · {year}</div><div className="card-table"><table className="ref-table"><thead><tr><th>Data</th><th>Document</th><th>Explicație</th><th>Categorie</th><th className="text-right">Venit fiscal</th><th className="text-right">Cheltuială fiscală</th><th></th></tr></thead><tbody>
-        {loading ? <tr><td colSpan={7} className="empty-row">Se încarcă…</td></tr> : rows.length === 0 ? <tr><td colSpan={7} className="empty-row">Nu există poziții pentru anul {year}.</td></tr> : rows.map((row) => <tr key={row.id}><td className="num">{row.date}</td><td><span className="doc-chip">{row.documentType} {row.documentNumber}</span>{row.source === "AUTO_PAYMENT" && <div className="ref-auto">automat din încasare</div>}</td><td>{row.explanation}{row.partnerName && <div className="ref-auto">{row.type === "EXPENSE" ? "Furnizor" : "Client"}: {row.partnerName}{row.partnerCif ? ` · ${row.partnerCif}` : ""}</div>}</td><td><span className="badge badge-partial">{categoryLabels[row.fiscalCategory]}</span><div className="ref-auto">TVA: {VAT_REGIME_LABELS[row.vatCategoryCode] || row.vatCategoryCode}</div>{row.fiscalCategory === "PARTIAL_EXPENSE" && <div className="ref-auto">{row.deductibilityPercent}%</div>}</td><td className="text-right num">{row.type === "INCOME" ? money(row.fiscalAmount) : "—"}</td><td className="text-right num">{row.type === "EXPENSE" ? money(row.fiscalAmount) : "—"}</td><td>{row.source === "MANUAL" && <button type="button" className="link-danger" title="Șterge" onClick={() => remove(row)}><Trash2 size={14}/></button>}</td></tr>)}
+            <div><div className="section-label">Totaluri REF pe conturi · {year}</div><div className="card-table"><table className="ref-table"><thead><tr><th>Cont</th><th>Denumire</th><th>Tip</th><th className="text-right">Rulaj debit</th><th className="text-right">Rulaj credit</th><th className="text-right">Total fiscal</th><th className="text-right">Note</th></tr></thead><tbody>
+        {loading ? <tr><td colSpan={7} className="empty-row">Se încarcă…</td></tr> : accountSummary.length === 0 ? <tr><td colSpan={7} className="empty-row">Nu există rulaje pe conturi pentru anul {year}.</td></tr> : accountSummary.map((row) => <tr key={row.accountCode}><td><span className="doc-chip">{row.accountCode}</span></td><td><strong>{row.accountName}</strong></td><td><span className={`badge ${row.type==="INCOME"?"badge-paid":"badge-partial"}`}>{row.type==="INCOME"?"VENIT":"CHELTUIALĂ"}</span></td><td className="text-right num">{money(row.debit)}</td><td className="text-right num">{money(row.credit)}</td><td className="text-right num"><strong>{money(row.fiscalAmount)} RON</strong></td><td className="text-right num">{row.entries}</td></tr>)}
       </tbody></table></div></div>
       <form className="card ref-form" onSubmit={submit}><div className="section-label"><Plus size={13}/>Adaugă poziție manuală</div><div className="ref-type-toggle"><button type="button" className={form.type === "INCOME" ? "active" : ""} onClick={() => setType("INCOME")}>Venit</button><button type="button" className={form.type === "EXPENSE" ? "active" : ""} onClick={() => setType("EXPENSE")}>Cheltuială</button></div>
         <label className="field-label">Data încasării/plății<input className="input" type="date" required value={form.date} onChange={(e) => setDocumentDate(e.target.value)}/></label>
