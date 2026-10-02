@@ -991,7 +991,7 @@ export async function createStornoInvoice(input: {
     connection.release();
   }
 }
-export async function listInvoices(): Promise<
+export async function listInvoices(limit?: number): Promise<
   (Invoice & {
     clientName: string;
     userName: string | null;
@@ -1009,6 +1009,7 @@ export async function listInvoices(): Promise<
   const pool = await ready();
   const environment =
     process.env.ANAF_ENVIRONMENT === "production" ? "production" : "test";
+  const safeLimit = Number.isInteger(limit) && Number(limit) > 0 ? Number(limit) : null;
   const { rows } = await pool.query(
     `SELECT i.*, c.name as "clientName", u.name as "userName",
        ef.status as "eFacturaStatus", ef.message as "eFacturaMessage",
@@ -1024,8 +1025,9 @@ export async function listInvoices(): Promise<
         FROM efactura_submissions
        WHERE "invoiceId"=i.id AND environment=$1 ORDER BY id DESC LIMIT 1
      ) ef ON true
-     ORDER BY i."issueDate" DESC, i.id DESC`,
-    [environment],
+     ORDER BY i."issueDate" DESC, i.id DESC
+     ${safeLimit ? "LIMIT $2" : ""}`,
+    safeLimit ? [environment, safeLimit] : [environment],
   );
   return rows as (Invoice & {
     clientName: string;
@@ -1393,50 +1395,35 @@ export async function getReceipt(id: number) {
 // ---------- Dashboard stats ----------
 export async function getDashboardStats() {
   const pool = await ready();
-  const totalInvoices = Number(
-    (await pool.query(`SELECT COUNT(*) as c FROM invoices`)).rows[0].c,
-  );
-  const totalOutstanding = round2(
-    Number(
-      (
-        await pool.query(
-          `SELECT COALESCE(SUM(total - "paidAmount"),0) as s FROM invoices WHERE status IN ('issued','partial')`,
-        )
-      ).rows[0].s,
-    ),
-  );
-  const totalCollected = round2(
-    Number(
-      (
-        await pool.query(
-          `SELECT COALESCE(SUM("paidAmount"),0) as s FROM invoices`,
-        )
-      ).rows[0].s,
-    ),
-  );
   const thisMonth = new Date().toISOString().slice(0, 7);
-  const monthRevenue = round2(
-    Number(
-      (
-        await pool.query(
-          `SELECT COALESCE(SUM(total),0) as s FROM invoices WHERE substring("issueDate",1,7)=$1`,
-          [thisMonth],
-        )
-      ).rows[0].s,
-    ),
+  const environment = process.env.ANAF_ENVIRONMENT === "production" ? "production" : "test";
+  const { rows } = await pool.query(
+    `WITH latest_efactura AS (
+       SELECT DISTINCT ON ("invoiceId") "invoiceId", status
+       FROM efactura_submissions
+       WHERE environment=$2
+       ORDER BY "invoiceId", id DESC
+     )
+     SELECT
+       COUNT(*)::int AS "totalInvoices",
+       COALESCE(SUM(total - "paidAmount") FILTER (WHERE status IN ('issued','partial')),0) AS "totalOutstanding",
+       COALESCE(SUM("paidAmount"),0) AS "totalCollected",
+       COALESCE(SUM(total) FILTER (WHERE substring("issueDate",1,7)=$1),0) AS "monthRevenue",
+       (SELECT COUNT(*)::int FROM clients) AS "totalClients",
+       (SELECT COUNT(*)::int FROM latest_efactura WHERE status IN ('REJECTED','ERROR')) AS "anafProblems"
+     FROM invoices`,
+    [thisMonth, environment],
   );
-  const totalClients = Number(
-    (await pool.query(`SELECT COUNT(*) as c FROM clients`)).rows[0].c,
-  );
+  const row = rows[0];
   return {
-    totalInvoices,
-    totalOutstanding,
-    totalCollected,
-    monthRevenue,
-    totalClients,
+    totalInvoices: Number(row.totalInvoices),
+    totalOutstanding: round2(Number(row.totalOutstanding)),
+    totalCollected: round2(Number(row.totalCollected)),
+    monthRevenue: round2(Number(row.monthRevenue)),
+    totalClients: Number(row.totalClients),
+    anafProblems: Number(row.anafProblems),
   };
 }
-
 // ---------- Rapoarte avansate ----------
 export type DateRange = { from?: string; to?: string };
 

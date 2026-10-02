@@ -26,11 +26,12 @@ function AnafCompactStatus({ status }: { status: string | null }) {
 }
 
 export default async function DashboardPage() {
-  const stats = await getDashboardStats();
-  const invoices = await listInvoices();
-  const recent = invoices.slice(0, 7);
+  const [stats, recent] = await Promise.all([
+    getDashboardStats(),
+    listInvoices(7),
+  ]);
   const anaf = getAnafPublicConfig();
-  const anafProblems = invoices.filter((invoice) => ["REJECTED", "ERROR"].includes(invoice.eFacturaStatus || "")).length;
+  const anafProblems = stats.anafProblems;
 
   const cards = [
     { label: "Facturi emise", value: stats.totalInvoices.toString(), accent: "var(--cyan)" },

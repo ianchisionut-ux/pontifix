@@ -1,8 +1,8 @@
-import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { SidebarUserBlock } from '@/components/sidebar-user-block'
 import { ResponsiveShell } from '@/components/responsive-shell'
 import { canAccessAccounting } from '@/lib/accounting/permissions'
+import { getPageSession } from '@/lib/page-session'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,7 +24,7 @@ const NAV_ITEMS = [
 ]
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth()
+  const session = await getPageSession()
   if (!session) redirect('/login')
   const businessId = (session as any)?.businessId
   const role = (session as any)?.role as string | undefined

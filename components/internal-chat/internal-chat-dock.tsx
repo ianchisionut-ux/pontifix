@@ -1,9 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { ExternalLink, Loader2, MessageCircle, Minus } from 'lucide-react'
-import { InternalChatManager, type InternalChatPayload } from '@/components/internal-chat/internal-chat-manager'
+import type { InternalChatPayload } from '@/components/internal-chat/internal-chat-manager'
+
+const InternalChatManager = dynamic(
+  () => import('@/components/internal-chat/internal-chat-manager').then((module) => module.InternalChatManager),
+  { ssr: false },
+)
 
 export function InternalChatDock(){
   const [open,setOpen]=useState(false);const [loading,setLoading]=useState(false);const [data,setData]=useState<InternalChatPayload|null>(null);const [unread,setUnread]=useState(0)

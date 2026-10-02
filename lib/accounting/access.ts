@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { canAccessAccounting } from "@/lib/accounting/permissions";
+import { getPageSession } from "@/lib/page-session";
 
 export async function requireAccountingPage() {
-  const session = await auth();
+  const session = await getPageSession();
   if (!session) redirect("/login");
   if (!canAccessAccounting(session)) redirect("/dashboard");
   return session;
