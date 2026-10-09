@@ -27,6 +27,7 @@ export type OfferSheetData = {
   executionNet: number
   reimbursement: string
   projectNet: number
+  additionalTaxes: { description: string; amount: number; vatRate: number }[]
   panelIncluded: boolean
   panelDescription: string
   panelNet: number
@@ -77,6 +78,7 @@ export function defaultOfferSheet(offer: OfferFallback, ocr?: AtrOcrData | null)
     executionNet: 0,
     reimbursement: '',
     projectNet: 0,
+    additionalTaxes: [],
     panelIncluded: false,
     panelDescription: 'Tablou electric monofazat/trifazat pe suport zincat la limita de proprietate',
     panelNet: 0,
@@ -105,6 +107,13 @@ export function normalizeOfferSheet(value: unknown, fallback: OfferFallback, ocr
     executionNet: amount(input.executionNet),
     reimbursement: text(input.reimbursement),
     projectNet: amount(input.projectNet),
+    additionalTaxes: [
+      ...(amount(input.otherTaxesNet) > 0 ? [{ description: 'Alte taxe', amount: amount(input.otherTaxesNet), vatRate: 0 }] : []),
+      ...(Array.isArray(input.additionalTaxes) ? input.additionalTaxes.slice(0, amount(input.otherTaxesNet) > 0 ? 49 : 50).map((item) => {
+          const tax = item && typeof item === 'object' ? item as Record<string, unknown> : {}
+          return { description: text(tax.description).slice(0, 200), amount: amount(tax.amount), vatRate: Math.min(100, amount(tax.vatRate)) }
+        }) : []),
+    ],
     panelIncluded: typeof input.panelIncluded === 'boolean' ? input.panelIncluded : defaults.panelIncluded,
     panelDescription: text(input.panelDescription, defaults.panelDescription),
     panelNet: amount(input.panelNet),
@@ -118,8 +127,10 @@ export function normalizeOfferSheet(value: unknown, fallback: OfferFallback, ocr
 }
 
 export function offerTotals(offer: OfferSheetData) {
-  const net = offer.executionNet + offer.projectNet + (offer.panelIncluded ? offer.panelNet : 0)
-  const vat = net * offer.vatRate / 100
+  const taxableNet = offer.executionNet + offer.projectNet + (offer.panelIncluded ? offer.panelNet : 0)
+  const net = taxableNet + offer.additionalTaxes.reduce((sum, tax) => sum + tax.amount, 0)
+  const vat = taxableNet * offer.vatRate / 100 +
+    offer.additionalTaxes.reduce((sum, tax) => sum + tax.amount * tax.vatRate / 100, 0)
   return { net, vat, gross: net + vat }
 }
 

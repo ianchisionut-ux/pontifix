@@ -13,7 +13,8 @@ type AccountingOffer = {
   id: string; offerNumber: string; customerName: string; customerPhone: string; customerEmail: string;
   workLocation: string; serviceType: string; connectionType: "MONOFAZAT" | "TRIFAZAT" | "NESPECIFICAT";
   executionNet: number; projectNet: number; panelIncluded: boolean; panelDescription: string;
-  panelNet: number; vatRate: number; hasExecution: boolean; hasProject: boolean; hasPanel: boolean;
+  panelNet: number; additionalTaxes: { description: string; amount: number; vatRate: number }[];
+  vatRate: number; hasExecution: boolean; hasProject: boolean; hasPanel: boolean;
 };
 type Product = { id: number; name: string; um: string; price: number; vatRate: number; unitCode: string; vatCategoryCode: string; taxExemptionReasonCode: string; taxExemptionReason: string; revenueAccount: string };
 type Account = { code:string; name:string; active:number; allowPosting:number };
@@ -81,7 +82,7 @@ export default function NewInvoicePage() {
   const [offers, setOffers] = useState<AccountingOffer[]>([]);
   const [offerId, setOfferId] = useState("");
   const [offerImporting, setOfferImporting] = useState(false);
-  const [offerParts, setOfferParts] = useState({ execution: true, project: true, panel: true });
+  const [offerParts, setOfferParts] = useState({ execution: true, project: true, panel: true, taxes: true });
   const [companyVatPayer, setCompanyVatPayer] = useState(true);
 
   useEffect(() => {
@@ -138,6 +139,7 @@ export default function NewInvoicePage() {
       execution: Boolean(offer?.hasExecution),
       project: Boolean(offer?.hasProject),
       panel: Boolean(offer?.hasPanel),
+      taxes: Boolean(offer && offer.additionalTaxes.some((tax) => tax.amount > 0)),
     });
   }
 
@@ -148,6 +150,7 @@ export default function NewInvoicePage() {
       offerParts.execution && selected.executionNet > 0,
       offerParts.project && selected.projectNet > 0,
       offerParts.panel && selected.panelIncluded && selected.panelNet > 0,
+      offerParts.taxes && selected.additionalTaxes.some((tax) => tax.amount > 0),
     ];
     if (!selectedValues.some(Boolean)) return alert("Selectează cel puțin o poziție cu valoare din ofertă.");
     setOfferImporting(true);
@@ -181,6 +184,18 @@ export default function NewInvoicePage() {
       unitPrice: selected.panelNet, vatRate: companyVatPayer ? selected.vatRate : 0,
       ...(companyVatPayer ? {} : { vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }),
     });
+    if (offerParts.taxes) {
+      for (const tax of selected.additionalTaxes) {
+        if (tax.amount <= 0) continue;
+        imported.push({
+          ...newItem(), description: tax.description.trim() || "Taxă suplimentară", um: "serv.",
+          unitPrice: tax.amount, vatRate: companyVatPayer ? tax.vatRate : 0,
+          ...(companyVatPayer
+            ? (tax.vatRate === 0 ? { vatCategoryCode: "Z" } : {})
+            : { vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }),
+        });
+      }
+    }
     setItems((current) => current.length === 1 && !current[0].description && current[0].unitPrice === 0 ? imported : [...current, ...imported]);
     setNotes((current) => current.includes(selected.offerNumber) ? current : [current, `Poziții preluate din oferta ${selected.offerNumber}.`].filter(Boolean).join("\n"));
     setCurrency("RON");
@@ -357,11 +372,12 @@ export default function NewInvoicePage() {
               { key: "execution" as const, label: "Execuție branșament", value: selectedOffer.executionNet, available: selectedOffer.hasExecution },
               { key: "project" as const, label: "Proiect / documentație", value: selectedOffer.projectNet, available: selectedOffer.hasProject },
               { key: "panel" as const, label: "Tablou electric (opțional)", value: selectedOffer.panelNet, available: selectedOffer.hasPanel },
+              { key: "taxes" as const, label: "Taxe suplimentare", value: selectedOffer.additionalTaxes.reduce((sum, tax) => sum + tax.amount, 0), available: selectedOffer.additionalTaxes.some((tax) => tax.amount > 0) },
             ].map((part) => (
               <label key={part.key} className="rounded-xl border border-[#cfe2ed] bg-white px-3 py-3 flex items-center gap-3 cursor-pointer">
                 <input type="checkbox" checked={offerParts[part.key] && part.available} disabled={!part.available}
                   onChange={(e) => setOfferParts((current) => ({ ...current, [part.key]: e.target.checked }))}/>
-                <span className="flex-1"><span className="block font-semibold text-sm">{part.label}</span><span className="text-xs text-slate-500">{part.available ? `${fmt(part.value)} lei + TVA` : "Fără valoare în ofertă"}</span></span>
+                <span className="flex-1"><span className="block font-semibold text-sm">{part.label}</span><span className="text-xs text-slate-500">{part.available ? `${fmt(part.value)} lei${part.key === "taxes" ? " · TVA conform fiecărei taxe" : " + TVA"}` : "Fără valoare în ofertă"}</span></span>
               </label>
             ))}
           </div>

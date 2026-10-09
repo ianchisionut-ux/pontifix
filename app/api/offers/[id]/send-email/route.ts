@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { getOfferAccess } from '@/lib/offer-access'
-import { normalizeOfferSheet } from '@/lib/offer-sheet'
+import { normalizeOfferSheet, offerTotals } from '@/lib/offer-sheet'
 import { offerEmailHtml, offerText } from '@/lib/offer-message'
 import { getEmailTransport } from '@/lib/email-settings'
 
@@ -53,6 +53,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     return NextResponse.json({ error: message, diagnostic: code }, { status: 502 })
   }
 
-  await prisma.$executeRaw`UPDATE "QuoteRequest" SET "offerData"=CAST(${JSON.stringify(data)} AS JSONB), "status"='QUOTED', "offerSentAt"=CURRENT_TIMESTAMP, "offerEmailSentAt"=CURRENT_TIMESTAMP, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id}`
-  return NextResponse.json({ sent: true, attachments: 0 })
+  await prisma.$executeRaw`UPDATE "QuoteRequest" SET "offerData"=CAST(${JSON.stringify(data)} AS JSONB),
+    "name"=${data.customerName.trim() || 'Beneficiar de completat'}, "phone"=${data.customerPhone},
+    "email"=${data.customerEmail}, "location"=${data.workLocation || null},
+    "serviceType"=${data.serviceType}, "estimatedValue"=${offerTotals(data).net},
+    "status"='QUOTED', "offerSentAt"=CURRENT_TIMESTAMP, "offerEmailSentAt"=CURRENT_TIMESTAMP,
+    "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id}`
+  return NextResponse.json({ sent: true, attachments: 0, offerData: data })
 }

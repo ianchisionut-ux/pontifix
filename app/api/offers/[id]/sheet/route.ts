@@ -3,7 +3,7 @@ import { revalidatePath } from 'next/cache'
 import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { getOfferAccess } from '@/lib/offer-access'
-import { normalizeOfferSheet } from '@/lib/offer-sheet'
+import { normalizeOfferSheet, offerTotals } from '@/lib/offer-sheet'
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await getOfferAccess()
@@ -14,7 +14,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "QuoteRequest" WHERE "id"=${id} AND ("businessId"=${access.businessId} OR "businessId" IS NULL) LIMIT 1`
   if (!rows[0]) return NextResponse.json({ error: 'Cererea nu există.' }, { status: 404 })
   const offerData = normalizeOfferSheet(await request.json(), rows[0], rows[0].atrOcrData)
-  await prisma.$executeRaw`UPDATE "QuoteRequest" SET "offerData"=CAST(${JSON.stringify(offerData)} AS JSONB), "estimatedValue"=${offerData.executionNet + offerData.projectNet + (offerData.panelIncluded ? offerData.panelNet : 0)}, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id}`
+  await prisma.$executeRaw`UPDATE "QuoteRequest" SET "offerData"=CAST(${JSON.stringify(offerData)} AS JSONB),
+    "name"=${offerData.customerName.trim() || 'Beneficiar de completat'}, "phone"=${offerData.customerPhone},
+    "email"=${offerData.customerEmail}, "location"=${offerData.workLocation || null},
+    "serviceType"=${offerData.serviceType}, "estimatedValue"=${offerTotals(offerData).net},
+    "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id}`
   revalidatePath('/dashboard/oferte')
   return NextResponse.json({ success: true, offerData })
 }

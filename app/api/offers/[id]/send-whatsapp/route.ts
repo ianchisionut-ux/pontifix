@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { ensureWhatsAppStorage } from '@/lib/ensure-whatsapp-storage'
 import { getOfferAccess } from '@/lib/offer-access'
-import { normalizeOfferSheet } from '@/lib/offer-sheet'
+import { normalizeOfferSheet, offerTotals } from '@/lib/offer-sheet'
 import { offerText } from '@/lib/offer-message'
 import { sendProjectWhatsApp, whatsappFallbackUrl } from '@/lib/project-whatsapp'
 
@@ -20,16 +20,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   const message = offerText(data)
   const fallbackUrl = whatsappFallbackUrl(data.customerPhone, message)
-  await prisma.$executeRaw`UPDATE "QuoteRequest" SET "offerData"=CAST(${JSON.stringify(data)} AS JSONB), "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id}`
+  await prisma.$executeRaw`UPDATE "QuoteRequest" SET "offerData"=CAST(${JSON.stringify(data)} AS JSONB),
+    "name"=${data.customerName.trim() || 'Beneficiar de completat'}, "phone"=${data.customerPhone},
+    "email"=${data.customerEmail}, "location"=${data.workLocation || null},
+    "serviceType"=${data.serviceType}, "estimatedValue"=${offerTotals(data).net},
+    "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id}`
   await ensureWhatsAppStorage()
   const channel = await prisma.channel.findFirst({ where: { businessId: access.businessId, type: 'WHATSAPP', status: 'ACTIVE', enabledByOwner: true }, select: { id: true } })
-  if (!channel) return NextResponse.json({ sent: false, fallbackUrl, message: 'WhatsApp Business nu este configurat. Se va deschide WhatsApp cu rezumatul completat.' })
+  if (!channel) return NextResponse.json({ sent: false, offerData: data, fallbackUrl, message: 'WhatsApp Business nu este configurat. Se va deschide WhatsApp cu rezumatul completat.' })
 
   try {
     await sendProjectWhatsApp(channel.id, data.customerPhone, message)
     await prisma.$executeRaw`UPDATE "QuoteRequest" SET "status"='QUOTED', "offerSentAt"=CURRENT_TIMESTAMP, "offerWhatsappSentAt"=CURRENT_TIMESTAMP, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id}`
-    return NextResponse.json({ sent: true })
+    return NextResponse.json({ sent: true, offerData: data })
   } catch (error) {
-    return NextResponse.json({ sent: false, fallbackUrl, message: error instanceof Error ? error.message : 'Trimiterea directă nu a reușit.' })
+    return NextResponse.json({ sent: false, offerData: data, fallbackUrl, message: error instanceof Error ? error.message : 'Trimiterea directă nu a reușit.' })
   }
 }
