@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { Check, Loader2, Mail, MessageCircle, Plus, Printer, Save, Trash2, X } from 'lucide-react'
 import { formatLei, normalizeOfferSheet, offerTotals, type AtrOcrData, type OfferSheetData } from '@/lib/offer-sheet'
 
@@ -10,6 +10,7 @@ type SheetOffer = {
 }
 
 export function OfferSheetEditor({ offer, onClose, onSaved }: { offer: SheetOffer; onClose: () => void; onSaved: (data: OfferSheetData, sent?: boolean) => void }) {
+  const paperRef = useRef<HTMLElement>(null)
   const [data, setData] = useState<OfferSheetData>(() => normalizeOfferSheet(offer.offerData, offer, offer.atrOcrData))
   const [busy, setBusy] = useState<'save' | 'email' | 'whatsapp' | null>(null)
   const [notice, setNotice] = useState('')
@@ -24,7 +25,15 @@ export function OfferSheetEditor({ offer, onClose, onSaved }: { offer: SheetOffe
     const mode = action === 'sheet' ? 'save' : action === 'send-email' ? 'email' : 'whatsapp'
     setBusy(mode); setNotice('')
     try {
-      const response = await fetch(`/api/offers/${offer.id}/${action}`, { method: action === 'sheet' ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
+      let offerImage: string | undefined
+      if (action === 'send-email') {
+        if (!paperRef.current) throw new Error('Fișa ofertei nu este pregătită pentru trimitere.')
+        await document.fonts.ready
+        const { toPng } = await import('html-to-image')
+        offerImage = await toPng(paperRef.current, { cacheBust: true, pixelRatio: 2, backgroundColor: '#ffffff' })
+        if (!offerImage.startsWith('data:image/png;base64,')) throw new Error('Imaginea ofertei nu a putut fi generată.')
+      }
+      const response = await fetch(`/api/offers/${offer.id}/${action}`, { method: action === 'sheet' ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, ...(offerImage ? { offerImage } : {}) }) })
       const result = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(result.error || 'Operațiunea nu a reușit.')
       if (result.offerData) setData(result.offerData)
@@ -68,15 +77,15 @@ export function OfferSheetEditor({ offer, onClose, onSaved }: { offer: SheetOffe
           <label className="mt-3 flex items-center gap-2 text-sm font-bold text-slate-700"><input type="checkbox" checked={data.panelIncluded} onChange={(e) => update('panelIncluded', e.target.checked)} className="accent-[#197fb5]"/> Include tablou electric opțional</label>{data.panelIncluded && <div className="mt-3 grid gap-3 sm:grid-cols-[1fr_150px]"><Field label="Descriere tablou" value={data.panelDescription} onChange={(v) => update('panelDescription', v)}/><NumberField label="Valoare" value={data.panelNet} onChange={(v) => update('panelNet', v)}/></div>}
           <h3 className="offer-fields-title">Condiții și detalii</h3><Field label="Valabilitatea ofertei" value={data.validity} onChange={(v) => update('validity', v)}/><Field label="Termen de execuție" value={data.executionTerm} onChange={(v) => update('executionTerm', v)}/><Field label="Condiții de plată" value={data.paymentTerms} onChange={(v) => update('paymentTerms', v)}/><Area label="Detalii primite de la beneficiar" value={data.customerDetails} onChange={(v) => update('customerDetails', v)}/><Area label="Observații incluse în ofertă" value={data.offerNotes} onChange={(v) => update('offerNotes', v)}/>
         </section>
-        <OfferPaper data={data} totals={totals}/>
+        <OfferPaper data={data} totals={totals} paperRef={paperRef}/>
       </div>
     </div>
   </div>
 }
 
-function OfferPaper({ data, totals }: { data: OfferSheetData; totals: ReturnType<typeof offerTotals> }) {
+function OfferPaper({ data, totals, paperRef }: { data: OfferSheetData; totals: ReturnType<typeof offerTotals>; paperRef: RefObject<HTMLElement | null> }) {
   const type = data.connectionType === 'NESPECIFICAT' ? '' : ` ${data.connectionType.toLowerCase()}`
-  return <article className="offer-print-sheet">
+  return <article ref={paperRef} className="offer-print-sheet">
     <header className="offer-paper-header"><img src="/elmont-logo.png" alt="Elmont"/><div><strong>ELMONT S.A.</strong><span>Proiectare și execuție instalații electrice</span><small>CUI 9710508 · J1997000155315</small></div><div className="text-right"><b>OFERTĂ</b><span>Nr. {data.offerNumber}</span><small>{new Date(data.offerDate).toLocaleDateString('ro-RO')}</small></div></header>
     <div className="offer-paper-band"><h1>{data.serviceType}{type}</h1><p>Fișă tehnico-economică pentru beneficiar</p></div>
     <section className="offer-paper-client"><div><small>BENEFICIAR</small><strong>{data.customerName || '—'}</strong><span>{data.customerPhone || '—'} · {data.customerEmail || '—'}</span></div><div><small>LOCUL LUCRĂRII</small><strong>{data.workLocation || '—'}</strong></div></section>

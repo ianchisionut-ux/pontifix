@@ -3,7 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { getOfferAccess } from '@/lib/offer-access'
 import { normalizeOfferSheet, offerTotals } from '@/lib/offer-sheet'
-import { offerEmailHtml, offerText } from '@/lib/offer-message'
+import { offerEmailImageHtml } from '@/lib/offer-message'
 import { getEmailTransport } from '@/lib/email-settings'
 
 export const runtime = 'nodejs'
@@ -18,16 +18,32 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const { id } = await params
   const rows = await prisma.$queryRaw<any[]>`SELECT * FROM "QuoteRequest" WHERE "id"=${id} AND ("businessId"=${access.businessId} OR "businessId" IS NULL) LIMIT 1`
   if (!rows[0]) return NextResponse.json({ error: 'Cererea nu există.' }, { status: 404 })
-  const data = normalizeOfferSheet(await request.json(), rows[0], rows[0].atrOcrData)
+  const input = await request.json()
+  const data = normalizeOfferSheet(input, rows[0], rows[0].atrOcrData)
   if (!data.customerEmail) return NextResponse.json({ error: 'Beneficiarul nu are adresă de e-mail.' }, { status: 400 })
+  const offerImage = typeof input?.offerImage === 'string' ? input.offerImage : ''
+  const match = offerImage.length <= 12_000_000 ? /^data:image\/png;base64,([A-Za-z0-9+/]+={0,2})$/.exec(offerImage) : null
+  if (!match) return NextResponse.json({ error: 'Imaginea fișei lipsește sau este invalidă. Deschide fișa și încearcă din nou.' }, { status: 400 })
+  const imageBuffer = Buffer.from(match[1], 'base64')
+  const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+  if (imageBuffer.length < 100 || imageBuffer.length > 8_000_000 || !imageBuffer.subarray(0, 8).equals(pngSignature)) {
+    return NextResponse.json({ error: 'Imaginea fișei este invalidă sau prea mare.' }, { status: 400 })
+  }
 
   try {
     const result = await emailTransport.transporter.sendMail({
       from: emailTransport.from,
       to: data.customerEmail,
       subject: `Oferta Elmont ${data.offerNumber} – ${data.serviceType}`,
-      html: offerEmailHtml(data),
-      text: offerText(data),
+      html: offerEmailImageHtml(data),
+      text: `Bună ziua, ${data.customerName}! Vă transmitem oferta ${data.offerNumber} ca imagine atașată. Cu stimă, Elmont S.A.`,
+      attachments: [{
+        filename: `Oferta_${data.offerNumber.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`,
+        content: imageBuffer,
+        contentType: 'image/png',
+        contentDisposition: 'inline',
+        cid: 'elmont-offer-sheet',
+      }],
     })
     if (!result.accepted.length || result.rejected.length) {
       const rejected = result.rejected.map(String).join(', ')
@@ -59,5 +75,5 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     "serviceType"=${data.serviceType}, "estimatedValue"=${offerTotals(data).net},
     "status"='QUOTED', "offerSentAt"=CURRENT_TIMESTAMP, "offerEmailSentAt"=CURRENT_TIMESTAMP,
     "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id}`
-  return NextResponse.json({ sent: true, attachments: 0, offerData: data })
+  return NextResponse.json({ sent: true, attachments: 1, offerData: data })
 }

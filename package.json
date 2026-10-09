@@ -32,6 +32,7 @@
     "exceljs": "^4.4.0",
     "fast-xml-parser": "^5.11.1",
     "fflate": "^0.8.3",
+    "html-to-image": "^1.11.13",
     "lucide-react": "^1.28.0",
     "next": "^15.0.0",
     "next-auth": "^5.0.0-beta.32",
