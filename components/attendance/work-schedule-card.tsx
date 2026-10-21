@@ -16,11 +16,14 @@ export function WorkScheduleCard({ startTime, endTime, breakStart, breakEnd, isW
   breakEnd: string | null
   isWorkday: boolean
 }) {
-  const [now, setNow] = useState(new Date())
+  const [now, setNow] = useState<Date | null>(null)
   useEffect(() => {
+    setNow(new Date())
     const timer = setInterval(() => setNow(new Date()), 1000)
     return () => clearInterval(timer)
   }, [])
+
+  if (!now) return <section className="schedule-card min-h-[240px]" aria-hidden="true"/>
 
   const current = now.getHours() * 60 + now.getMinutes()
   const start = minutes(startTime)
