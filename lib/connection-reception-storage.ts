@@ -24,6 +24,12 @@ export function ensureConnectionReceptionStorage(businessId: string) {
   const existing = readyByBusiness.get(businessId)
   if (existing) return existing
   const operation = (async () => {
+    const [schema] = await prisma.$queryRaw<{ ready: boolean }[]>`
+      SELECT to_regclass('"ConnectionReception"') IS NOT NULL
+        AND to_regclass('"ConnectionReception_business_source_key"') IS NOT NULL
+        AND to_regclass('"ConnectionReception_business_year_order_idx"') IS NOT NULL AS "ready"
+    `
+    if (schema?.ready) return
     await prisma.$executeRawUnsafe(`
       CREATE TABLE IF NOT EXISTS "ConnectionReception" (
         "id" TEXT PRIMARY KEY,
