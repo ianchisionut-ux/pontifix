@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 
 const INITIAL_FORMS = [
@@ -75,20 +76,14 @@ async function ensureTable() {
 
 export async function ensureFormStorage(businessId: string) {
   await ensureTable()
-  for (let index = 0; index < INITIAL_FORMS.length; index++) {
-    const [slug, title, filename] = INITIAL_FORMS[index]
-    await prisma.$executeRaw`
-      INSERT INTO "FormTemplate" ("id", "businessId", "title", "category", "documentPathname", "documentName", "sortOrder")
-      VALUES (${`${businessId}:formular:${slug}`}, ${businessId}, ${title}, 'FORMULAR', ${`asset:${filename}`}, ${filename}, ${index})
-      ON CONFLICT ("id") DO NOTHING`
-  }
-  for (let index = 0; index < REQUESTS.length; index++) {
-    const [slug, title, filename, fields] = REQUESTS[index]
-    await prisma.$executeRaw`
-      INSERT INTO "FormTemplate" ("id", "businessId", "title", "category", "documentPathname", "documentName", "sortOrder", "fieldSchema")
-      VALUES (${`${businessId}:cerere:${slug}`}, ${businessId}, ${title}, 'CERERE', ${`asset:${filename}`}, ${filename}, ${index}, ${JSON.stringify(fields)}::jsonb)
-      ON CONFLICT ("id") DO NOTHING`
-  }
+  const rows = [
+    ...INITIAL_FORMS.map(([slug, title, filename], index) => Prisma.sql`(${`${businessId}:formular:${slug}`}, ${businessId}, ${title}, 'FORMULAR', ${`asset:${filename}`}, ${filename}, ${index}, '[]'::jsonb)`),
+    ...REQUESTS.map(([slug, title, filename, fields], index) => Prisma.sql`(${`${businessId}:cerere:${slug}`}, ${businessId}, ${title}, 'CERERE', ${`asset:${filename}`}, ${filename}, ${index}, ${JSON.stringify(fields)}::jsonb)`),
+  ]
+  await prisma.$executeRaw(Prisma.sql`
+    INSERT INTO "FormTemplate" ("id", "businessId", "title", "category", "documentPathname", "documentName", "sortOrder", "fieldSchema")
+    VALUES ${Prisma.join(rows)} ON CONFLICT ("id") DO NOTHING
+  `)
 }
 
 export type FormTemplateDto = {
