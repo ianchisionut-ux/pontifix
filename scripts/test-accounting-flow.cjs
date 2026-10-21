@@ -73,6 +73,7 @@ async function main() {
     return {rows:[]};
   }};
   const repo=load('lib/accounting/repo.ts',{'./db':{ready:async()=>({connect:async()=>refundClient})},'./ref':{createRefIncomeForPayment:async()=>{}},'./ledger':{postPaymentToLedger:async()=>{}},'./date':{bucharestDate:()=> '2026-09-24'}});
+  await assert.rejects(()=>repo.createInvoice({series:'FACT',clientId:1,issueDate:'2026-09-24',items:[{description:'Servicii',um:'buc',qty:1,unitPrice:100,vatRate:0,vatCategoryCode:'O',taxExemptionReason:'Test'}]}),/data scadenței/,'An unpaid invoice requires a due date before persistence');
   await assert.rejects(()=>repo.addPayment(1,.001,'2026-09-24','bank','',true),/0,01/);
   await repo.addPayment(1,40,'2026-09-24','bank','',true);
   assert.equal(savedAmount,-40);assert.equal(paid,60);assert.equal(status,'stornoed');
@@ -133,7 +134,8 @@ async function main() {
   await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1,allocatedInvoiceTo:Infinity}),/numere întregi/);
   await assert.rejects(()=>detailed.updateDeclarationSettings({...settings,invoiceSeries:'F',allocatedInvoiceFrom:1.2,allocatedInvoiceTo:10}),/numere întregi/);
   const purchaseQueries=[];
-  const purchases=load('lib/accounting/purchases.ts',{'./db':{ready:async()=>({query:async(sql,args)=>{purchaseQueries.push({sql,args});if(sql.includes('SELECT blocked,"vatPayer"'))return {rows:[{blocked:0,vatPayer:0,countryCode:'RO'}]};return {rows:[]};},connect:async()=>{throw new Error('Invalid input reached database');}})},'./ledger':{},'./vat-regime':vatRegime});
+  let companyVatPayer=1;
+  const purchases=load('lib/accounting/purchases.ts',{'./db':{ready:async()=>({query:async(sql,args)=>{purchaseQueries.push({sql,args});if(sql.includes('SELECT blocked,"vatPayer"'))return {rows:[{blocked:0,vatPayer:0,countryCode:'RO'}]};if(sql.includes('SELECT "vatPayer" FROM company'))return {rows:[{vatPayer:companyVatPayer}]};return {rows:[]};},connect:async()=>{throw new Error('Invalid input reached database');}})},'./ledger':{},'./vat-regime':vatRegime});
   for(const amount of [NaN,Infinity,-1,0,.001])await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-09-25',amount}),/suma plății/);
   await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-02-30',amount:10}),/Data/);
   await assert.rejects(()=>purchases.addSupplierPayment(1,{date:'2026-09-25',amount:10,method:'INVALID'}),/Metoda/);
@@ -144,6 +146,9 @@ async function main() {
   assert.ok(!situationQuery.sql.includes('p."paidAmount"'));
   assert.equal(situationQuery.args[0],'2026-09-01');
   await assert.rejects(()=>purchases.createPurchase({supplierId:1,documentNumber:'F1',issueDate:'2026-09-25',dueDate:'2026-09-25',items:[{description:'Servicii',quantity:1,unitPrice:100,vatRate:21,vatCategoryCode:'S'}]}),/Invalid input reached database/,'Manual S passes validation and reaches persistence');
+  companyVatPayer=0;
+  await assert.rejects(()=>purchases.createPurchase({supplierId:1,documentNumber:'F2',issueDate:'2026-09-25',items:[{description:'Servicii',quantity:1,unitPrice:100,vatRate:21,vatCategoryCode:'S',deductibilityPercent:100}]}),/nu poate deduce TVA/);
+  await assert.rejects(()=>purchases.createPurchase({supplierId:1,documentNumber:'F3',issueDate:'2026-09-25',items:[{description:'Servicii',quantity:1,unitPrice:100,vatRate:21,vatCategoryCode:'S'}]}),/Invalid input reached database/,'A non-VAT company defaults purchase deduction to zero');
   const receiptRepo=load('lib/accounting/repo.ts',{'./db':{ready:async()=>({connect:async()=>({release(){},async query(sql){
     if(sql.includes('SELECT * FROM invoices'))return {rows:[{id:1,status:'issued',invoiceType:'STANDARD',currency:'RON'}]};
     if(sql.includes('SUM(amount)'))return {rows:[{amount:sql.includes('FROM payments')?10:0}]};

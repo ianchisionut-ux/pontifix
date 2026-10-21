@@ -119,14 +119,18 @@ export async function createPurchase(input: PurchaseInput) {
   if (!validDate(issueDate) || !validDate(dueDate)) throw new Error("Data documentului sau scadența nu este validă.");
   if (!items.length) throw new Error("Adaugă cel puțin o poziție în factură.");
   const supplierContext = (await (await ready()).query(`SELECT blocked,"vatPayer","countryCode" FROM suppliers WHERE id=$1`, [supplierId])).rows[0];
+  const company = (await (await ready()).query(`SELECT "vatPayer" FROM company WHERE id=1`)).rows[0];
+  if (!company) throw new Error("Completează datele firmei înainte de a înregistra achiziții.");
   if (!supplierContext) throw new Error("Furnizorul selectat nu există.");
   if (supplierContext.blocked) throw new Error("Furnizorul este blocat. Deblochează-l înainte de operare.");
   const domesticNonVatSupplier = String(supplierContext.countryCode || "RO").toUpperCase() === "RO" && !Number(supplierContext.vatPayer);
   const reverseCharge = flag(input.reverseCharge);
   const normalized = items.map((item, index) => {
     const quantity = Number(item.quantity || 0), unitPrice = Number(item.unitPrice || 0), enteredVatRate = Number(item.vatRate || 0);
-    const deductibility = Math.max(0, Math.min(100, Number(item.deductibilityPercent ?? 100)));
+    const deductibility = Number(item.deductibilityPercent ?? (company.vatPayer ? 100 : 0));
     if (!text(item.description) || !Number.isFinite(quantity) || !Number.isFinite(unitPrice) || !Number.isFinite(enteredVatRate) || !Number.isFinite(deductibility) || quantity <= 0 || unitPrice < 0 || enteredVatRate < 0 || enteredVatRate > 100) throw new Error(`Poziția ${index + 1} nu este completată corect.`);
+    if (deductibility < 0 || deductibility > 100) throw new Error(`Poziția ${index + 1}: deductibilitatea TVA trebuie să fie între 0% și 100%.`);
+    if (!Number(company.vatPayer) && deductibility > 0) throw new Error(`Poziția ${index + 1}: firma neplătitoare de TVA nu poate deduce TVA din achiziții.`);
     if (item.vatCategoryCode && !isVatRegimeCode(item.vatCategoryCode)) throw new Error(`Regimul TVA al poziției ${index + 1} nu este valid.`);
     const vatCategoryCode = item.vatCategoryCode || suggestVatRegime({ type: "EXPENSE", partnerVatPayer: domesticNonVatSupplier ? false : undefined, vatRate: enteredVatRate, reverseCharge: Boolean(reverseCharge) });
     const vatRate = vatCategoryCode === "S" ? enteredVatRate : 0;
@@ -179,8 +183,12 @@ export async function updatePurchase(id: number, input: PurchaseInput) {
   const supplierId=Number(input.supplierId||0),documentNumber=text(input.documentNumber),issueDate=text(input.issueDate),dueDate=text(input.dueDate||issueDate),items=Array.isArray(input.items)?input.items:[];
   if(!supplierId||!documentNumber||!validDate(issueDate)||!validDate(dueDate)||!items.length) throw new Error("Completează corect furnizorul, documentul, datele și pozițiile.");
   const reverseCharge=flag(input.reverseCharge);
-  const normalized=items.map((item,index)=>{const quantity=Number(item.quantity||0),unitPrice=Number(item.unitPrice||0),enteredVatRate=Number(item.vatRate||0),deductibility=Math.max(0,Math.min(100,Number(item.deductibilityPercent??100)));
-    if(!text(item.description)||quantity<=0||unitPrice<0||enteredVatRate<0||enteredVatRate>100) throw new Error(`Poziția ${index+1} nu este completată corect.`);
+  const company=(await (await ready()).query(`SELECT "vatPayer" FROM company WHERE id=1`)).rows[0];
+  if(!company) throw new Error("Completează datele firmei înainte de a modifica achiziții.");
+  const normalized=items.map((item,index)=>{const quantity=Number(item.quantity||0),unitPrice=Number(item.unitPrice||0),enteredVatRate=Number(item.vatRate||0),deductibility=Number(item.deductibilityPercent??(company.vatPayer?100:0));
+    if(!text(item.description)||!Number.isFinite(quantity)||!Number.isFinite(unitPrice)||!Number.isFinite(enteredVatRate)||!Number.isFinite(deductibility)||quantity<=0||unitPrice<0||enteredVatRate<0||enteredVatRate>100) throw new Error(`Poziția ${index+1} nu este completată corect.`);
+    if(deductibility<0||deductibility>100) throw new Error(`Poziția ${index+1}: deductibilitatea TVA trebuie să fie între 0% și 100%.`);
+    if(!Number(company.vatPayer)&&deductibility>0) throw new Error(`Poziția ${index+1}: firma neplătitoare de TVA nu poate deduce TVA din achiziții.`);
     const vatCategoryCode=item.vatCategoryCode||suggestVatRegime({type:"EXPENSE",vatRate:enteredVatRate,reverseCharge:Boolean(reverseCharge)}),vatRate=vatCategoryCode==="S"?enteredVatRate:0,taxExemptionReasonCode=text(item.taxExemptionReasonCode),taxExemptionReason=text(item.taxExemptionReason)||defaultVatRegimeReason(vatCategoryCode);
     if(vatRegimeNeedsReason(vatCategoryCode)&&!taxExemptionReason&&!taxExemptionReasonCode) throw new Error(`Poziția ${index+1}: completează motivul regimului TVA.`);
     return {description:text(item.description),expenseAccount:text(item.expenseAccount||"628"),unit:text(item.unit||"buc"),quantity,unitPrice,vatRate,vatCategoryCode,taxExemptionReasonCode,taxExemptionReason,deductibility,net:round2(quantity*unitPrice),vat:round2(quantity*unitPrice*vatRate/100)};});
