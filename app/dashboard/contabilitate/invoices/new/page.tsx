@@ -58,7 +58,7 @@ export default function NewInvoicePage() {
   const [nextNumber, setNextNumber] = useState<number | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [issueDate, setIssueDate] = useState(bucharestDate());
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(bucharestDate());
   const [taxPointDate, setTaxPointDate] = useState("");
   const [paymentMeansCode, setPaymentMeansCode] = useState("30");
   const [paidOnSpot, setPaidOnSpot] = useState(false);
@@ -272,6 +272,10 @@ export default function NewInvoicePage() {
       alert("Factura achitată pe loc și chitanța pot fi emise doar în RON.");
       return;
     }
+    if (!paidOnSpot && !dueDate) {
+      alert("Completează data scadenței pentru factura cu sold de plată.");
+      return;
+    }
     const choice = await ask();
     if (!choice) return;
     setSaving(true);
@@ -421,14 +425,14 @@ export default function NewInvoicePage() {
         </div>
         <div>
           <label className="field-label">Data emiterii</label>
-          <input type="date" className="input" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+          <input type="date" className="input" value={issueDate} onChange={(e) => { const next=e.target.value; setDueDate(current=>current===issueDate?next:current); setIssueDate(next); }} />
         </div>
       </div>
 
       <div className="card mb-4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
         <div>
-          <label className="field-label">Data scadenta (optional)</label>
-          <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <label className="field-label">Data scadenței {paidOnSpot?"(opțională)":"(obligatorie)"}</label>
+          <input type="date" className="input" required={!paidOnSpot} min={issueDate} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </div>
         <div>
           <label className="field-label">Discount (%)</label>

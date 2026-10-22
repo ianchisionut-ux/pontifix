@@ -718,6 +718,8 @@ async function createInvoiceInTransaction(
       "Totalul facturii trebuie să fie pozitiv pentru încasarea pe loc.",
     );
   }
+  if (invoiceType === "STANDARD" && !input.paidOnSpot && total > 0 && !input.dueDate)
+    throw new Error("Completează data scadenței pentru o factură cu sold de plată.");
 
   const connection = transactionClient || await pool.connect();
   const ownsTransaction = !transactionClient;
@@ -1101,6 +1103,7 @@ export async function correctUnsentInvoice(id: number, input: { clientId?: numbe
     if (locked) throw new Error("Factura a fost transmisă sau este în procesare. Editarea este blocată.");
     if (typeof input.dueDate !== 'string' || typeof input.paymentTerms !== 'string' || typeof input.notes !== 'string' || !Array.isArray(input.items)) throw new Error("Date de corecție invalide.");
     if (input.dueDate && (!/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate) || !Number.isFinite(Date.parse(input.dueDate)) || new Date(input.dueDate).toISOString().slice(0,10) !== input.dueDate)) throw new Error("Scadență invalidă.");
+    if (input.dueDate && input.dueDate < String(invoice.issueDate).slice(0,10)) throw new Error("Scadența nu poate preceda data emiterii.");
     const existing = (await connection.query(`SELECT * FROM invoice_items WHERE "invoiceId"=$1 ORDER BY id`, [id])).rows;
     if (input.items.length !== existing.length || new Set(input.items.map(i => i.id)).size !== existing.length || input.items.some(i => !existing.some(e => e.id === i.id) || typeof i.description !== 'string' || !i.description.trim())) throw new Error("Pozițiile facturii sunt invalide.");
     const changedMoney = input.items.some(i => { const old = existing.find(e => e.id === i.id)!; return (i.qty !== undefined && Number(i.qty) !== Number(old.qty)) || (i.unitPrice !== undefined && Number(i.unitPrice) !== Number(old.unitPrice)); });
@@ -1118,6 +1121,8 @@ export async function correctUnsentInvoice(id: number, input: { clientId?: numbe
       for (let i=0;i<existing.length;i++) { const item=totals.computed[i]; await connection.query(`UPDATE invoice_items SET qty=$1,"unitPrice"=$2,valoare=$3,"vatValue"=$4 WHERE id=$5`, [item.qty,item.unitPrice,item.valoare,item.vatValue,existing[i].id]); }
       await connection.query(`UPDATE invoices SET subtotal=$2,"vatTotal"=$3,total=$4 WHERE id=$1`, [id,totals.subtotal,totals.vatTotal,round2(totals.subtotal+totals.vatTotal)]);
     }
+    if (Number(invoice.total) > Number(invoice.paidAmount) && !input.dueDate)
+      throw new Error("Completează data scadenței pentru o factură cu sold de plată.");
     await connection.query(`UPDATE invoices SET "dueDate"=$1,"paymentTerms"=$2,notes=$3 WHERE id=$4`, [input.dueDate || null, input.paymentTerms, input.notes, id]);
     for (const item of input.items) await connection.query(`UPDATE invoice_items SET description=$1 WHERE id=$2 AND "invoiceId"=$3`, [item.description.trim(), item.id, id]);
     if (changedMoney || changedClient) await postInvoiceToLedger(id, connection);
