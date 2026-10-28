@@ -20,6 +20,16 @@ const DEER_STAMPS = [
   { key: 's5-verificator-stamp', label: 'Ștampilă verificator' },
 ] as const
 
+const FIELD_COLORS = [
+  { value: '#111827', label: 'Negru' },
+  { value: '#082b4d', label: 'Bleumarin' },
+  { value: '#197fb5', label: 'Albastru' },
+  { value: '#b91c1c', label: 'Roșu' },
+  { value: '#15803d', label: 'Verde' },
+  { value: '#7e22ce', label: 'Mov' },
+  { value: '#475569', label: 'Gri' },
+] as const
+
 const transparentStampCache = new Map<string, Promise<string>>()
 function transparentStamp(key: string) {
   const cached = transparentStampCache.get(key)
@@ -334,12 +344,13 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
       canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height)
       const context = canvas.getContext('2d')!
       await page.render({ canvasContext: context, viewport }).promise
-      context.fillStyle = '#111827'; context.textBaseline = 'top'
+      context.textBaseline = 'top'
       for (const field of fields.filter((item) => item.page === pageNumber)) {
         const value = values[field.id] || ''
         if (!value) continue
         const size = field.fontSize * 2.5
-        context.font = `${size}px Arial, sans-serif`
+        context.fillStyle = field.color || '#111827'
+        context.font = `${field.bold ? 'bold ' : ''}${size}px Arial, sans-serif`
         const x = field.x * canvas.width, y = field.y * canvas.height, maxWidth = field.width * canvas.width
         if (field.multiline) {
           const words = value.split(/\s+/); let line = '', lineNo = 0
@@ -441,8 +452,8 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
               <PdfCanvas pdf={pdf} pageNumber={pageNumber}/>
               <div className="absolute inset-0">
                 {fields.filter((field) => field.page === pageNumber).map((field) => <div key={field.id} onClick={() => setSelectedId(field.id)} className={`absolute group ${selectedId === field.id ? 'z-20' : 'z-10'}`} style={{ left: `${field.x * 100}%`, top: `${field.y * 100}%`, width: `${field.width * 100}%`, height: `${field.height * 100}%` }}>
-                  {field.multiline ? <textarea aria-label={field.label} value={values[field.id] || ''} onChange={(e) => setValues((all) => ({ ...all, [field.id]: e.target.value }))} className={`h-full w-full resize-none overflow-hidden bg-white/65 px-0.5 leading-tight text-slate-950 outline-none ${layoutMode ? 'border border-dashed border-[#197fb5]' : 'border border-transparent focus:border-[#197fb5]'}`} style={{ fontSize: `${field.fontSize * 1.334}px` }}/> :
-                  <input aria-label={field.label} value={values[field.id] || ''} onChange={(e) => setValues((all) => ({ ...all, [field.id]: e.target.value }))} className={`h-full w-full bg-white/65 px-0.5 text-slate-950 outline-none ${layoutMode ? 'border border-dashed border-[#197fb5]' : 'border border-transparent focus:border-[#197fb5]'}`} style={{ fontSize: `${field.fontSize * 1.334}px` }}/>}
+                  {field.multiline ? <textarea aria-label={field.label} value={values[field.id] || ''} onChange={(e) => setValues((all) => ({ ...all, [field.id]: e.target.value }))} className={`h-full w-full resize-none overflow-hidden bg-white/65 px-0.5 leading-tight text-slate-950 outline-none ${layoutMode ? 'border border-dashed border-[#197fb5]' : 'border border-transparent focus:border-[#197fb5]'}`} style={{ fontSize: `${field.fontSize * 1.334}px`, fontWeight: field.bold ? 700 : 400, color: field.color || '#111827' }}/> :
+                  <input aria-label={field.label} value={values[field.id] || ''} onChange={(e) => setValues((all) => ({ ...all, [field.id]: e.target.value }))} className={`h-full w-full bg-white/65 px-0.5 text-slate-950 outline-none ${layoutMode ? 'border border-dashed border-[#197fb5]' : 'border border-transparent focus:border-[#197fb5]'}`} style={{ fontSize: `${field.fontSize * 1.334}px`, fontWeight: field.bold ? 700 : 400, color: field.color || '#111827' }}/>}
                   {layoutMode && <><button title="Mută" onPointerDown={(e) => startDrag(e, field, 'move')} className="absolute -left-3 -top-3 flex h-6 w-6 cursor-move items-center justify-center rounded-full bg-[#0d5d8b] text-white shadow"><Grip size={12}/></button><button title="Redimensionează" onPointerDown={(e) => startDrag(e, field, 'resize')} className="absolute -bottom-2 -right-2 h-4 w-4 cursor-nwse-resize rounded-sm bg-[#197fb5] shadow"/></>}
                 </div>)}
                 {isDeer && placements.filter((item) => item.page === pageNumber).map((item) => <div key={item.id} onPointerDown={(event) => startStampDrag(event, item)} onClick={() => setSelectedStampId(item.id)} className={`absolute z-30 cursor-move ${selectedStampId === item.id ? 'ring-2 ring-[#197fb5]' : 'hover:ring-1 hover:ring-[#197fb5]'}`} style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%`, transform: `rotate(${item.rotation}deg)` }}><img src={stampImages[item.stampKey] || `/api/formulare/stamps/${item.stampKey}`} alt={DEER_STAMPS.find((stamp) => stamp.key === item.stampKey)?.label || 'Semnătură'} className="h-full w-full select-none object-contain" draggable={false}/></div>)}
@@ -459,6 +470,8 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
           <label className="block text-xs font-bold text-slate-500">{tr('Denumire')}<input className="input-field mt-1 w-full" value={selected.label} onChange={(e) => updateField({ label: e.target.value })}/></label>
           <label className="block text-xs font-bold text-slate-500">{tr('Preia automat din')}<select className="input-field mt-1 w-full" value={selected.binding || ''} onChange={(e) => { updateField({ binding: e.target.value || undefined }); const value = boundValue(e.target.value, selectedConnection, selectedProject, selectedIdentity); if (value) setValues((all) => ({ ...all, [selected.id]: value })) }}>{BINDINGS.map(([value, label]) => <option key={value} value={value}>{tr(label)}</option>)}</select></label>
           <div className="grid grid-cols-2 gap-3"><label className="text-xs font-bold text-slate-500">{tr('Pagina')}<input type="number" min={1} max={pageCount || 50} className="input-field mt-1 w-full" value={selected.page} onChange={(e) => updateField({ page: Number(e.target.value) || 1 })}/></label><label className="text-xs font-bold text-slate-500">{tr('Font')}<input type="number" min={6} max={40} className="input-field mt-1 w-full" value={selected.fontSize} onChange={(e) => updateField({ fontSize: Number(e.target.value) || 12 })}/></label></div>
+          <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><input type="checkbox" checked={!!selected.bold} onChange={(e) => updateField({ bold: e.target.checked })}/> Text îngroșat (Bold)</label>
+          <label className="block text-xs font-bold text-slate-500">Culoare text<div className="mt-1 flex items-center gap-2"><span className="h-6 w-6 shrink-0 rounded-full border border-slate-200" style={{ backgroundColor: selected.color || '#111827' }}/><select className="input-field w-full" value={selected.color || '#111827'} onChange={(e) => updateField({ color: e.target.value })}>{FIELD_COLORS.map((color) => <option key={color.value} value={color.value}>{color.label}</option>)}</select></div></label>
           <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={!!selected.multiline} onChange={(e) => updateField({ multiline: e.target.checked })}/> {tr('Text pe mai multe rânduri')}</label>
           <button className="inline-flex items-center gap-2 text-sm font-bold text-red-600" onClick={() => { setFields((all) => all.filter((item) => item.id !== selected.id)); setSelectedId('') }}><Trash2 size={15}/> {tr('Șterge câmpul')}</button>
         </div>}
