@@ -11,7 +11,7 @@ const INITIAL_FORMS = [
 
 export type FormField = {
   id: string; label: string; page: number; x: number; y: number
-  width: number; height: number; fontSize: number; multiline?: boolean; bold?: boolean
+  width: number; height: number; fontSize: number; multiline?: boolean; bold?: boolean; color?: string
   binding?: string; defaultValue?: string
 }
 
