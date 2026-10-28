@@ -160,7 +160,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
   const [documentVersion, setDocumentVersion] = useState(0)
   const [error, setError] = useState('')
   const drag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; field: FormField; box: DOMRect } | null>(null)
-  const stampDrag = useRef<{ id: string; startX: number; startY: number; item: StampPlacement; box: DOMRect } | null>(null)
+  const stampDrag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; item: StampPlacement; box: DOMRect } | null>(null)
   const documentUrl = `/api/formulare/${encodeURIComponent(template.id)}/document?v=${documentVersion}`
   const selected = fields.find((field) => field.id === selectedId)
   const selectedStamp = placements.find((item) => item.id === selectedStampId)
@@ -197,8 +197,19 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
       if (movingStamp) {
         const dx = (event.clientX - movingStamp.startX) / movingStamp.box.width
         const dy = (event.clientY - movingStamp.startY) / movingStamp.box.height
-        setPlacements((all) => all.map((item) => item.id === movingStamp.id
-          ? { ...item, x: Math.max(0, Math.min(1 - item.width, movingStamp.item.x + dx)), y: Math.max(0, Math.min(1 - item.height, movingStamp.item.y + dy)) } : item))
+        setPlacements((all) => all.map((item) => {
+          if (item.id !== movingStamp.id) return item
+          if (movingStamp.kind === 'resize') {
+            const original = movingStamp.item
+            const ratio = original.width / original.height
+            const projectedWidth = original.width + (dx + dy / ratio) / 2
+            const minWidth = Math.max(.03, .02 * ratio)
+            const maxWidth = Math.min(1 - original.x, (1 - original.y) * ratio)
+            const width = Math.max(Math.min(minWidth, maxWidth), Math.min(maxWidth, projectedWidth))
+            return { ...item, width, height: width / ratio }
+          }
+          return { ...item, x: Math.max(0, Math.min(1 - item.width, movingStamp.item.x + dx)), y: Math.max(0, Math.min(1 - item.height, movingStamp.item.y + dy)) }
+        }))
         return
       }
       const current = drag.current
@@ -269,10 +280,10 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Semnătura nu a putut fi adăugată.') }
   }
 
-  function startStampDrag(event: React.PointerEvent, item: StampPlacement) {
+  function startStampDrag(event: React.PointerEvent, item: StampPlacement, kind: 'move' | 'resize' = 'move') {
     event.preventDefault(); event.stopPropagation()
     const box = (event.currentTarget.closest('[data-pdf-page]') as HTMLElement).getBoundingClientRect()
-    stampDrag.current = { id: item.id, startX: event.clientX, startY: event.clientY, item: { ...item }, box }
+    stampDrag.current = { id: item.id, kind, startX: event.clientX, startY: event.clientY, item: { ...item }, box }
     setSelectedStampId(item.id)
   }
 
@@ -463,7 +474,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
                   <input aria-label={field.label} value={values[field.id] || ''} onChange={(e) => setFieldValue(field, e.target.value)} className={`h-full w-full bg-white/65 px-0.5 text-slate-950 outline-none ${layoutMode ? 'border border-dashed border-[#197fb5]' : 'border border-transparent focus:border-[#197fb5]'}`} style={{ fontSize: `${field.fontSize * 1.334}px`, fontWeight: field.bold ? 700 : 400, color: field.color || '#111827' }}/>}
                   {layoutMode && <><button title="Mută" onPointerDown={(e) => startDrag(e, field, 'move')} className="absolute -left-3 -top-3 flex h-6 w-6 cursor-move items-center justify-center rounded-full bg-[#0d5d8b] text-white shadow"><Grip size={12}/></button><button title="Redimensionează" onPointerDown={(e) => startDrag(e, field, 'resize')} className="absolute -bottom-2 -right-2 h-4 w-4 cursor-nwse-resize rounded-sm bg-[#197fb5] shadow"/></>}
                 </div>)}
-                {isDeer && placements.filter((item) => item.page === pageNumber).map((item) => <div key={item.id} onPointerDown={(event) => startStampDrag(event, item)} onClick={() => setSelectedStampId(item.id)} className={`absolute z-30 cursor-move ${selectedStampId === item.id ? 'ring-2 ring-[#197fb5]' : 'hover:ring-1 hover:ring-[#197fb5]'}`} style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%`, transform: `rotate(${item.rotation}deg)` }}><img src={stampImages[item.stampKey] || `/api/formulare/stamps/${item.stampKey}`} alt={DEER_STAMPS.find((stamp) => stamp.key === item.stampKey)?.label || 'Semnătură'} className="h-full w-full select-none object-contain" draggable={false}/></div>)}
+                {isDeer && placements.filter((item) => item.page === pageNumber).map((item) => <div key={item.id} onPointerDown={(event) => startStampDrag(event, item)} onClick={() => setSelectedStampId(item.id)} className={`absolute z-30 cursor-move touch-none ${selectedStampId === item.id ? 'ring-2 ring-[#197fb5]' : 'hover:ring-1 hover:ring-[#197fb5]'}`} style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%`, transform: `rotate(${item.rotation}deg)` }}><img src={stampImages[item.stampKey] || `/api/formulare/stamps/${item.stampKey}`} alt={DEER_STAMPS.find((stamp) => stamp.key === item.stampKey)?.label || 'Semnătură'} className="h-full w-full select-none object-contain" draggable={false}/>{canManage && selectedStampId === item.id && <button type="button" title="Redimensionează ștampila" aria-label="Redimensionează ștampila" onPointerDown={(event) => startStampDrag(event, item, 'resize')} className="absolute -bottom-3 -right-3 z-40 flex h-7 w-7 cursor-nwse-resize touch-none items-center justify-center rounded-md border-2 border-white bg-[#197fb5] text-white shadow-lg"><Grip size={14}/></button>}</div>)}
               </div>
               <span className="absolute bottom-2 right-2 rounded bg-slate-900/65 px-2 py-1 text-[10px] text-white">Pagina {pageNumber}</span>
             </div>
