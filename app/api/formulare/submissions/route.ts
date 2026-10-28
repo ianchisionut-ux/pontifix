@@ -11,11 +11,16 @@ const field = z.object({
   height: z.number().min(.01).max(1), fontSize: z.number().min(6).max(40), multiline: z.boolean().optional(),
   binding: z.string().max(150).optional(), defaultValue: z.string().max(4000).optional(),
 })
+const stamp = z.object({
+  id: z.string().min(1).max(100), stampKey: z.enum(['s1-elmont-stamp', 's2-signature', 's3-signature', 's4-elmont-signed', 's5-verificator-stamp']),
+  page: z.number().int().min(1).max(100), x: z.number().min(0).max(1), y: z.number().min(0).max(1),
+  width: z.number().min(.01).max(1), height: z.number().min(.01).max(1), rotation: z.number().min(-360).max(360),
+})
 const schema = z.object({
   id: z.string().uuid().optional(), formTemplateId: z.string().min(1).max(300),
   title: z.string().trim().min(2).max(180), sourceType: z.string().max(30).nullable().optional(),
   sourceId: z.string().max(200).nullable().optional(),
-  values: z.record(z.string(), z.string().max(10000)), fieldSchema: z.array(field).max(250),
+  values: z.record(z.string(), z.string().max(10000)), fieldSchema: z.array(field).max(250), stampSchema: z.array(stamp).max(250).default([]),
 })
 
 export async function POST(request: NextRequest) {
@@ -30,10 +35,10 @@ export async function POST(request: NextRequest) {
   if (!template[0]) return NextResponse.json({ error: 'Model inexistent.' }, { status: 404 })
   const id = parsed.data.id || crypto.randomUUID()
   if (parsed.data.id) {
-    const changed = Number(await prisma.$executeRaw`UPDATE "FormSubmission" SET "title"=${parsed.data.title}, "sourceType"=${parsed.data.sourceType || null}, "sourceId"=${parsed.data.sourceId || null}, "values"=${JSON.stringify(parsed.data.values)}::jsonb, "fieldSchema"=${JSON.stringify(parsed.data.fieldSchema)}::jsonb, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${businessId}`)
+    const changed = Number(await prisma.$executeRaw`UPDATE "FormSubmission" SET "title"=${parsed.data.title}, "sourceType"=${parsed.data.sourceType || null}, "sourceId"=${parsed.data.sourceId || null}, "values"=${JSON.stringify(parsed.data.values)}::jsonb, "fieldSchema"=${JSON.stringify(parsed.data.fieldSchema)}::jsonb, "stampSchema"=${JSON.stringify(parsed.data.stampSchema)}::jsonb, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${businessId}`)
     if (!changed) return NextResponse.json({ error: 'Completarea nu există.' }, { status: 404 })
   } else {
-    await prisma.$executeRaw`INSERT INTO "FormSubmission" ("id","businessId","formTemplateId","title","sourceType","sourceId","values","fieldSchema") VALUES (${id},${businessId},${parsed.data.formTemplateId},${parsed.data.title},${parsed.data.sourceType || null},${parsed.data.sourceId || null},${JSON.stringify(parsed.data.values)}::jsonb,${JSON.stringify(parsed.data.fieldSchema)}::jsonb)`
+    await prisma.$executeRaw`INSERT INTO "FormSubmission" ("id","businessId","formTemplateId","title","sourceType","sourceId","values","fieldSchema","stampSchema") VALUES (${id},${businessId},${parsed.data.formTemplateId},${parsed.data.title},${parsed.data.sourceType || null},${parsed.data.sourceId || null},${JSON.stringify(parsed.data.values)}::jsonb,${JSON.stringify(parsed.data.fieldSchema)}::jsonb,${JSON.stringify(parsed.data.stampSchema)}::jsonb)`
   }
   revalidatePath('/dashboard/formulare')
   return NextResponse.json({ id })
