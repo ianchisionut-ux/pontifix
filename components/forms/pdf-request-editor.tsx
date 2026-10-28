@@ -31,7 +31,7 @@ const FIELD_COLORS = [
 ] as const
 
 const transparentStampCache = new Map<string, Promise<string>>()
-function transparentStamp(key: string) {
+export function transparentStamp(key: string) {
   const cached = transparentStampCache.get(key)
   if (cached) return cached
   const result = new Promise<string>((resolve, reject) => {
@@ -56,7 +56,7 @@ function transparentStamp(key: string) {
   return result
 }
 
-function loadImage(src: string) {
+export function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image()
     image.onload = () => resolve(image)
@@ -88,7 +88,7 @@ const BINDINGS: ReadonlyArray<readonly [string, string]> = [
   ['project.certificateNumber', 'Proiect: Număr certificat'], ['project.certificateDate', 'Proiect: Data certificatului'],
 ]
 
-function boundValue(binding: string | undefined, connection?: ConnectionFormOption, project?: ProjectFormOption, identity?: IdentityCardRecord) {
+export function boundValue(binding: string | undefined, connection?: ConnectionFormOption, project?: ProjectFormOption, identity?: IdentityCardRecord) {
   if (!binding) return ''
   if (binding === 'system.today') return todayInBucharest()
   if (binding === 'identity.seriesNumber') return identity ? [identity.series, identity.number].filter(Boolean).join(' ') : ''
@@ -126,9 +126,10 @@ function PdfCanvas({ pdf, pageNumber }: { pdf: any; pageNumber: number }) {
   return <canvas ref={ref} className="block h-auto w-full bg-white" />
 }
 
-export function PdfRequestEditor({ template, initialSubmission, connections, projects, identityCards, canManage, onClose }: {
+export function PdfRequestEditor({ template, initialSubmission, defaultConnectionId, connections, projects, identityCards, canManage, onClose }: {
   template: FormTemplateDto
   initialSubmission?: FormSubmissionDto
+  defaultConnectionId?: string
   connections: ConnectionFormOption[]
   projects: ProjectFormOption[]
   identityCards: IdentityCardRecord[]
@@ -138,6 +139,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
   const router = useRouter()
   const { tr } = useLanguage()
   const isDeer = template.category === 'DEER'
+  const defaultConnection = isDeer && defaultConnectionId ? connections.find((item) => item.id === defaultConnectionId) : undefined
   const [pdf, setPdf] = useState<any>(null)
   const [pageCount, setPageCount] = useState(0)
   const [fields, setFields] = useState<FormField[]>(() => initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema)
@@ -147,16 +149,17 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
   const [selectedStampId, setSelectedStampId] = useState('')
   const [values, setValues] = useState<Record<string, string>>(() => {
     const saved = initialSubmission?.values || {}
-    return Object.fromEntries((initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema).map((field) => [field.id, saved[field.id] ?? (field.binding === 'system.today' ? todayInBucharest() : field.defaultValue ?? '')]))
+    return Object.fromEntries((initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema).map((field) => [field.id, saved[field.id] ?? (field.binding === 'system.today' ? todayInBucharest() : boundValue(field.binding, defaultConnection) || field.defaultValue || '')]))
   })
-  const [sourceId, setSourceId] = useState(initialSubmission?.sourceId ? `${initialSubmission.sourceType?.toLowerCase()}:${initialSubmission.sourceId}` : '')
+  const [sourceId, setSourceId] = useState(initialSubmission?.sourceId ? `${initialSubmission.sourceType?.toLowerCase()}:${initialSubmission.sourceId}` : defaultConnection ? `connection:${defaultConnection.id}` : '')
   const [submissionId, setSubmissionId] = useState(initialSubmission?.id || '')
-  const [title, setTitle] = useState(initialSubmission?.title || template.title)
+  const [title, setTitle] = useState(initialSubmission?.title || (defaultConnection ? `${template.title} - ${defaultConnection.fields.Beneficiar || defaultConnection.nib}` : template.title))
   const [layoutMode, setLayoutMode] = useState(false)
   const [selectedId, setSelectedId] = useState('')
   const [activePage, setActivePage] = useState(1)
   const [printPage, setPrintPage] = useState(1)
   const [busy, setBusy] = useState('')
+  const [saveNotice, setSaveNotice] = useState('')
   const [documentVersion, setDocumentVersion] = useState(0)
   const [error, setError] = useState('')
   const drag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; field: FormField; box: DOMRect } | null>(null)
@@ -184,7 +187,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
           if (!response.ok) throw new Error('PDF-ul nu a putut fi deschis.')
           return response.arrayBuffer()
         })
-        const loaded = await pdfjs.getDocument({ data }).promise
+        const loaded = await pdfjs.getDocument({ data, wasmUrl: '/pdfjs/wasm/' }).promise
         if (!cancelled) { setPdf(loaded); setPageCount(loaded.numPages) }
       } catch (cause) { if (!cancelled) setError(cause instanceof Error ? cause.message : 'PDF indisponibil.') }
     })()
@@ -324,11 +327,12 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
   }
 
   async function saveModel() {
-    setBusy('model'); setError('')
+    setBusy('model'); setError(''); setSaveNotice('')
     try {
       const response = await fetch(`/api/formulare/${encodeURIComponent(template.id)}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fieldSchema: fields, ...(isDeer ? { stampSchema: placements } : {}) }) })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'Modelul nu a putut fi salvat.')
+      setSaveNotice('Șablonul a fost salvat. Pentru a apărea la „Completări salvate”, alege un branșament și apasă „Salvează completarea”.')
       router.refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Modelul nu a putut fi salvat.') }
     finally { setBusy('') }
@@ -336,7 +340,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
 
   async function saveSubmission() {
     if (isDeer && !sourceId.startsWith('connection:')) return setError('Alege branșamentul pentru acest document DEER.')
-    setBusy('save'); setError('')
+    setBusy('save'); setError(''); setSaveNotice('')
     try {
       const response = await fetch('/api/formulare/submissions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
         id: submissionId || undefined, formTemplateId: template.id, title,
@@ -345,7 +349,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
       }) })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'Cererea nu a putut fi salvată.')
-      setSubmissionId(body.id); router.refresh()
+      setSubmissionId(body.id); setSaveNotice('Completarea a fost salvată și va apărea în lista „Completări salvate”.'); router.refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Cererea nu a putut fi salvată.') }
     finally { setBusy('') }
   }
@@ -448,9 +452,9 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
       {canManage && <button className={`btn-secondary inline-flex items-center gap-2 !py-2 ${layoutMode ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`} onClick={() => setLayoutMode((value) => !value)}><Settings2 size={16}/> {tr('Poziționare')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addField}><Plus size={16}/> {tr('Câmp')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addTodayField}><Plus size={16}/> Data de azi</button>}
-      {canManage && isDeer && <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy} onClick={saveModel}>{busy === 'model' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează șablonul</button>}
+      {canManage && isDeer && <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy} onClick={saveModel} title="Păstrează câmpurile și ștampilele pentru toate completările viitoare">{busy === 'model' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează șablonul</button>}
       {isDeer && <><select className="input-field !w-auto !py-2" aria-label="Alege semnătura sau ștampila" value={stampKey} onChange={(event) => setStampKey(event.target.value)}>{DEER_STAMPS.map((stamp) => <option key={stamp.key} value={stamp.key}>{stamp.label}</option>)}</select><button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf} onClick={addStamp}><Stamp size={16}/> Adaugă semnătură / ștampilă</button></>}
-      <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || (isDeer && !sourceId.startsWith('connection:'))} onClick={saveSubmission}>{busy === 'save' ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} {tr('Salvează')}</button>
+      <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || (isDeer && !sourceId.startsWith('connection:'))} onClick={saveSubmission}>{busy === 'save' ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} {isDeer ? 'Salvează completarea' : tr('Salvează')}</button>
       <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf || (isDeer && !sourceId.startsWith('connection:'))} onClick={() => downloadOrPrint(false)}><Download size={16}/> PDF</button>
       <select className="input-field !w-auto !py-2" aria-label={tr('Pagina pentru print')} value={printPage} onChange={(event) => setPrintPage(Number(event.target.value))}>
         {Array.from({ length: pageCount }, (_, index) => <option key={index + 1} value={index + 1}>{tr('Pagina')} {index + 1}</option>)}
@@ -459,6 +463,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
       <button className="btn-primary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf || (isDeer && !sourceId.startsWith('connection:'))} onClick={() => downloadOrPrint(true)}>{busy === 'print' ? <Loader2 className="animate-spin" size={16}/> : <Printer size={16}/>} {tr('Printează')}</button>
     </header>
     {isDeer && <div className="bg-blue-50 px-5 py-2 text-xs font-medium text-[#0d5d8b]">Alege branșamentul, completează câmpurile și selectează pagina înainte de a adăuga semnătura. Semnătura se poate trage și redimensiona.</div>}
+    {saveNotice && <div role="status" className="bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-800">{saveNotice}</div>}
     {error && <div className="bg-red-50 px-5 py-2 text-sm font-semibold text-red-700">{error}</div>}
     <div className="flex min-h-0 flex-1">
       <main className="min-w-0 flex-1 overflow-auto p-6">

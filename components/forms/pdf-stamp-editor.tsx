@@ -100,7 +100,7 @@ export function PdfStampEditor({ template, canManage, onClose }: { template: For
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
         const response = await fetch(documentUrl)
         if (!response.ok) throw new Error('PDF-ul nu a putut fi deschis.')
-        const loaded = await pdfjs.getDocument({ data: await response.arrayBuffer() }).promise
+        const loaded = await pdfjs.getDocument({ data: await response.arrayBuffer(), wasmUrl: '/pdfjs/wasm/' }).promise
         const metrics = await Promise.all(Array.from({ length: loaded.numPages }, async (_, index) => {
           const page = await loaded.getPage(index + 1)
           const viewport = page.getViewport({ scale: 1 })
