@@ -55,8 +55,13 @@ function loadImage(src: string) {
   })
 }
 
+function todayInBucharest() {
+  return new Intl.DateTimeFormat('ro-RO', { timeZone: 'Europe/Bucharest', day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date())
+}
+
 const BINDINGS: ReadonlyArray<readonly [string, string]> = [
   ['', 'Completare manuală'],
+  ['system.today', 'Data de azi (editabilă)'],
   ['connection.NIB', 'Branșament: NIB'],
   ['connection.sequenceNumber', 'Branșament: Număr de ordine'],
   ['connection.status', 'Branșament: Stadiu dosar'],
@@ -75,6 +80,7 @@ const BINDINGS: ReadonlyArray<readonly [string, string]> = [
 
 function boundValue(binding: string | undefined, connection?: ConnectionFormOption, project?: ProjectFormOption, identity?: IdentityCardRecord) {
   if (!binding) return ''
+  if (binding === 'system.today') return todayInBucharest()
   if (binding === 'identity.seriesNumber') return identity ? [identity.series, identity.number].filter(Boolean).join(' ') : ''
   if (binding.startsWith('identity.')) return identity?.[binding.replace('identity.', '') as keyof IdentityCardRecord] as string || ''
   if (binding.startsWith('project.')) return project?.[binding.replace('project.', '') as keyof ProjectFormOption] || ''
@@ -131,7 +137,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
   const [selectedStampId, setSelectedStampId] = useState('')
   const [values, setValues] = useState<Record<string, string>>(() => {
     const saved = initialSubmission?.values || {}
-    return Object.fromEntries((initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema).map((field) => [field.id, saved[field.id] ?? field.defaultValue ?? '']))
+    return Object.fromEntries((initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema).map((field) => [field.id, saved[field.id] ?? (field.binding === 'system.today' ? todayInBucharest() : field.defaultValue ?? '')]))
   })
   const [sourceId, setSourceId] = useState(initialSubmission?.sourceId ? `${initialSubmission.sourceType?.toLowerCase()}:${initialSubmission.sourceId}` : '')
   const [submissionId, setSubmissionId] = useState(initialSubmission?.id || '')
@@ -230,6 +236,13 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
     const id = `field_${Date.now()}`
     setFields((all) => [...all, { id, label, page: activePage, x: .1, y: .1, width: .25, height: .028, fontSize: 12 }])
     setValues((current) => ({ ...current, [id]: '' }))
+    setSelectedId(id); setLayoutMode(true)
+  }
+
+  function addTodayField() {
+    const id = `today_${crypto.randomUUID()}`
+    setFields((all) => [...all, { id, label: 'Data completării', binding: 'system.today', page: activePage, x: .1, y: .1, width: .2, height: .028, fontSize: 12 }])
+    setValues((current) => ({ ...current, [id]: todayInBucharest() }))
     setSelectedId(id); setLayoutMode(true)
   }
 
@@ -405,6 +418,7 @@ export function PdfRequestEditor({ template, initialSubmission, connections, pro
       {canManage && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
       {canManage && <button className={`btn-secondary inline-flex items-center gap-2 !py-2 ${layoutMode ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`} onClick={() => setLayoutMode((value) => !value)}><Settings2 size={16}/> {tr('Poziționare')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addField}><Plus size={16}/> {tr('Câmp')}</button>}
+      {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addTodayField}><Plus size={16}/> Data de azi</button>}
       {canManage && isDeer && <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy} onClick={saveModel}>{busy === 'model' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează șablonul</button>}
       {isDeer && <><select className="input-field !w-auto !py-2" aria-label="Alege semnătura sau ștampila" value={stampKey} onChange={(event) => setStampKey(event.target.value)}>{DEER_STAMPS.map((stamp) => <option key={stamp.key} value={stamp.key}>{stamp.label}</option>)}</select><button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf} onClick={addStamp}><Stamp size={16}/> Adaugă semnătură / ștampilă</button></>}
       <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || (isDeer && !sourceId.startsWith('connection:'))} onClick={saveSubmission}>{busy === 'save' ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} {tr('Salvează')}</button>
