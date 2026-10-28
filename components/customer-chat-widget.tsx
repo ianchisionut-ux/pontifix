@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { CheckCircle2, Loader2, MessageCircle, Send, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 
@@ -26,6 +27,7 @@ export function CustomerChatWidget() {
         <input name="name" className="input-field w-full" placeholder={tr('Nume și prenume')} required maxLength={120}/>
         <div className="grid grid-cols-2 gap-3"><input name="phone" className="input-field w-full" placeholder={tr('Telefon')}/><input name="email" type="email" className="input-field w-full" placeholder="E-mail"/></div>
         <textarea name="message" className="input-field min-h-28 w-full resize-y" placeholder={tr('Cu ce te putem ajuta?')} required maxLength={1500}/>
+        <p className="text-xs leading-5 text-slate-500">Folosim datele transmise pentru a răspunde solicitării. Vezi <Link href="/politica-de-confidentialitate" className="font-semibold text-[#0f679b] underline underline-offset-2 hover:text-[#082b4d]">politica de confidențialitate</Link>.</p>
         {error&&<p className="text-sm text-rose-600">{error}</p>}
         <button className="btn-primary flex w-full items-center justify-center gap-2" disabled={busy}>{busy?<Loader2 size={17} className="animate-spin"/>:<Send size={17}/>} {busy?tr('Se trimite...'):tr('Trimite mesajul')}</button>
       </form>}
