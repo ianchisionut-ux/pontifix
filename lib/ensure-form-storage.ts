@@ -55,7 +55,9 @@ async function ensureTable() {
             AND attname IN ('fieldSchema', 'stampSchema') AND attnum > 0 AND NOT attisdropped) = 2
           AND to_regclass('"FormTemplate_businessId_category_sortOrder_idx"') IS NOT NULL
           AND to_regclass('"FormSubmission"') IS NOT NULL
-          AND to_regclass('"FormSubmission_businessId_updatedAt_idx"') IS NOT NULL AS "ready"
+          AND to_regclass('"FormSubmission_businessId_updatedAt_idx"') IS NOT NULL
+          AND (SELECT COUNT(*) FROM pg_attribute WHERE attrelid = to_regclass('"FormSubmission"')
+            AND attname = 'stampSchema' AND attnum > 0 AND NOT attisdropped) = 1 AS "ready"
       `
       if (schema?.ready) return
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "FormTemplate" (
@@ -74,10 +76,12 @@ async function ensureTable() {
         "id" TEXT NOT NULL, "businessId" TEXT NOT NULL, "formTemplateId" TEXT NOT NULL,
         "title" TEXT NOT NULL, "sourceType" TEXT, "sourceId" TEXT,
         "values" JSONB NOT NULL DEFAULT '{}'::jsonb, "fieldSchema" JSONB NOT NULL DEFAULT '[]'::jsonb,
+        "stampSchema" JSONB NOT NULL DEFAULT '[]'::jsonb,
         "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
         CONSTRAINT "FormSubmission_pkey" PRIMARY KEY ("id")
       )`)
+      await prisma.$executeRawUnsafe(`ALTER TABLE "FormSubmission" ADD COLUMN IF NOT EXISTS "stampSchema" JSONB NOT NULL DEFAULT '[]'::jsonb`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FormSubmission_businessId_updatedAt_idx" ON "FormSubmission"("businessId", "updatedAt" DESC)`)
     })().catch((error) => { tableReady = null; throw error })
   }
@@ -97,11 +101,11 @@ export async function ensureFormStorage(businessId: string) {
 }
 
 export type FormTemplateDto = {
-  id: string; title: string; category: 'FORMULAR' | 'CERERE' | 'SEMNARE'
+  id: string; title: string; category: 'FORMULAR' | 'CERERE' | 'SEMNARE' | 'DEER'
   documentPathname: string; documentName: string; sortOrder: number
   fieldSchema: FormField[]; stampSchema: StampPlacement[]; updatedAt: string
 }
 export type FormSubmissionDto = {
   id: string; formTemplateId: string; title: string; sourceType: string | null; sourceId: string | null
-  values: Record<string, string>; fieldSchema: FormField[]; createdAt: string; updatedAt: string
+  values: Record<string, string>; fieldSchema: FormField[]; stampSchema: StampPlacement[]; createdAt: string; updatedAt: string
 }
