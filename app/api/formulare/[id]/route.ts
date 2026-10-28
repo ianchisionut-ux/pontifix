@@ -8,7 +8,7 @@ import { ensureFormStorage } from '@/lib/ensure-form-storage'
 const fieldSchema = z.array(z.object({
   id: z.string().min(1).max(100), label: z.string().max(180), page: z.number().int().min(1).max(50),
   x: z.number().min(0).max(1), y: z.number().min(0).max(1), width: z.number().min(.01).max(1),
-  height: z.number().min(.01).max(1), fontSize: z.number().min(6).max(40), multiline: z.boolean().optional(),
+  height: z.number().min(.01).max(1), fontSize: z.number().min(6).max(40), multiline: z.boolean().optional(), bold: z.boolean().optional(),
   binding: z.string().max(150).optional(), defaultValue: z.string().max(4000).optional(),
 })).max(250)
 const stampSchema = z.array(z.object({
