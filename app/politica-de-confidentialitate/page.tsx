@@ -10,17 +10,17 @@ export default function PrivacyPage() {
   return <LegalPage
     title="Politica de confidențialitate"
     description="Această politică explică ce date sunt prelucrate prin Elmont, de ce sunt necesare și ce drepturi au persoanele vizate."
-    updatedAt="13 august 2026"
+    updatedAt="28 octombrie 2026"
     sections={[
       { title: 'Cine prelucrează datele', content: <>
         <p>Elmont S.A. administrează utilizarea Elmont și stabilește scopurile prelucrării datelor introduse în platformă. Pentru întrebări privind confidențialitatea ne puteți contacta la <a className="font-semibold text-blue-600 hover:underline" href="mailto:elmont_zalau@yahoo.com">elmont_zalau@yahoo.com</a>.</p>
       </> },
       { title: 'Datele prelucrate', content: <>
         <p>În funcție de funcțiile utilizate, putem prelucra: nume și prenume, adresă de email, număr de telefon, funcție, departament, categorie profesională, program de lucru, pontaje, absențe și concedii.</p>
-        <p>Pentru gestiunea proiectelor pot fi prelucrate denumirea și datele proiectului, datele beneficiarului, numărul de telefon, stadiile avizelor și documentele încărcate. Sunt prelucrate și date tehnice necesare autentificării, securității și diagnosticării erorilor.</p>
+        <p>Pentru cererile de ofertă și mesajele trimise prin site prelucrăm datele de contact, tipul lucrării, localitatea, mesajul și, dacă este atașat, documentul ATR. Pentru gestiunea proiectelor pot fi prelucrate denumirea și datele proiectului, datele beneficiarului, stadiile avizelor și documentele încărcate. Sunt prelucrate și date tehnice necesare autentificării, securității și diagnosticării erorilor.</p>
       </> },
       { title: 'Scopurile prelucrării', content: <>
-        <p>Datele sunt utilizate pentru administrarea conturilor și a drepturilor de acces, evidența timpului de lucru, întocmirea foilor de prezență, gestionarea concediilor, realizarea rapoartelor și administrarea proiectelor și documentelor.</p>
+        <p>Datele din cererile de ofertă sunt folosite pentru analiza solicitării, pregătirea ofertei și contactarea solicitantului. Datele din mesajele trimise prin chatul public sunt folosite pentru a răspunde solicitării. Datele din portal sunt utilizate pentru administrarea conturilor și a drepturilor de acces, evidența timpului de lucru, întocmirea foilor de prezență, gestionarea concediilor, realizarea rapoartelor și administrarea proiectelor și documentelor.</p>
         <p>Dacă integrarea WhatsApp este activată, datele de contact sunt utilizate numai la inițiativa unui utilizator autorizat pentru transmiterea unei actualizări despre proiectul beneficiarului.</p>
       </> },
       { title: 'Temeiurile prelucrării', content: <>
