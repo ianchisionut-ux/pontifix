@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: '/dashboard/oferte', label: 'Oferte', icon: 'inbox' },
   { href: '/dashboard/contabilitate', label: 'Contabilitate', icon: 'contabilitate' },
   { href: '/dashboard/proiecte', label: 'Proiecte', icon: 'proiecte' },
+  { href: '/dashboard/licitatii', label: 'Licitații', icon: 'calendar' },
   { href: '/dashboard/bransamente', label: 'Branșamente', icon: 'bransamente' },
   { href: '/dashboard/formulare', label: 'Formulare', icon: 'formulare' },
   { href: '/dashboard/mesaje', label: 'Mesaje', icon: 'mesaje' },
