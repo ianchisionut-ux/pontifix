@@ -1,11 +1,13 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { CalendarDays, Check, ChevronLeft, ChevronRight, ExternalLink, FileUp, FolderKanban, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { uploadPresigned } from '@vercel/blob/client'
+import { CalendarDays, Check, ChevronLeft, ChevronRight, ExternalLink, FileUp, FolderKanban, Pencil, Plus, Search, Trash2, UploadCloud, X } from 'lucide-react'
 import type { Tender } from '@/lib/tenders'
 import { STANDARD_APPROVALS } from '@/lib/project-approvals'
+import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
-type View = 'month' | 'week' | 'day'
+type View = 'year' | 'month' | 'week' | 'day'
 type Draft = Pick<Tender, 'title' | 'noticeNumber' | 'contractingAuthority' | 'procedureType' | 'cpvCode' | 'publicationDate' | 'deadline' | 'estimatedValue' | 'currency' | 'status' | 'seapUrl' | 'notes'>
 const WEEKDAYS = ['Luni', 'Marți', 'Miercuri', 'Joi', 'Vineri', 'Sâmbătă', 'Duminică']
 const STATUS: Record<string, { label: string; style: string }> = {
@@ -41,6 +43,7 @@ export function TendersManager({ initialTenders, today, canManage, canConvert }:
   const [conversionApprovals, setConversionApprovals] = useState<string[]>([])
   const [conversionCustomApprovals, setConversionCustomApprovals] = useState('')
   const [importing, setImporting] = useState(false)
+  const [uploadingInstructions, setUploadingInstructions] = useState(false)
   const [importSummary, setImportSummary] = useState('')
   const importRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
@@ -54,11 +57,11 @@ export function TendersManager({ initialTenders, today, canManage, canConvert }:
     for (const item of visible) grouped.set(item.deadline.slice(0, 10), [...(grouped.get(item.deadline.slice(0, 10)) || []), item])
     return grouped
   }, [visible])
-  const first = view === 'month' ? monday(new Date(focus.getFullYear(), focus.getMonth(), 1, 12)) : view === 'week' ? monday(focus) : dayDate(key(focus))
-  const days = Array.from({ length: view === 'month' ? 42 : view === 'week' ? 7 : 1 }, (_, i) => addDays(first, i))
-  const heading = view === 'month' ? formatDate(focus, { month: 'long', year: 'numeric' }) : view === 'week' ? `${formatDate(days[0], { day: 'numeric', month: 'short' })} – ${formatDate(days[6], { day: 'numeric', month: 'short', year: 'numeric' })}` : formatDate(focus, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+  const first = view === 'month' || view === 'year' ? monday(new Date(focus.getFullYear(), focus.getMonth(), 1, 12)) : view === 'week' ? monday(focus) : dayDate(key(focus))
+  const days = Array.from({ length: view === 'year' ? 0 : view === 'month' ? 42 : view === 'week' ? 7 : 1 }, (_, i) => addDays(first, i))
+  const heading = view === 'year' ? String(focus.getFullYear()) : view === 'month' ? formatDate(focus, { month: 'long', year: 'numeric' }) : view === 'week' ? `${formatDate(days[0], { day: 'numeric', month: 'short' })} – ${formatDate(days[6], { day: 'numeric', month: 'short', year: 'numeric' })}` : formatDate(focus, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   function move(amount: number) {
-    setFocus(current => view === 'month' ? new Date(current.getFullYear(), current.getMonth() + amount, Math.min(current.getDate(), 28), 12) : addDays(current, amount * (view === 'week' ? 7 : 1)))
+    setFocus(current => view === 'year' ? new Date(current.getFullYear() + amount, current.getMonth(), 1, 12) : view === 'month' ? new Date(current.getFullYear(), current.getMonth() + amount, Math.min(current.getDate(), 28), 12) : addDays(current, amount * (view === 'week' ? 7 : 1)))
   }
   function openNew(date = focus) { setEditing(null); setDraft(emptyDraft(date)); setError('') }
   function openEdit(item: Tender) { setSelected(null); setEditing(item); setDraft({ title: item.title, noticeNumber: item.noticeNumber, contractingAuthority: item.contractingAuthority, procedureType: item.procedureType, cpvCode: item.cpvCode, publicationDate: item.publicationDate, deadline: item.deadline, estimatedValue: item.estimatedValue, currency: item.currency, status: item.status, seapUrl: item.seapUrl, notes: item.notes }); setError('') }
@@ -132,28 +135,50 @@ export function TendersManager({ initialTenders, today, canManage, canConvert }:
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Proiectul nu a putut fi creat.') }
     finally { setSaving(false) }
   }
+  async function uploadInstructions(item: Tender, file: File | undefined) {
+    if (!file) return
+    if (!/\.pdf$/i.test(file.name)) { setError('Alege un fișier PDF.'); return }
+    if (file.size > 20 * 1024 * 1024) { setError('PDF-ul poate avea maximum 20 MB.'); return }
+    setUploadingInstructions(true); setError('')
+    try {
+      const signature = new TextDecoder().decode(await file.slice(0, 1024).arrayBuffer())
+      if (!signature.includes('%PDF-')) throw new Error('Fișierul selectat nu este un PDF valid.')
+      const pathname = `tenders/${item.id}/instructions/${crypto.randomUUID()}/instructions.pdf`
+      const uploadFile = file.type === 'application/pdf' ? file : new File([file], file.name, { type: 'application/pdf' })
+      const blob = await uploadPresigned(pathname, uploadFile, { access: 'private', handleUploadUrl: '/api/tenders/upload' })
+      const response = await fetch(`/api/tenders/${item.id}/instructions`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pathname: blob.pathname, name: file.name }) })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Fișa de instrucțiuni nu a putut fi salvată.')
+      setTenders(data)
+      setSelected(data.find((entry: Tender) => entry.id === item.id) || null)
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Fișa de instrucțiuni nu a putut fi încărcată.') }
+    finally { setUploadingInstructions(false) }
+  }
 
   return <div className="flex min-h-[calc(100dvh-6rem)] flex-col gap-4 text-[#082b4d]">
     <header className="flex flex-wrap items-end justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[.16em] text-[#197fb5]">Achiziții publice</p><h1 className="mt-1 text-3xl font-bold">Licitații</h1><p className="mt-1 text-sm text-slate-500">Termenele și informațiile importante din SEAP, într-un singur calendar.</p></div>{canManage && <div className="flex flex-wrap gap-2"><input ref={importRef} type="file" accept=".xlsx,.csv" className="hidden" onChange={event => importFile(event.target.files?.[0])} /><button type="button" className="btn-secondary inline-flex items-center gap-2" disabled={importing} onClick={() => importRef.current?.click()}><FileUp size={17}/>{importing ? 'Se importă…' : 'Import Excel / CSV'}</button><button type="button" className="btn-primary inline-flex items-center gap-2" onClick={() => openNew()}><Plus size={17} /> Adaugă licitație</button></div>}</header>
     {importSummary && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{importSummary}</p>}
-    <section className="card flex flex-1 flex-col overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4"><div className="flex items-center gap-2"><CalendarDays className="text-[#197fb5]" size={21} /><h2 className="text-lg font-bold capitalize">{heading}</h2></div><div className="flex flex-wrap items-center gap-2"><button type="button" className="btn-secondary !px-3" onClick={() => move(-1)} aria-label="Perioada anterioară"><ChevronLeft size={18}/></button><button type="button" className="btn-secondary" onClick={() => setFocus(dayDate(today))}>Azi</button><button type="button" className="btn-secondary !px-3" onClick={() => move(1)} aria-label="Perioada următoare"><ChevronRight size={18}/></button><div className="ml-1 flex rounded-xl border border-slate-200 p-1">{([['month','Lună'],['week','Săptămână'],['day','Zi']] as const).map(([value,label]) => <button key={value} type="button" onClick={() => setView(value)} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === value ? 'bg-[#0d5d8b] text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{label}</button>)}</div></div></div>
+    <section className="card flex flex-1 flex-col overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4"><div className="flex items-center gap-2"><CalendarDays className="text-[#197fb5]" size={21} /><h2 className="text-lg font-bold capitalize">{heading}</h2></div><div className="flex flex-wrap items-center gap-2"><button type="button" className="btn-secondary !px-3" onClick={() => move(-1)} aria-label="Perioada anterioară"><ChevronLeft size={18}/></button><button type="button" className="btn-secondary" onClick={() => setFocus(dayDate(today))}>Azi</button><button type="button" className="btn-secondary !px-3" onClick={() => move(1)} aria-label="Perioada următoare"><ChevronRight size={18}/></button><div className="ml-1 flex rounded-xl border border-slate-200 p-1">{([['year','An'],['month','Lună'],['week','Săptămână'],['day','Zi']] as const).map(([value,label]) => <button key={value} type="button" onClick={() => setView(value)} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === value ? 'bg-[#0d5d8b] text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{label}</button>)}</div></div></div>
       <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3"><Search size={17} className="text-slate-400"/><input className="w-full bg-transparent text-sm outline-none" value={search} onChange={event => setSearch(event.target.value)} placeholder="Caută după denumire, număr SEAP, autoritate sau CPV" /></div>
-      <div className="flex flex-1 flex-col overflow-x-auto"><div className={`flex flex-1 flex-col ${view === 'day' ? 'min-w-[420px]' : 'min-w-[800px]'}`}>
+      {view === 'year' ? <YearOverview year={focus.getFullYear()} today={today} byDay={byDay} onMonth={month => { setFocus(new Date(focus.getFullYear(), month, 1, 12)); setView('month') }} onDay={date => { setFocus(date); setView('day') }} onTender={setSelected} /> : <div className="flex flex-1 flex-col overflow-x-auto"><div className={`flex flex-1 flex-col ${view === 'day' ? 'min-w-[420px]' : 'min-w-[800px]'}`}>
         {view !== 'day' && <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">{WEEKDAYS.map(name => <div key={name} className="px-2 py-1.5 text-center text-xs font-bold text-slate-500">{name}</div>)}</div>}
         <div className={`grid flex-1 ${view === 'day' ? 'grid-cols-1' : view === 'week' ? 'grid-cols-7' : 'grid-cols-7 grid-rows-6'}`}>{days.map(date => {
           const items = byDay.get(key(date)) || []
           const isToday = key(date) === today
           return <div key={key(date)} className={`${view === 'day' ? 'min-h-[360px]' : view === 'week' ? 'min-h-[120px]' : 'min-h-[88px]'} border-b border-r border-slate-200 p-1.5 ${date.getMonth() !== focus.getMonth() && view === 'month' ? 'bg-slate-50/70' : 'bg-white'}`}>
             <div className="mb-1 flex items-center"><button type="button" onClick={() => { setFocus(date); setView('day') }} className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday ? 'bg-[#0d5d8b] text-white' : 'hover:bg-slate-100'}`}>{date.getDate()}</button></div>
-            <div className="space-y-1">{items.map(item => <button type="button" key={item.id} title={item.title} onClick={() => setSelected(item)} className={`w-full rounded-lg border px-1.5 py-1 text-left text-xs ${STATUS[item.status]?.style || STATUS.NESELECTATA.style}`}><span className="flex items-start gap-1 font-bold">{item.status === 'INTERES' && <Check size={18} strokeWidth={4} className="shrink-0 text-emerald-600" aria-label="Interes" />}<span className="line-clamp-2 min-w-0 break-words">{item.title}</span></span></button>)}</div>
+            <div className="space-y-1">{items.map(item => <button type="button" key={item.id} onClick={() => setSelected(item)} className={`w-full rounded-lg border px-1.5 py-1 text-left text-xs ${STATUS[item.status]?.style || STATUS.NESELECTATA.style}`}><span className="flex items-start gap-1 font-bold">{item.status === 'INTERES' && <Check size={18} strokeWidth={4} className="shrink-0 text-emerald-600" aria-label="Interes" />}<span className="line-clamp-2 min-w-0 break-words">{item.title}</span></span></button>)}</div>
           </div>
         })}</div>
-      </div></div>
+      </div></div>}
     </section>
     {selected && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setSelected(null) }}>
-      <div role="dialog" aria-modal="true" aria-label="Detalii licitație" className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl">
-        <div className="flex justify-between gap-3"><div><span className={`rounded-lg border px-2 py-1 text-xs font-bold ${STATUS[selected.status]?.style}`}>{STATUS[selected.status]?.label}</span><h2 className="mt-3 text-xl font-bold">{selected.title}</h2></div><button onClick={() => setSelected(null)} aria-label="Închide"><X size={20}/></button></div>
-        <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">{[['Număr SEAP',selected.noticeNumber],['Autoritate contractantă',selected.contractingAuthority],['Termen depunere',selected.deadline.replace('T',' · ')],['Valoare estimată',selected.estimatedValue === null ? null : `${selected.estimatedValue.toLocaleString('ro-RO')} ${selected.currency}`],['Tip procedură',selected.procedureType],['Cod CPV',selected.cpvCode],['Data publicării',selected.publicationDate],['Note',selected.notes]].filter(([,value]) => value).map(([label,value]) => <div key={label} className="rounded-xl bg-slate-50 p-3"><span className="block text-xs font-semibold text-slate-500">{label}</span><span className="mt-1 block whitespace-pre-wrap">{value}</span></div>)}</div>
+      <div role="dialog" aria-modal="true" aria-label="Detalii licitație" className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4"><span className={`rounded-lg border px-2 py-1 text-xs font-bold ${STATUS[selected.status]?.style}`}>{STATUS[selected.status]?.label}</span><button type="button" onClick={() => setSelected(null)} aria-label="Închide" className="rounded-full p-2 hover:bg-slate-100"><X size={22}/></button></div>
+        <h2 className="mt-4 break-words text-2xl font-bold leading-snug sm:text-3xl">{selected.title}</h2>
+        <div className="mt-6 grid gap-3 text-sm sm:grid-cols-2">{[['Număr SEAP',selected.noticeNumber],['Autoritate contractantă',selected.contractingAuthority],['Termen limită de depunere',selected.deadline.replace('T',' · ')],['Valoare estimată',selected.estimatedValue === null ? null : `${selected.estimatedValue.toLocaleString('ro-RO')} ${selected.currency}`],['Tip procedură',selected.procedureType],['Cod CPV',selected.cpvCode],['Data publicării',selected.publicationDate]].map(([label,value]) => <div key={label} className="rounded-xl bg-slate-50 p-4"><span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span><span className="mt-1 block break-words font-semibold">{value || '—'}</span></div>)}</div>
+        <div className="mt-3 rounded-xl bg-slate-50 p-4 text-sm"><span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Note / documente necesare</span><span className="mt-1 block whitespace-pre-wrap break-words">{selected.notes || '—'}</span></div>
+        <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-3"><span className="text-xs font-bold text-slate-500">Fișa de instrucțiuni</span><div className="mt-2 flex flex-wrap items-center gap-2">{canManage && <label className={`btn-secondary inline-flex cursor-pointer items-center gap-2 ${uploadingInstructions ? 'pointer-events-none opacity-50' : ''}`}><UploadCloud size={16}/>{uploadingInstructions ? 'Se încarcă…' : selected.instructionPdfPathname ? 'Înlocuiește PDF' : 'Încarcă PDF'}<input type="file" accept="application/pdf,.pdf" disabled={uploadingInstructions} className="hidden" onChange={event => { const file = event.target.files?.[0]; event.currentTarget.value = ''; uploadInstructions(selected, file) }}/></label>}{selected.instructionPdfPathname && <SecurePdfViewerButton url={`/api/tenders/${selected.id}/instructions`} title={`Fișa de instrucțiuni · ${selected.title}`} className="btn-secondary inline-flex items-center gap-2">Vizualizează PDF</SecurePdfViewerButton>}{selected.instructionPdfName && <span className="max-w-full truncate text-xs text-slate-500" title={selected.instructionPdfName}>{selected.instructionPdfName}</span>}</div></div>
         <div className="mt-5 flex flex-wrap items-center gap-2">
           {canManage && <button type="button" title="Marchează sau elimină interesul" aria-label={selected.status === 'INTERES' ? 'Elimină marcajul de interes' : 'Marchează interesul'} aria-pressed={selected.status === 'INTERES'} disabled={saving} onClick={() => toggleInterest(selected)} className={`flex h-11 w-11 items-center justify-center rounded-xl border-2 ${selected.status === 'INTERES' ? 'border-emerald-600 bg-emerald-50 text-emerald-700' : 'border-slate-300 text-slate-400 hover:border-emerald-500 hover:text-emerald-600'}`}><Check size={27} strokeWidth={4}/></button>}
           {selected.seapUrl && <a className="btn-secondary inline-flex items-center gap-2" href={selected.seapUrl} target="_blank" rel="noopener noreferrer">Deschide în SEAP <ExternalLink size={15}/></a>}
@@ -197,4 +222,24 @@ export function TendersManager({ initialTenders, today, canManage, canConvert }:
 
 function Field({ label, children, wide = false }: { label: string; children: React.ReactNode; wide?: boolean }) {
   return <label className={`block text-xs font-bold text-slate-600 ${wide ? 'sm:col-span-2' : ''}`}>{label}<div className="mt-1 [&_input]:w-full [&_input]:rounded-xl [&_input]:border [&_input]:border-slate-200 [&_input]:px-3 [&_input]:py-2.5 [&_input]:text-sm [&_select]:w-full [&_select]:rounded-xl [&_select]:border [&_select]:border-slate-200 [&_select]:px-3 [&_select]:py-2.5 [&_select]:text-sm [&_textarea]:w-full [&_textarea]:rounded-xl [&_textarea]:border [&_textarea]:border-slate-200 [&_textarea]:px-3 [&_textarea]:py-2.5 [&_textarea]:text-sm">{children}</div></label>
+}
+
+function YearOverview({ year, today, byDay, onMonth, onDay, onTender }: { year: number; today: string; byDay: Map<string, Tender[]>; onMonth: (month: number) => void; onDay: (date: Date) => void; onTender: (tender: Tender) => void }) {
+  return <div className="flex-1 overflow-y-auto p-3"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">{Array.from({ length: 12 }, (_, month) => {
+    const start = monday(new Date(year, month, 1, 12))
+    return <section key={month} className="rounded-xl border border-slate-200 bg-white p-3">
+      <button type="button" onClick={() => onMonth(month)} className="mb-3 text-base font-bold capitalize text-[#0d5d8b] hover:underline">{formatDate(new Date(year, month, 1, 12), { month: 'long' })}</button>
+      <div className="grid grid-cols-7 gap-0.5 text-center">{['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((label, index) => <span key={index} className="pb-1 text-[10px] font-bold text-slate-400">{label}</span>)}
+        {Array.from({ length: 42 }, (_, index) => {
+          const date = addDays(start, index)
+          const dateKey = key(date)
+          const items = byDay.get(dateKey) || []
+          const inMonth = date.getMonth() === month
+          const interested = items.some(item => item.status === 'INTERES')
+          return <button key={dateKey} type="button" disabled={!inMonth} aria-label={`${formatDate(date, { day: 'numeric', month: 'long' })}: ${items.length} licitații`} onClick={() => items.length === 1 ? onTender(items[0]) : onDay(date)} className={`flex min-h-8 items-center justify-center gap-0.5 rounded-md text-[11px] font-semibold ${!inMonth ? 'text-slate-300' : interested ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : items.length ? 'bg-sky-50 text-sky-800 hover:bg-sky-100' : 'text-slate-700 hover:bg-slate-100'} ${dateKey === today ? 'ring-1 ring-[#0d5d8b]' : ''}`}>
+            {date.getDate()}{interested ? <Check size={12} strokeWidth={4} /> : items.length ? <span className="rounded-full bg-sky-600 px-1 text-[9px] text-white">{items.length}</span> : null}
+          </button>
+        })}</div>
+    </section>
+  })}</div></div>
 }

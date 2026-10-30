@@ -15,6 +15,8 @@ export type Tender = {
   seapUrl: string | null
   notes: string | null
   projectId: string | null
+  instructionPdfPathname: string | null
+  instructionPdfName: string | null
   createdAt: string
   updatedAt: string
 }
@@ -45,10 +47,12 @@ export function ensureTenderStorage() {
       "seapUrl" TEXT,
       "notes" TEXT,
       "projectId" TEXT,
+      "instructionPdfPathname" TEXT,
+      "instructionPdfName" TEXT,
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`)
-    await prisma.$executeRawUnsafe('ALTER TABLE "Tender" ADD COLUMN IF NOT EXISTS "projectId" TEXT')
+    await prisma.$executeRawUnsafe('ALTER TABLE "Tender" ADD COLUMN IF NOT EXISTS "projectId" TEXT, ADD COLUMN IF NOT EXISTS "instructionPdfPathname" TEXT, ADD COLUMN IF NOT EXISTS "instructionPdfName" TEXT')
     await prisma.$executeRawUnsafe('CREATE INDEX IF NOT EXISTS "Tender_business_deadline_idx" ON "Tender" ("businessId", "deadline")')
   })().catch(error => { ready = null; throw error })
   return ready
@@ -59,7 +63,7 @@ export async function listTenders(businessId: string): Promise<Tender[]> {
   const rows = await prisma.$queryRaw<TenderRow[]>`
     SELECT "id", "title", "noticeNumber", "contractingAuthority", "procedureType", "cpvCode",
       "publicationDate", "deadline", "estimatedValue", "currency", "status", "seapUrl",
-      "notes", "projectId", "createdAt", "updatedAt"
+      "notes", "projectId", "instructionPdfPathname", "instructionPdfName", "createdAt", "updatedAt"
     FROM "Tender" WHERE "businessId" = ${businessId}
     ORDER BY "deadline" ASC, "createdAt" DESC
   `
