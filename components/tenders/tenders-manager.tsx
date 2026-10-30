@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { uploadPresigned } from '@vercel/blob/client'
 import { CalendarDays, Check, ChevronLeft, ChevronRight, ExternalLink, FileUp, FolderKanban, Pencil, Plus, Search, Trash2, UploadCloud, X } from 'lucide-react'
 import type { Tender } from '@/lib/tenders'
@@ -33,6 +34,8 @@ export function TendersManager({ initialTenders, today, canManage, canConvert }:
   const [focus, setFocus] = useState(() => dayDate(today))
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Tender | null>(null)
+  const [hovered, setHovered] = useState<{ item: Tender; left: number; top: number; width: number } | null>(null)
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [editing, setEditing] = useState<Tender | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
   const [saving, setSaving] = useState(false)
@@ -47,6 +50,24 @@ export function TendersManager({ initialTenders, today, canManage, canConvert }:
   const [importSummary, setImportSummary] = useState('')
   const importRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
+
+  function showHover(item: Tender, element: HTMLElement) {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    const rect = element.getBoundingClientRect()
+    const width = Math.min(440, window.innerWidth - 24)
+    const left = rect.right + width + 12 <= window.innerWidth ? rect.right + 8 : Math.max(12, rect.left - width - 8)
+    const top = Math.max(12, Math.min(rect.top, window.innerHeight - Math.min(480, window.innerHeight * 0.72) - 12))
+    setHovered({ item, left, top, width })
+  }
+  function scheduleHideHover() {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    hoverTimer.current = setTimeout(() => setHovered(null), 180)
+  }
+  function openTender(item: Tender) {
+    if (hoverTimer.current) clearTimeout(hoverTimer.current)
+    setHovered(null)
+    setSelected(item)
+  }
 
   const visible = useMemo(() => {
     const q = search.trim().toLocaleLowerCase('ro-RO')
@@ -160,18 +181,25 @@ export function TendersManager({ initialTenders, today, canManage, canConvert }:
     {importSummary && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{importSummary}</p>}
     <section className="card flex flex-1 flex-col overflow-hidden"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 p-4"><div className="flex items-center gap-2"><CalendarDays className="text-[#197fb5]" size={21} /><h2 className="text-lg font-bold capitalize">{heading}</h2></div><div className="flex flex-wrap items-center gap-2"><button type="button" className="btn-secondary !px-3" onClick={() => move(-1)} aria-label="Perioada anterioară"><ChevronLeft size={18}/></button><button type="button" className="btn-secondary" onClick={() => setFocus(dayDate(today))}>Azi</button><button type="button" className="btn-secondary !px-3" onClick={() => move(1)} aria-label="Perioada următoare"><ChevronRight size={18}/></button><div className="ml-1 flex rounded-xl border border-slate-200 p-1">{([['year','An'],['month','Lună'],['week','Săptămână'],['day','Zi']] as const).map(([value,label]) => <button key={value} type="button" onClick={() => setView(value)} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${view === value ? 'bg-[#0d5d8b] text-white' : 'text-slate-600 hover:bg-slate-100'}`}>{label}</button>)}</div></div></div>
       <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3"><Search size={17} className="text-slate-400"/><input className="w-full bg-transparent text-sm outline-none" value={search} onChange={event => setSearch(event.target.value)} placeholder="Caută după denumire, număr SEAP, autoritate sau CPV" /></div>
-      {view === 'year' ? <YearOverview year={focus.getFullYear()} today={today} byDay={byDay} onMonth={month => { setFocus(new Date(focus.getFullYear(), month, 1, 12)); setView('month') }} onDay={date => { setFocus(date); setView('day') }} onTender={setSelected} /> : <div className="flex flex-1 flex-col overflow-x-auto"><div className={`flex flex-1 flex-col ${view === 'day' ? 'min-w-[420px]' : 'min-w-[800px]'}`}>
+      {view === 'year' ? <YearOverview year={focus.getFullYear()} today={today} byDay={byDay} onMonth={month => { setFocus(new Date(focus.getFullYear(), month, 1, 12)); setView('month') }} onDay={date => { setFocus(date); setView('day') }} onTender={openTender} /> : <div className="flex flex-1 flex-col overflow-x-auto"><div className={`flex flex-1 flex-col ${view === 'day' ? 'min-w-[420px]' : 'min-w-[800px]'}`}>
         {view !== 'day' && <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">{WEEKDAYS.map(name => <div key={name} className="px-2 py-1.5 text-center text-xs font-bold text-slate-500">{name}</div>)}</div>}
         <div className={`grid flex-1 ${view === 'day' ? 'grid-cols-1' : view === 'week' ? 'grid-cols-7' : 'grid-cols-7 grid-rows-6'}`}>{days.map(date => {
           const items = byDay.get(key(date)) || []
           const isToday = key(date) === today
-          return <div key={key(date)} className={`${view === 'day' ? 'min-h-[360px]' : view === 'week' ? 'min-h-[120px]' : 'min-h-[88px]'} border-b border-r border-slate-200 p-1.5 ${date.getMonth() !== focus.getMonth() && view === 'month' ? 'bg-slate-50/70' : 'bg-white'}`}>
-            <div className="mb-1 flex items-center"><button type="button" onClick={() => { setFocus(date); setView('day') }} className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday ? 'bg-[#0d5d8b] text-white' : 'hover:bg-slate-100'}`}>{date.getDate()}</button></div>
-            <div className="space-y-1">{items.map(item => <button type="button" key={item.id} onClick={() => setSelected(item)} className={`w-full rounded-lg border px-1.5 py-1 text-left text-xs ${STATUS[item.status]?.style || STATUS.NESELECTATA.style}`}><span className="flex items-start gap-1 font-bold">{item.status === 'INTERES' && <Check size={18} strokeWidth={4} className="shrink-0 text-emerald-600" aria-label="Interes" />}<span className="line-clamp-2 min-w-0 break-words">{item.title}</span></span></button>)}</div>
+          return <div key={key(date)} className={`flex min-h-0 flex-col ${view === 'day' ? 'min-h-[360px]' : view === 'week' ? 'min-h-[120px]' : 'min-h-[88px]'} border-b border-r border-slate-200 p-1.5 ${date.getMonth() !== focus.getMonth() && view === 'month' ? 'bg-slate-50/70' : 'bg-white'}`}>
+            <div className="mb-1 flex shrink-0 items-center"><button type="button" onClick={() => { setHovered(null); setFocus(date); setView('day') }} className={`flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${isToday ? 'bg-[#0d5d8b] text-white' : 'hover:bg-slate-100'}`}>{date.getDate()}</button></div>
+            <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden">{items.map(item => <button type="button" key={item.id} onClick={() => openTender(item)} onMouseEnter={event => showHover(item, event.currentTarget)} onMouseLeave={scheduleHideHover} onFocus={event => showHover(item, event.currentTarget)} onBlur={scheduleHideHover} className={`min-h-0 w-full flex-1 overflow-hidden rounded-lg border px-1.5 py-1 text-left text-xs ${STATUS[item.status]?.style || STATUS.NESELECTATA.style}`}><span className="flex h-full min-h-0 items-start gap-1 overflow-hidden font-bold">{item.status === 'INTERES' && <Check size={18} strokeWidth={4} className="shrink-0 text-emerald-600" aria-label="Interes" />}<span className="min-w-0 overflow-hidden break-words [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:10]">{item.title}</span></span></button>)}</div>
           </div>
         })}</div>
       </div></div>}
     </section>
+    {hovered && !selected && createPortal(<div role="tooltip" onMouseEnter={() => { if (hoverTimer.current) clearTimeout(hoverTimer.current) }} onMouseLeave={scheduleHideHover} style={{ left: hovered.left, top: hovered.top, width: hovered.width }} className="fixed z-[80] max-h-[72vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-2xl">
+      <div className="flex items-start justify-between gap-3"><h3 className="break-words text-base font-bold leading-snug text-[#082b4d]">{hovered.item.title}</h3><span className={`shrink-0 rounded-lg border px-2 py-1 text-[11px] font-bold ${STATUS[hovered.item.status]?.style || STATUS.NESELECTATA.style}`}>{STATUS[hovered.item.status]?.label}</span></div>
+      <dl className="mt-3 grid gap-x-4 gap-y-2 border-t border-slate-100 pt-3 sm:grid-cols-2">{[['Număr SEAP', hovered.item.noticeNumber], ['Autoritate contractantă', hovered.item.contractingAuthority], ['Termen limită', hovered.item.deadline.replace('T', ' · ')], ['Valoare estimată', hovered.item.estimatedValue === null ? null : `${hovered.item.estimatedValue.toLocaleString('ro-RO')} ${hovered.item.currency}`], ['Tip procedură', hovered.item.procedureType], ['Cod CPV', hovered.item.cpvCode], ['Data publicării', hovered.item.publicationDate], ['Fișa de instrucțiuni', hovered.item.instructionPdfName], ['Proiect asociat', hovered.item.projectId]].map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-[11px] font-semibold uppercase text-slate-500">{label}</dt><dd className="break-words font-semibold text-[#082b4d]">{value || '—'}</dd></div>)}</dl>
+      {hovered.item.notes && <div className="mt-3 border-t border-slate-100 pt-3"><p className="text-[11px] font-semibold uppercase text-slate-500">Note / documente necesare</p><p className="mt-1 whitespace-pre-wrap break-words text-[#082b4d]">{hovered.item.notes}</p></div>}
+      {hovered.item.seapUrl && <p className="mt-3 truncate border-t border-slate-100 pt-3 text-xs text-[#0d5d8b]">{hovered.item.seapUrl}</p>}
+      <p className="mt-3 text-xs text-slate-500">Click pentru fișa completă și acțiuni.</p>
+    </div>, document.body)}
     {selected && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setSelected(null) }}>
       <div role="dialog" aria-modal="true" aria-label="Detalii licitație" className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
         <div className="flex items-start justify-between gap-4"><span className={`rounded-lg border px-2 py-1 text-xs font-bold ${STATUS[selected.status]?.style}`}>{STATUS[selected.status]?.label}</span><button type="button" onClick={() => setSelected(null)} aria-label="Închide" className="rounded-full p-2 hover:bg-slate-100"><X size={22}/></button></div>
