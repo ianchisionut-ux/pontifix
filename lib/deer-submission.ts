@@ -4,17 +4,17 @@ export const DEER_CONTACT_EMAIL = 'elmont_zalau@yahoo.com'
 
 export const DEER_ACTIONS = [
   ['completareDocumentatie', 'Completare documentație'],
-  ['cerereNotificareIncheiereContractRacordare', 'Cerere / notificare încheiere contract de racordare'],
-  ['alteDocumenteRacordare', 'Alte documente racordare'],
+  ['cerereNotificareIncheiereContractRacordare', 'Cerere/Notificare încheiere Contract de Racordare'],
+  ['alteDocumenteRacordare', 'Alte Documente Racordare'],
   ['incarcareDIU', 'Încărcare DIU'],
   ['incarcareInstiintareBMP', 'Încărcare înștiințare – în vederea montării BMP'],
-  ['incarcareDosarReceptie', 'Încărcare dosar recepție branșament'],
-  ['incarcareDosarReceptieBMP', 'Încărcare dosar recepție BMP (constructor AC)'],
-  ['incarcareDosarRestituire', 'Încărcare dosar restituire'],
-  ['incarcarePVProbe', 'Încărcare PV probe și PIF'],
+  ['incarcareDosarReceptie', 'Încărcare Dosar Recepție Branșament'],
+  ['incarcareDosarReceptieBMP', 'Încărcare Dosar Recepție BMP (constructor AC)'],
+  ['incarcareDosarRestituire', 'Încărcare Dosar Restituire'],
+  ['incarcarePVProbe', 'Încărcare PV Probe și PIF'],
   ['alteDocumenteCOR', 'Alte documente COR'],
   ['alteDocumenteCMI', 'Alte documente CMI'],
-  ['alteDocumenteProsumator', 'Alte documente prosumator'],
+  ['alteDocumenteProsumator', 'Alte documente Prosumator'],
 ] as const
 
 export const DEER_STATUSES = ['DRAFT', 'READY', 'SUBMITTED', 'REGISTERED', 'COMPLETED'] as const
