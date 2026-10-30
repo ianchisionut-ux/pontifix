@@ -40,7 +40,7 @@ export function ensureTenderStorage() {
       "deadline" TEXT NOT NULL,
       "estimatedValue" DOUBLE PRECISION,
       "currency" TEXT NOT NULL DEFAULT 'RON',
-      "status" TEXT NOT NULL DEFAULT 'INTERES',
+      "status" TEXT NOT NULL DEFAULT 'NESELECTATA',
       "seapUrl" TEXT,
       "notes" TEXT,
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),

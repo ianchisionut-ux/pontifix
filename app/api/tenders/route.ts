@@ -17,7 +17,7 @@ const schema = z.object({
   deadline: dateTime,
   estimatedValue: z.number().nonnegative().finite().nullable(),
   currency: z.enum(['RON', 'EUR']).default('RON'),
-  status: z.enum(['INTERES', 'PREGATIRE', 'DEPUSA', 'CASTIGATA', 'PIERDUTA', 'ANULATA']).default('INTERES'),
+  status: z.enum(['NESELECTATA', 'INTERES', 'PREGATIRE', 'DEPUSA', 'CASTIGATA', 'PIERDUTA', 'ANULATA']).default('NESELECTATA'),
   seapUrl: z.union([z.literal(''), z.string().url().max(1000).refine(value => { try { const url = new URL(value); return url.protocol === 'https:' && (url.hostname === 'e-licitatie.ro' || url.hostname === 'www.e-licitatie.ro') } catch { return false } }, 'Folosește un link SEAP valid')]).optional().nullable().transform(value => value || null),
   notes: optionalText(5000),
 })
