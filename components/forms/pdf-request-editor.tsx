@@ -8,6 +8,7 @@ import { useLanguage } from '@/components/language-provider'
 import type { FormField, FormSubmissionDto, FormTemplateDto, StampPlacement } from '@/lib/ensure-form-storage'
 import { CONNECTION_FIELDS, CONNECTION_FIELD_LABELS } from '@/lib/connection-fields'
 import type { IdentityCardRecord } from '@/lib/identity-card-storage'
+import { isBorderouTemplate, type DeerBorderouDto } from '@/lib/deer-borderou-shared'
 
 export type ConnectionFormOption = { id: string; nib: string; sequenceNumber: number; status: string; deerSubmittedAt: string; createdAt: string; fields: Record<string, string> }
 export type ProjectFormOption = { id: string; name: string; beneficiary: string; beneficiaryPhone: string; address: string; certificateNumber: string; certificateDate: string }
@@ -126,19 +127,21 @@ function PdfCanvas({ pdf, pageNumber }: { pdf: any; pageNumber: number }) {
   return <canvas ref={ref} className="block h-auto w-full bg-white" />
 }
 
-export function PdfRequestEditor({ template, initialSubmission, defaultConnectionId, connections, projects, identityCards, canManage, onClose }: {
+export function PdfRequestEditor({ template, initialSubmission, defaultConnectionId, connections, projects, identityCards, borderouri, canManage, onClose }: {
   template: FormTemplateDto
   initialSubmission?: FormSubmissionDto
   defaultConnectionId?: string
   connections: ConnectionFormOption[]
   projects: ProjectFormOption[]
   identityCards: IdentityCardRecord[]
+  borderouri: DeerBorderouDto[]
   canManage: boolean
   onClose: () => void
 }) {
   const router = useRouter()
   const { tr } = useLanguage()
   const isDeer = template.category === 'DEER'
+  const isBorderou = isDeer && isBorderouTemplate(template.title)
   const defaultConnection = isDeer && defaultConnectionId ? connections.find((item) => item.id === defaultConnectionId) : undefined
   const [pdf, setPdf] = useState<any>(null)
   const [pageCount, setPageCount] = useState(0)
@@ -164,7 +167,11 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   const [error, setError] = useState('')
   const drag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; field: FormField; box: DOMRect } | null>(null)
   const stampDrag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; item: StampPlacement; box: DOMRect } | null>(null)
-  const documentUrl = `/api/formulare/${encodeURIComponent(template.id)}/document?v=${documentVersion}`
+  const borderou = isBorderou && sourceId.startsWith('connection:')
+    ? borderouri.find((item) => item.connectionId === sourceId.slice(11)) : undefined
+  const documentUrl = isBorderou
+    ? borderou ? `/api/formulare/borderou/${borderou.id}/document?v=${documentVersion}` : ''
+    : `/api/formulare/${encodeURIComponent(template.id)}/document?v=${documentVersion}`
   const selected = fields.find((field) => field.id === selectedId)
   const selectedStamp = placements.find((item) => item.id === selectedStampId)
 
@@ -178,6 +185,8 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   }, [isDeer])
 
   useEffect(() => {
+    setPdf(null); setPageCount(0); setError('')
+    if (!documentUrl) { setError('Nu există un borderou PDF pentru branșamentul ales.'); return }
     let cancelled = false
     ;(async () => {
       try {
@@ -442,13 +451,13 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
     <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
       <button className="round-action mr-1" onClick={onClose}><X size={18}/></button>
       <input className="min-w-[260px] flex-1 border-0 bg-transparent text-lg font-bold text-[#082b4d] outline-none" value={title} onChange={(e) => setTitle(e.target.value)}/>
-      <select className="input-field !w-auto min-w-[290px] !py-2" value={sourceId} onChange={(e) => chooseSource(e.target.value)}>
+      <select className="input-field !w-auto min-w-[290px] !py-2" value={sourceId} disabled={isDeer} title={isDeer ? 'Pentru alt branșament, închide editorul și alege-l din lista DEER.' : undefined} onChange={(e) => chooseSource(e.target.value)}>
         <option value="">{isDeer ? 'Alege branșamentul DEER' : tr('Fără legătură - completare manuală')}</option>
         <optgroup label={tr('Branșamente')}>{connections.map((item) => <option key={item.id} value={`connection:${item.id}`}>{item.nib} - {item.fields.Beneficiar || tr('Fără beneficiar')}</option>)}</optgroup>
         {!isDeer && <><optgroup label="Cărți de identitate">{identityCards.map((item) => <option key={item.id} value={`identity:${item.id}`}>{item.fullName} - {[item.series, item.number].filter(Boolean).join(' ') || 'fără serie'}</option>)}</optgroup>
         <optgroup label={tr('Proiecte')}>{projects.map((item) => <option key={item.id} value={`project:${item.id}`}>{item.name} - {item.beneficiary || tr('Fără beneficiar')}</option>)}</optgroup></>}
       </select>
-      {canManage && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
+      {canManage && !isBorderou && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
       {canManage && <button className={`btn-secondary inline-flex items-center gap-2 !py-2 ${layoutMode ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`} onClick={() => setLayoutMode((value) => !value)}><Settings2 size={16}/> {tr('Poziționare')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addField}><Plus size={16}/> {tr('Câmp')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addTodayField}><Plus size={16}/> Data de azi</button>}

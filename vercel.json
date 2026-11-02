@@ -1,6 +1,7 @@
 {
   "regions": ["fra1"],
   "crons": [
-    { "path": "/api/cron/efactura", "schedule": "0 6 * * *" }
+    { "path": "/api/cron/efactura", "schedule": "0 6 * * *" },
+    { "path": "/api/cron/deer-borderou", "schedule": "0 7 * * *" }
   ]
 }

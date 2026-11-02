@@ -4,11 +4,13 @@ import { useEffect, useState } from 'react'
 import { Download, Loader2, Printer, X } from 'lucide-react'
 import type { FormField, FormSubmissionDto, FormTemplateDto, StampPlacement } from '@/lib/ensure-form-storage'
 import { boundValue, loadImage, transparentStamp, type ConnectionFormOption } from './pdf-request-editor'
+import { isBorderouTemplate } from '@/lib/deer-borderou-shared'
 
 type PreviewProps = {
   templates: FormTemplateDto[]
   submissions: FormSubmissionDto[]
   connection: ConnectionFormOption
+  borderouDocumentId?: string
   onClose: () => void
 }
 
@@ -43,7 +45,7 @@ function drawField(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement,
   if (line) context.fillText(line, x, y + lineNo * size * 1.18)
 }
 
-export function DeerBulkPreview({ templates, submissions, connection, onClose }: PreviewProps) {
+export function DeerBulkPreview({ templates, submissions, connection, borderouDocumentId, onClose }: PreviewProps) {
   const [previewUrl, setPreviewUrl] = useState('')
   const [error, setError] = useState('')
   const [current, setCurrent] = useState('')
@@ -62,7 +64,10 @@ export function DeerBulkPreview({ templates, submissions, connection, onClose }:
         for (const template of templates) {
           if (cancelled) return
           setCurrent(template.title)
-          const response = await fetch(`/api/formulare/${encodeURIComponent(template.id)}/document`, { signal: controller.signal })
+          const documentUrl = isBorderouTemplate(template.title) && borderouDocumentId
+            ? `/api/formulare/borderou/${encodeURIComponent(borderouDocumentId)}/document`
+            : `/api/formulare/${encodeURIComponent(template.id)}/document`
+          const response = await fetch(documentUrl, { signal: controller.signal })
           if (!response.ok) throw new Error(`PDF-ul „${template.title}” nu poate fi deschis.`)
           const loadingTask = pdfjs.getDocument({ data: await response.arrayBuffer(), wasmUrl: '/pdfjs/wasm/' })
           const pdf = await loadingTask.promise
@@ -112,7 +117,7 @@ export function DeerBulkPreview({ templates, submissions, connection, onClose }:
       }
     })()
     return () => { cancelled = true; controller.abort(); if (url) URL.revokeObjectURL(url) }
-  }, [templates, submissions, connection])
+  }, [templates, submissions, connection, borderouDocumentId])
 
   function printAll() {
     if (!previewUrl) return

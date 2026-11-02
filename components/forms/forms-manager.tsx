@@ -11,15 +11,17 @@ import { PdfStampEditor } from './pdf-stamp-editor'
 import { DeerBulkPreview } from './deer-bulk-preview'
 import { IdentityCardScanner } from '@/components/identity-cards/identity-card-scanner'
 import type { IdentityCardRecord } from '@/lib/identity-card-storage'
+import { isBorderouTemplate, type DeerBorderouDto } from '@/lib/deer-borderou-shared'
 
 type Category = 'FORMULAR' | 'CERERE' | 'DEER' | 'SEMNARE' | 'CI'
 
-export function FormsManager({ initialForms, initialSubmissions, connections, projects, identityCards, canManage, canEdit }: {
+export function FormsManager({ initialForms, initialSubmissions, connections, projects, identityCards, borderouri, canManage, canEdit }: {
   initialForms: FormTemplateDto[]
   initialSubmissions: FormSubmissionDto[]
   connections: ConnectionFormOption[]
   projects: ProjectFormOption[]
   identityCards: IdentityCardRecord[]
+  borderouri: DeerBorderouDto[]
   canManage: boolean
   canEdit: boolean
 }) {
@@ -38,8 +40,14 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
   const items = initialForms.filter((item) => item.category === category)
   const requests = initialForms.filter((item) => item.category === 'CERERE')
   const editableTemplates = category === 'DEER' ? items : requests
-  const savedSubmissions = initialSubmissions.filter((saved) => editableTemplates.some((item) => item.id === saved.formTemplateId) && (category !== 'DEER' || !deerConnectionId || saved.sourceId === deerConnectionId))
+  const savedSubmissions = initialSubmissions.filter((saved) => editableTemplates.some((item) => item.id === saved.formTemplateId) && (category !== 'DEER' || (!!deerConnectionId && saved.sourceId === deerConnectionId)))
   const selectedDeerConnection = connections.find((connection) => connection.id === deerConnectionId)
+  const activeBorderou = borderouri.find((document) => document.connectionId === deerConnectionId)
+  const pendingBorderouri = borderouri.filter((document) => !document.connectionId)
+  const bulkTemplates = items.filter((item) => !isBorderouTemplate(item.title) || !!activeBorderou)
+  const submissionFor = (templateId: string) => selectedDeerConnection
+    ? initialSubmissions.find((saved) => saved.formTemplateId === templateId && saved.sourceId === selectedDeerConnection.id)
+    : undefined
 
   async function uploadPdf(pdf: File, pathname: string) {
     if (pdf.type !== 'application/pdf') throw new Error(tr('Fișierul trebuie să fie PDF.'))
@@ -70,6 +78,56 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
       if (!response.ok) throw new Error(body.error || tr('Formularul nu a putut fi înlocuit.'))
       router.refresh()
     } catch (error) { alert(error instanceof Error ? error.message : tr('Formularul nu a putut fi înlocuit.')) }
+    finally { setBusy('') }
+  }
+
+  async function uploadBorderou(pdf?: File) {
+    if (!pdf || !selectedDeerConnection) return
+    setBusy('borderou-upload')
+    try {
+      const blob = await uploadPdf(pdf, `formulare/deer/borderou/${selectedDeerConnection.id}/${Date.now()}-${pdf.name}`)
+      const response = await fetch('/api/formulare/borderou', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ connectionId: selectedDeerConnection.id, documentPathname: blob.pathname, documentName: pdf.name }) })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'Borderoul nu a putut fi salvat.')
+      router.refresh()
+    } catch (error) { alert(error instanceof Error ? error.message : 'Încărcarea borderoului a eșuat.') }
+    finally { setBusy('') }
+  }
+
+  async function useExistingBorderou() {
+    const template = items.find((item) => isBorderouTemplate(item.title))
+    if (!selectedDeerConnection || !template) return
+    setBusy('borderou-existing')
+    try {
+      const response = await fetch('/api/formulare/borderou', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ connectionId: selectedDeerConnection.id, templateId: template.id }) })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'PDF-ul existent nu a putut fi asociat.')
+      router.refresh()
+    } catch (error) { alert(error instanceof Error ? error.message : 'Asocierea PDF-ului a eșuat.') }
+    finally { setBusy('') }
+  }
+
+  async function syncBorderouri() {
+    setBusy('borderou-sync')
+    try {
+      const response = await fetch('/api/formulare/borderou/sync', { method: 'POST' })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'E-mailul DEER nu poate fi verificat.')
+      alert(`Verificate ${body.scanned || 0} e-mailuri DEER. Borderouri noi: ${body.imported || 0}; asociate: ${body.matched || 0}; de verificat: ${body.pending || 0}.`)
+      router.refresh()
+    } catch (error) { alert(error instanceof Error ? error.message : 'E-mailul DEER nu poate fi verificat.') }
+    finally { setBusy('') }
+  }
+
+  async function assignBorderou(id: string, connectionId: string) {
+    if (!connectionId) return
+    setBusy(`assign:${id}`)
+    try {
+      const response = await fetch('/api/formulare/borderou', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, connectionId }) })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'Asocierea a eșuat.')
+      router.refresh()
+    } catch (error) { alert(error instanceof Error ? error.message : 'Asocierea a eșuat.') }
     finally { setBusy('') }
   }
 
@@ -107,9 +165,15 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3"><a href={`/api/formulare/${encodeURIComponent(item.id)}/document`} target="_blank" className="inline-flex items-center gap-2 text-xs font-bold text-[#0d5d8b]"><FileText size={15}/> {tr('Deschide PDF')}</a>{canManage && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !px-3 !py-2 text-xs">{busy === item.id ? <Loader2 size={15} className="animate-spin"/> : <RefreshCw size={15}/>} {tr('Înlocuiește')}<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => replaceForm(item, event.target.files?.[0])}/></label>}</div>
     </article>)}</div> : <div className="space-y-6">
       {category === 'DEER' && <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4"><p className="text-sm text-[#0d5d8b]">Încarcă șabloanele PDF necesare pentru DEER. Alege beneficiarul pentru a vedea și tipări toate documentele completate.</p><div className="flex flex-wrap items-center gap-2"><label className="flex items-center gap-2 text-sm font-bold text-[#0d5d8b]">Beneficiar / branșament <select className="input-field !w-auto min-w-[220px] bg-white" value={deerConnectionId} onChange={(event) => setDeerConnectionId(event.target.value)}><option value="">Alege branșamentul</option>{connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.fields.Beneficiar || 'Fără beneficiar'} · {connection.nib}</option>)}</select></label><button type="button" className="btn-primary inline-flex items-center gap-2 !py-2 text-sm" disabled={!selectedDeerConnection || !items.length} onClick={() => setDeerBulkOpen(true)}><FileText size={16}/> Previzualizează toate</button></div></div>}
+      {category === 'DEER' && <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3"><div><b className="text-[#082b4d]">Documentele branșamentului</b><p className="text-slate-500">{selectedDeerConnection ? `${selectedDeerConnection.fields.Beneficiar || 'Beneficiar'} · ${selectedDeerConnection.nib}` : 'Alege un branșament pentru a vedea documentele lui.'}</p></div>{canManage && <button type="button" className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy} onClick={syncBorderouri}>{busy === 'borderou-sync' ? <Loader2 size={15} className="animate-spin"/> : <RefreshCw size={15}/>} Verifică e-mailul DEER</button>}</div>
+        {selectedDeerConnection && <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3"><FileText size={18} className="text-[#197fb5]"/><span className="min-w-0 flex-1"><b className="block text-[#082b4d]">Borderou primit de la DEER</b><small className="text-slate-500">{activeBorderou ? `${activeBorderou.documentName} · ${new Date(activeBorderou.receivedAt).toLocaleString('ro-RO')}` : 'Încă nu există un borderou pentru acest branșament.'}</small></span>{activeBorderou && <a className="btn-secondary !px-3 !py-2 text-xs" href={`/api/formulare/borderou/${activeBorderou.id}/document`} target="_blank">Vezi PDF</a>}{canManage && !activeBorderou && items.some((item) => isBorderouTemplate(item.title)) && <button type="button" className="btn-secondary !px-3 !py-2 text-xs" disabled={!!busy} onClick={useExistingBorderou}>Asociază PDF-ul deja încărcat</button>}{canManage && <label className="btn-secondary cursor-pointer !px-3 !py-2 text-xs">{busy === 'borderou-upload' ? 'Se încarcă…' : activeBorderou ? 'Înlocuiește pentru acest branșament' : 'Încarcă borderou'}<input className="hidden" type="file" accept="application/pdf,.pdf" disabled={!!busy} onChange={(event) => { uploadBorderou(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}</div>}
+        {canManage && pendingBorderouri.length > 0 && <div className="mt-3"><b className="text-amber-800">Borderouri din e-mail care necesită asociere ({pendingBorderouri.length})</b><div className="mt-2 space-y-2">{pendingBorderouri.map((document) => <div key={document.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2"><span className="min-w-0 flex-1 text-xs">{document.beneficiary || document.documentName} · {document.dossierNumber || 'Număr dosar neidentificat'}</span><select aria-label={`Asociază ${document.documentName}`} className="input-field !w-auto !py-1 text-xs" defaultValue="" disabled={!!busy} onChange={(event) => assignBorderou(document.id, event.target.value)}><option value="">Alege branșamentul</option>{connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.fields.Beneficiar || 'Beneficiar'} · {connection.nib}</option>)}</select></div>)}</div></div>}
+      </div>}
       <section><div className="mb-3 flex items-center gap-2"><FilePlus2 size={18} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">{category === 'DEER' ? 'Șabloane DEER' : tr('Modele de cereri')}</h2></div><div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">{editableTemplates.map((item) => <article key={item.id} className="flex min-h-[150px] flex-col rounded-[20px] border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#edf7fc] text-[#197fb5]"><FileText size={20}/></div><div className="min-w-0"><h3 className="font-extrabold text-[#082b4d]">{item.title}</h3><p className="mt-1 text-xs text-slate-400">{item.fieldSchema.length} {tr('câmpuri configurate')}{category === 'DEER' && <> · {item.stampSchema.length} semnături / ștampile</>}</p>{category === 'DEER' && <p className="mt-1 text-xs text-slate-400">Șablon actualizat: {new Date(item.updatedAt).toLocaleString('ro-RO')}</p>}</div></div>
-        <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">{canEdit&&<button className="btn-primary inline-flex items-center gap-2 !px-4 !py-2 text-sm" onClick={() => setEditor({ template: item })}><Edit3 size={16}/> {category === 'DEER' ? 'Completează și semnează' : tr('Completează pe PDF')}</button>}<a className="btn-secondary !px-3 !py-2 text-xs" href={`/api/formulare/${encodeURIComponent(item.id)}/document`} target="_blank">{tr('PDF gol')}</a>{canManage && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !px-3 !py-2 text-xs"><RefreshCw size={14}/> {tr('Înlocuiește')}<input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => replaceForm(item, event.target.files?.[0])}/></label>}</div>
+        {category === 'DEER' && selectedDeerConnection && <p className="mt-2 text-xs font-semibold text-[#0d5d8b]">{isBorderouTemplate(item.title) ? activeBorderou ? 'PDF propriu acestui branșament' : 'PDF lipsă pentru acest branșament' : submissionFor(item.id) ? 'Completare salvată pentru acest branșament' : 'Necompletat pentru acest branșament'}</p>}
+        <div className="mt-auto flex flex-wrap items-center gap-2 pt-5">{canEdit&&<button className="btn-primary inline-flex items-center gap-2 !px-4 !py-2 text-sm" disabled={category === 'DEER' && (!selectedDeerConnection || (isBorderouTemplate(item.title) && !activeBorderou))} onClick={() => setEditor({ template: item, submission: category === 'DEER' ? submissionFor(item.id) : undefined })}><Edit3 size={16}/> {category === 'DEER' ? 'Completează și semnează' : tr('Completează pe PDF')}</button>}{(!isBorderouTemplate(item.title) || category !== 'DEER' || activeBorderou) && <a className="btn-secondary !px-3 !py-2 text-xs" href={category === 'DEER' && isBorderouTemplate(item.title) ? `/api/formulare/borderou/${activeBorderou!.id}/document` : `/api/formulare/${encodeURIComponent(item.id)}/document`} target="_blank">{category === 'DEER' && isBorderouTemplate(item.title) ? 'PDF branșament' : tr('PDF gol')}</a>}{canManage && !(category === 'DEER' && isBorderouTemplate(item.title)) && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !px-3 !py-2 text-xs"><RefreshCw size={14}/> {tr('Înlocuiește')}<input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => replaceForm(item, event.target.files?.[0])}/></label>}</div>
       </article>)}</div></section>
       <section className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4 flex items-center gap-2"><History size={18} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">{tr('Completări salvate')}</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">{savedSubmissions.length}</span></div>
         {savedSubmissions.length ? <div className="divide-y divide-slate-100">{savedSubmissions.map((saved) => { const template = editableTemplates.find((item) => item.id === saved.formTemplateId); return <div key={saved.id} className="flex flex-wrap items-center gap-3 py-3"><div className="min-w-[240px] flex-1"><b className="block text-sm text-[#082b4d]">{saved.title}</b><span className="text-xs text-slate-400">{template?.title}{category === 'DEER' && saved.sourceId ? ` · ${connections.find((connection) => connection.id === saved.sourceId)?.nib || 'Branșament'}` : ''} · {new Date(saved.updatedAt).toLocaleString('ro-RO')}</span></div>{canEdit&&template && <button className="btn-secondary inline-flex items-center gap-2 !px-3 !py-2 text-xs" onClick={() => setEditor({ template, submission: saved })}><Edit3 size={14}/> {tr('Redeschide')}</button>}{canEdit&&<button className="round-action !text-red-600" onClick={() => removeSubmission(saved.id)}><Trash2 size={15}/></button>}</div> })}</div> : <p className="py-8 text-center text-sm text-slate-400">{category === 'DEER' ? 'Aici apar documentele completate după ce alegi branșamentul și apeși „Salvează completarea”. „Salvează șablonul” păstrează câmpurile și ștampilele în modelul de mai sus.' : tr('Nu există încă cereri completate și salvate.')}</p>}
@@ -118,7 +182,7 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
 
     {modalOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4" onMouseDown={() => !busy && setModalOpen(false)}><div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl" onMouseDown={(event) => event.stopPropagation()}><div className="flex items-start justify-between"><div><h2 className="text-xl font-bold text-[#082b4d]">{category === 'FORMULAR' ? tr('Adaugă formular') : category === 'SEMNARE' ? tr('Adaugă șablon de semnare') : category === 'DEER' ? 'Adaugă șablon DEER' : tr('Adaugă model de cerere')}</h2><p className="mt-1 text-sm text-slate-500">{tr('Încarcă PDF-ul gol, care va rămâne fundalul documentului.')}</p></div><button className="round-action" onClick={() => setModalOpen(false)}><X size={17}/></button></div><label className="mt-5 block text-sm font-bold text-slate-600">{tr('Denumirea documentului')}<input className="input-field mt-1.5 w-full" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={180}/></label><label className="mt-4 flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-[#8bc8e5] bg-[#f4fbfe] p-5"><FileText className="text-[#197fb5]"/><span className="min-w-0 flex-1"><b className="block text-sm text-[#082b4d]">{file?.name || tr('Selectează documentul PDF')}</b><small className="text-slate-500">{tr('Maximum 20 MB')}</small></span><input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => setFile(event.target.files?.[0] || null)}/></label><div className="mt-6 flex justify-end gap-2"><button className="btn-secondary" onClick={() => setModalOpen(false)}>{tr('Renunță')}</button><button className="btn-primary inline-flex items-center gap-2" disabled={!title.trim() || !file || busy === 'add'} onClick={addForm}>{busy === 'add' ? <Loader2 size={16} className="animate-spin"/> : <Plus size={16}/>} {tr('Adaugă')}</button></div></div></div>}
     {stampEditor && <PdfStampEditor template={stampEditor} canManage={canManage} onClose={() => { setStampEditor(null); router.refresh() }}/>}
-    {deerBulkOpen && selectedDeerConnection && <DeerBulkPreview templates={items} submissions={initialSubmissions} connection={selectedDeerConnection} onClose={() => setDeerBulkOpen(false)}/>}
-    {canEdit&&editor && <PdfRequestEditor template={editor.template} initialSubmission={editor.submission} defaultConnectionId={editor.template.category === 'DEER' ? deerConnectionId : undefined} connections={connections} projects={projects} identityCards={identityCards} canManage={canManage} onClose={() => { setEditor(null); router.refresh() }}/>}
+    {deerBulkOpen && selectedDeerConnection && <DeerBulkPreview templates={bulkTemplates} submissions={initialSubmissions} connection={selectedDeerConnection} borderouDocumentId={activeBorderou?.id} onClose={() => setDeerBulkOpen(false)}/>}
+    {canEdit&&editor && <PdfRequestEditor template={editor.template} initialSubmission={editor.submission} defaultConnectionId={editor.template.category === 'DEER' ? deerConnectionId : undefined} connections={connections} projects={projects} identityCards={identityCards} borderouri={borderouri} canManage={canManage} onClose={() => { setEditor(null); router.refresh() }}/>}
   </div>
 }

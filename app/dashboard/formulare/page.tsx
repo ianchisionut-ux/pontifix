@@ -6,6 +6,8 @@ import { ensureFormStorage, type FormSubmissionDto, type FormTemplateDto } from 
 import { FormsManager } from '@/components/forms/forms-manager'
 import type { ConnectionFormOption, ProjectFormOption } from '@/components/forms/pdf-request-editor'
 import { listIdentityCards } from '@/lib/identity-card-storage'
+import { listDeerBorderouri } from '@/lib/deer-borderou'
+import type { DeerBorderouDto } from '@/lib/deer-borderou-shared'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,7 +17,7 @@ export default async function FormsPage() {
   if (!businessId) redirect('/login')
   await Promise.all([ensureFormStorage(businessId), ensureConnectionStorage()])
 
-  const [formRows, submissionRows, connectionRows, projectRows, identityCards] = await Promise.all([
+  const [formRows, submissionRows, connectionRows, projectRows, identityCards, borderouRows] = await Promise.all([
     prisma.$queryRaw<Array<Omit<FormTemplateDto, 'updatedAt'> & { updatedAt: Date }>>`
       SELECT "id", "title", "category", "documentPathname", "documentName", "sortOrder", "fieldSchema", "stampSchema", "updatedAt"
       FROM "FormTemplate" WHERE "businessId"=${businessId} ORDER BY "category", "sortOrder", "createdAt"`,
@@ -26,12 +28,14 @@ export default async function FormsPage() {
       SELECT "id", "nib", "sequenceNumber", "status", "deerSubmittedAt", "createdAt", "fields" FROM "ConnectionCase" WHERE "businessId"=${businessId} ORDER BY "sequenceNumber" DESC`,
     prisma.project.findMany({ where: { businessId }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, beneficiary: true, beneficiaryPhone: true, address: true, certificateNumber: true, certificateDate: true } }),
     listIdentityCards(businessId),
+    listDeerBorderouri(businessId),
   ])
 
   const forms: FormTemplateDto[] = formRows.map((row) => ({ ...row, fieldSchema: Array.isArray(row.fieldSchema) ? row.fieldSchema : [], stampSchema: Array.isArray(row.stampSchema) ? row.stampSchema : [], updatedAt: row.updatedAt.toISOString() }))
   const submissions: FormSubmissionDto[] = submissionRows.map((row) => ({ ...row, values: row.values || {}, fieldSchema: Array.isArray(row.fieldSchema) ? row.fieldSchema : [], stampSchema: Array.isArray(row.stampSchema) ? row.stampSchema : [], createdAt: row.createdAt.toISOString(), updatedAt: row.updatedAt.toISOString() }))
   const connections: ConnectionFormOption[] = connectionRows.map((row) => ({ id: row.id, nib: row.nib, sequenceNumber: row.sequenceNumber, status: row.status, deerSubmittedAt: row.deerSubmittedAt?.toISOString().slice(0, 10) || '', createdAt: row.createdAt.toLocaleDateString('ro-RO'), fields: row.fields || {} }))
   const projects: ProjectFormOption[] = projectRows.map((row) => ({ id: row.id, name: row.name, beneficiary: row.beneficiary || '', beneficiaryPhone: row.beneficiaryPhone || '', address: row.address || '', certificateNumber: row.certificateNumber || '', certificateDate: row.certificateDate?.toLocaleDateString('ro-RO') || '' }))
+  const borderouri: DeerBorderouDto[] = borderouRows.map(({ documentPathname: _pathname, ...row }) => ({ ...row, receivedAt: row.receivedAt.toISOString() }))
 
-  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><FormsManager initialForms={forms} initialSubmissions={submissions} connections={connections} projects={projects} identityCards={identityCards} canManage={(session as any)?.role === 'SUPER_ADMIN'} canEdit={(session as any)?.role !== 'STAFF'}/></div>
+  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><FormsManager initialForms={forms} initialSubmissions={submissions} connections={connections} projects={projects} identityCards={identityCards} borderouri={borderouri} canManage={(session as any)?.role === 'SUPER_ADMIN'} canEdit={(session as any)?.role !== 'STAFF'}/></div>
 }
