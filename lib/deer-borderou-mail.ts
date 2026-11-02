@@ -5,7 +5,10 @@ import { decrypt } from '@/lib/crypto'
 import { getStoredEmailSettings } from '@/lib/email-settings'
 import { emailAttachmentKey, ensureDeerBorderouStorage, extractDeerEmailIdentity, findDeerCase, saveDeerBorderou } from '@/lib/deer-borderou'
 
-const DEER_SENDER = 'noreply_energieelectrica_mn@distributie-energie.ro'
+const DEER_SENDERS = [
+  'noreply_energieelectrica_mn@distributie-energie.ro',
+  'noreply_energieelectrica_tn@distributie-energie.ro',
+]
 const MAX_PDF_BYTES = 20 * 1024 * 1024
 
 export async function syncDeerBorderouri(businessId: string) {
@@ -23,17 +26,19 @@ export async function syncDeerBorderouri(businessId: string) {
     await client.connect()
     await client.mailboxOpen('INBOX', { readOnly: true })
     const since = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000)
-    const all = await client.search({ from: DEER_SENDER, since }, { uid: true })
-    const uids = (Array.isArray(all) ? all : []).slice(-100)
+    const uidGroups = []
+    for (const sender of DEER_SENDERS) uidGroups.push(await client.search({ from: sender, since }, { uid: true }))
+    const uids = [...new Set(uidGroups.flatMap((group) => Array.isArray(group) ? group : []))].sort((a, b) => a - b).slice(-100)
     for (const uid of uids) {
       const message = await client.fetchOne(uid, { source: true, envelope: true, internalDate: true }, { uid: true })
       if (!message || !message.source) continue
       result.scanned++
       const mail = await simpleParser(message.source, { skipHtmlToText: false })
       const sender = mail.from?.value?.[0]?.address?.toLowerCase() || ''
-      if (sender !== DEER_SENDER) continue
+      if (!DEER_SENDERS.includes(sender)) continue
       const subject = mail.subject || ''
-      const { dossierNumber, beneficiary } = extractDeerEmailIdentity(`${subject}\n${mail.text || ''}`)
+      const html = typeof mail.html === 'string' ? mail.html : ''
+      const { dossierNumber, beneficiary } = extractDeerEmailIdentity(`${subject}\n${mail.text || ''}\n${html.replace(/<[^>]*>/g, ' ')}\n${html}`)
       const connectionId = await findDeerCase(businessId, dossierNumber, beneficiary)
       for (const attachment of mail.attachments) {
         const filename = attachment.filename || ''
@@ -41,10 +46,16 @@ export async function syncDeerBorderouri(businessId: string) {
         const content = attachment.content
         if (!content || content.length < 100 || content.length > MAX_PDF_BYTES || content.subarray(0, 5).toString() !== '%PDF-') continue
         const sourceKey = emailAttachmentKey(mail.messageId || String(uid), filename, content)
-        const exists = await prisma.$queryRaw<Array<{ id: string }>>`
-          SELECT "id" FROM "DeerBorderou" WHERE "businessId"=${businessId} AND "sourceKey"=${sourceKey} LIMIT 1
+        const exists = await prisma.$queryRaw<Array<{ id: string; connectionId: string | null }>>`
+          SELECT "id", "connectionId" FROM "DeerBorderou" WHERE "businessId"=${businessId} AND "sourceKey"=${sourceKey} LIMIT 1
         `
-        if (exists.length) continue
+        if (exists.length) {
+          if (!exists[0].connectionId && (dossierNumber || beneficiary)) await prisma.$executeRaw`
+            UPDATE "DeerBorderou" SET "connectionId"=${connectionId}, "dossierNumber"=${dossierNumber || null}, "beneficiary"=${beneficiary || null}
+            WHERE "id"=${exists[0].id} AND "businessId"=${businessId} AND "connectionId" IS NULL
+          `
+          continue
+        }
         await saveDeerBorderou({
           businessId, connectionId, documentPathname: `db:${sourceKey}`, documentData: content, documentName: filename,
           source: 'EMAIL', sourceKey, sender, subject, dossierNumber, beneficiary,
