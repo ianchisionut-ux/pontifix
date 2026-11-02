@@ -139,7 +139,7 @@ export async function postPayrollToLedger(input: {
   const connection = await (await ready()).connect();
   try {
     await connection.query("BEGIN");
-    const payrollRun = (await connection.query(`SELECT status FROM "PayrollRun" WHERE id=$1 FOR UPDATE`, [input.runId])).rows[0];
+    const payrollRun = (await connection.query(`SELECT status FROM public."PayrollRun" WHERE id=$1 FOR UPDATE`, [input.runId])).rows[0];
     if (!payrollRun) throw new Error("Statul de salarii nu mai există.");
     if (payrollRun.status === "FINALIZED") {
       await connection.query("COMMIT");
@@ -153,7 +153,7 @@ export async function postPayrollToLedger(input: {
               COALESCE(SUM(cam),0)::float8 AS cam,
               COALESCE(SUM("otherDeductions"),0)::float8 AS "otherDeductions",
               COALESCE(SUM("advancePaid"),0)::float8 AS "advancePaid"
-         FROM "PayrollLine" WHERE "payrollRunId"=$1`,
+         FROM public."PayrollLine" WHERE "payrollRunId"=$1`,
       [input.runId],
     )).rows[0];
     for (const key of ["gross", "cas", "cass", "incomeTax", "cam", "otherDeductions", "advancePaid"] as const) {
@@ -194,7 +194,7 @@ export async function postPayrollToLedger(input: {
       lines,
     });
     await connection.query(
-      `UPDATE "PayrollRun" SET status='FINALIZED', "finalizedAt"=now(), "finalizedBy"=$2, "updatedAt"=now() WHERE id=$1`,
+      `UPDATE public."PayrollRun" SET status='FINALIZED', "finalizedAt"=now(), "finalizedBy"=$2, "updatedAt"=now() WHERE id=$1`,
       [input.runId, input.createdBy || ""],
     );
     await connection.query("COMMIT");
@@ -237,13 +237,13 @@ export async function postPayrollPayment(input: {
   try {
     await connection.query("BEGIN");
     const run = (await connection.query(
-      `SELECT id,status FROM "PayrollRun" WHERE "businessId"=$1 AND month=$2 FOR UPDATE`,
+      `SELECT id,status FROM public."PayrollRun" WHERE "businessId"=$1 AND month=$2 FOR UPDATE`,
       [input.businessId, input.month],
     )).rows[0];
     if (!run) throw new Error("Statul de salarii nu există.");
     if (run.status !== "FINALIZED") throw new Error("Finalizează statul înainte de înregistrarea plăților.");
     const existing = (await connection.query(
-      `SELECT id FROM "PayrollPayment" WHERE "payrollRunId"=$1 AND type=$2`,
+      `SELECT id FROM public."PayrollPayment" WHERE "payrollRunId"=$1 AND type=$2`,
       [run.id, input.type],
     )).rows[0];
     if (existing) throw new Error("Această obligație salarială este deja achitată.");
@@ -255,7 +255,7 @@ export async function postPayrollPayment(input: {
               COALESCE(SUM("incomeTax"),0)::float8 AS tax,
               COALESCE(SUM(cam),0)::float8 AS cam,
               COALESCE(SUM("otherDeductions"),0)::float8 AS other
-         FROM "PayrollLine" WHERE "payrollRunId"=$1`,
+         FROM public."PayrollLine" WHERE "payrollRunId"=$1`,
       [run.id],
     )).rows[0];
     const amountByType: Record<PayrollPaymentType, number> = {
@@ -271,7 +271,7 @@ export async function postPayrollPayment(input: {
     };
     const paymentId = randomUUID();
     await connection.query(
-      `INSERT INTO "PayrollPayment" (id,"payrollRunId",type,method,amount,"paidAt","createdBy")
+      `INSERT INTO public."PayrollPayment" (id,"payrollRunId",type,method,amount,"paidAt","createdBy")
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [paymentId, run.id, input.type, input.method, amount, input.paidAt, input.createdBy || ""],
     );
@@ -287,7 +287,7 @@ export async function postPayrollPayment(input: {
         { accountCode: input.method === "CASH" ? "5311" : "5121", credit: amount, explanation: input.method === "CASH" ? "Plată numerar" : "Plată bancă" },
       ],
     });
-    await connection.query(`UPDATE "PayrollPayment" SET "journalEntryId"=$2 WHERE id=$1`, [paymentId, entryId]);
+    await connection.query(`UPDATE public."PayrollPayment" SET "journalEntryId"=$2 WHERE id=$1`, [paymentId, entryId]);
     await connection.query("COMMIT");
     return { id: paymentId, type: input.type, method: input.method, amount, paidAt: input.paidAt, journalEntryId: entryId };
   } catch (error) {
