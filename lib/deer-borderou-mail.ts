@@ -1,6 +1,5 @@
 import { ImapFlow } from 'imapflow'
 import { simpleParser } from 'mailparser'
-import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/crypto'
 import { getStoredEmailSettings } from '@/lib/email-settings'
@@ -46,9 +45,8 @@ export async function syncDeerBorderouri(businessId: string) {
           SELECT "id" FROM "DeerBorderou" WHERE "businessId"=${businessId} AND "sourceKey"=${sourceKey} LIMIT 1
         `
         if (exists.length) continue
-        const blob = await put(`formulare/deer/borderou/${sourceKey}.pdf`, content, { access: 'private', contentType: 'application/pdf', addRandomSuffix: false })
         await saveDeerBorderou({
-          businessId, connectionId, documentPathname: blob.pathname, documentName: filename,
+          businessId, connectionId, documentPathname: `db:${sourceKey}`, documentData: content, documentName: filename,
           source: 'EMAIL', sourceKey, sender, subject, dossierNumber, beneficiary,
           receivedAt: mail.date || (message.internalDate ? new Date(message.internalDate) : new Date()),
         })

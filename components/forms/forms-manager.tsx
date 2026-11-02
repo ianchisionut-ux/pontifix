@@ -85,8 +85,11 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
     if (!pdf || !selectedDeerConnection) return
     setBusy('borderou-upload')
     try {
-      const blob = await uploadPdf(pdf, `formulare/deer/borderou/${selectedDeerConnection.id}/${Date.now()}-${pdf.name}`)
-      const response = await fetch('/api/formulare/borderou', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ connectionId: selectedDeerConnection.id, documentPathname: blob.pathname, documentName: pdf.name }) })
+      if (pdf.size > 4 * 1024 * 1024) throw new Error('Borderoul poate avea maximum 4 MB.')
+      const form = new FormData()
+      form.append('connectionId', selectedDeerConnection.id)
+      form.append('file', pdf)
+      const response = await fetch('/api/formulare/borderou', { method: 'POST', body: form })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'Borderoul nu a putut fi salvat.')
       router.refresh()

@@ -24,6 +24,7 @@ export function ensureDeerBorderouStorage() {
     "businessId" TEXT NOT NULL,
     "connectionId" TEXT,
     "documentPathname" TEXT NOT NULL,
+    "documentData" BYTEA,
     "documentName" TEXT NOT NULL,
     "source" TEXT NOT NULL,
     "sourceKey" TEXT NOT NULL,
@@ -34,7 +35,9 @@ export function ensureDeerBorderouStorage() {
     "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "DeerBorderou_business_source_unique" UNIQUE ("businessId", "sourceKey")
-  )`).then(() => undefined).catch((error) => { ready = null; throw error })
+  )`).then(async () => {
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "documentData" BYTEA`)
+  }).catch((error) => { ready = null; throw error })
   return ready
 }
 
@@ -80,6 +83,7 @@ export async function listDeerBorderouri(businessId: string) {
 
 export async function saveDeerBorderou(input: {
   businessId: string; connectionId: string | null; documentPathname: string; documentName: string
+  documentData?: Buffer
   source: 'EMAIL' | 'UPLOAD'; sourceKey?: string; sender?: string; subject?: string
   dossierNumber?: string; beneficiary?: string; receivedAt?: Date
 }) {
@@ -88,8 +92,8 @@ export async function saveDeerBorderou(input: {
   const sourceKey = input.sourceKey || `upload:${id}`
   const receivedAt = input.receivedAt || new Date()
   await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO "DeerBorderou" ("id", "businessId", "connectionId", "documentPathname", "documentName", "source", "sourceKey", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt")
-    VALUES (${id}, ${input.businessId}, ${input.connectionId}, ${input.documentPathname}, ${input.documentName}, ${input.source}, ${sourceKey}, ${input.sender || null}, ${input.subject || null}, ${input.dossierNumber || null}, ${input.beneficiary || null}, ${receivedAt})
+    INSERT INTO "DeerBorderou" ("id", "businessId", "connectionId", "documentPathname", "documentData", "documentName", "source", "sourceKey", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt")
+    VALUES (${id}, ${input.businessId}, ${input.connectionId}, ${input.documentPathname}, ${input.documentData || null}, ${input.documentName}, ${input.source}, ${sourceKey}, ${input.sender || null}, ${input.subject || null}, ${input.dossierNumber || null}, ${input.beneficiary || null}, ${receivedAt})
     ON CONFLICT ("businessId", "sourceKey") DO NOTHING
   `)
   return id
