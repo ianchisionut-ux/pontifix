@@ -56,10 +56,13 @@ type CaseMatch = { id: string; fields: Record<string, string>; deerSubmission: {
 export function matchDeerCase(cases: CaseMatch[], dossierNumber: string, beneficiary: string) {
   if (!/^\d{13}$/.test(dossierNumber) || !beneficiary) return null
   const name = normalizePerson(beneficiary)
+  const samePerson = (caseName: string) => caseName === name ||
+    (caseName.split(' ').length >= 2 && name.startsWith(`${caseName} `)) ||
+    (name.split(' ').length >= 2 && caseName.startsWith(`${name} `))
   const matches = cases.filter((item) => {
     const number = extractDeerDossierNumber(item.deerSubmission?.dossierNumber || '') || extractDeerDossierNumber(item.fields.ATR || '')
     const caseName = normalizePerson(item.fields.Beneficiar || '')
-    return number === dossierNumber && caseName === name
+    return number === dossierNumber && samePerson(caseName)
   })
   return matches.length === 1 ? matches[0].id : null
 }
