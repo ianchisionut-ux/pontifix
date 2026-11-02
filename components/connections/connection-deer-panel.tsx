@@ -129,14 +129,14 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
 
   function toggleTrackedAction(action: DeerSubmission['action']) {
     if (!canEdit) return
+    const exists = draft.actionHistory.some((entry) => entry.action === action)
+    if (!exists && !window.confirm('Confirmi că această acțiune a fost depusă efectiv pe portalul DEER? Bifa și data vor apărea în registru.')) return
     setDraft((current) => {
-      const exists = current.actionHistory.some((entry) => entry.action === action)
       const actionHistory = exists
         ? current.actionHistory.filter((entry) => entry.action !== action)
         : [...current.actionHistory, { action, submittedAt: localDateToday() }]
       return {
         ...current,
-        action: exists && current.action === action && actionHistory.length ? actionHistory[actionHistory.length - 1].action : exists ? current.action : action,
         actionHistory,
       }
     })
@@ -194,15 +194,20 @@ export function ConnectionDeerPanel({ item, fields, canEdit, onClose, onSaved }:
 
           <section className="rounded-2xl border border-slate-200 p-4">
             <h3 className="font-black text-[#082b4d]">Urmărire depunere</h3>
+            <label className="mt-4 block text-xs font-bold text-slate-500">Acțiunea de pregătit în portal
+              <select disabled={!canEdit} value={draft.action} onChange={(event) => setDraft({ ...draft, action: event.target.value as DeerSubmission['action'] })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50">
+                {DEER_ACTIONS.map(([action, label]) => <option key={action} value={action}>{label}</option>)}
+              </select>
+            </label>
             <div className="mt-4">
-              <div className="text-xs font-bold text-slate-500">Acțiuni efectuate / depuse</div>
-              <p className="mt-1 text-[11px] leading-4 text-slate-400">Poți bifa mai multe acțiuni. Fiecare are data ei; ultima acțiune bifată este folosită la completarea portalului.</p>
+              <div className="text-xs font-bold text-slate-500">Acțiuni depuse efectiv pe portalul DEER</div>
+              <p className="mt-1 text-[11px] leading-4 text-slate-500">Bifează o acțiune numai după finalizarea depunerii pe portal. Alegerea de mai sus pregătește formularul, fără să înregistreze o depunere.</p>
               <div className="mt-3 grid gap-2">{DEER_ACTIONS.map(([action, label]) => {
                 const entry = draft.actionHistory.find((item) => item.action === action)
                 return <div key={action} className={`rounded-xl border p-2.5 ${entry ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white"}`}>
                   <label className="flex cursor-pointer items-start gap-2 text-xs font-bold text-slate-700">
                     <input type="checkbox" disabled={!canEdit} checked={Boolean(entry)} onChange={() => toggleTrackedAction(action)} className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"/>
-                    <span className="flex-1">{label}{entry && draft.action === action ? <small className="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-[9px] font-black uppercase text-white">portal</small> : null}</span>
+                    <span className="flex-1">{label}</span>
                   </label>
                   {entry ? <input aria-label={`Data depunerii pentru ${label}`} disabled={!canEdit} required type="date" value={entry.submittedAt} onChange={(event) => updateTrackedActionDate(action, event.target.value)} className="input-field mt-2 w-full bg-white disabled:bg-slate-50"/> : null}
                 </div>
