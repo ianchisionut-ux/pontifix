@@ -273,6 +273,7 @@
 @media (max-width:1050px){.declaration-grid{grid-template-columns:1fr}.declaration-workflow{align-items:stretch;flex-direction:column}.declaration-steps{overflow-x:auto}.declaration-period{flex-wrap:wrap}.declaration-config{grid-template-columns:1fr}.declaration-config-fields{grid-template-columns:1fr 1fr}}
 
 /* Dense accounting workspace; all selectors stay inside Contabilitate. */
+.accounting-root { width:86.9565%; zoom:1.15; padding-inline:12px; }
 .accounting-root .accounting-heading { display:flex; align-items:baseline; gap:10px; margin:0 auto 7px; }
 .accounting-root .accounting-heading h1 { margin:0; font-size:20px; }
 .accounting-root .accounting-heading span { font-size:9px; letter-spacing:.09em; }
@@ -315,3 +316,4 @@
 @media (max-width:1250px) { .accounting-overview .stat-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } .accounting-invoice-filters { flex-wrap:wrap; } }
 @media (max-width:1100px) { .accounting-root .accounting-toolbar { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } .accounting-root .current-user-box { grid-column:1/-1; max-width:none; border-left:0; border-top:1px solid var(--border-soft); margin-top:4px; } }
 @media (max-width:700px) { .accounting-root .accounting-heading span { display:none; } .accounting-root .accounting-toolbar { grid-template-columns:minmax(0,1fr); } .accounting-root .accounting-nav-group { padding:3px 0; } .accounting-root .accounting-nav-group-bookkeeping { border-left:0; border-top:1px solid var(--border); } .accounting-root .current-user-box { max-width:none; border-left:0; } .accounting-overview .stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media print { .accounting-root { width:100%; zoom:1; } }
