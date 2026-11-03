@@ -40,16 +40,18 @@ function formatDate(value?: string | null) {
 
 export function EFacturaPanel({ invoiceId }: { invoiceId: number }) {
   const [data, setData] = useState<Validation | null>(null);
+  const [connection, setConnection] = useState<{ configured: boolean; connected: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   async function load() {
     try {
-      const response = await fetch(`/api/accounting/efactura/invoices/${invoiceId}/validate`);
+      const [response, statusResponse] = await Promise.all([fetch(`/api/accounting/efactura/invoices/${invoiceId}/validate`), fetch("/api/accounting/efactura/status")]);
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Statusul ANAF nu a putut fi încărcat.");
       setData({ ...result, errors: Array.isArray(result.errors) ? result.errors : [] });
+      if (statusResponse.ok) setConnection(await statusResponse.json());
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Statusul ANAF nu a putut fi încărcat.");
     }
@@ -131,7 +133,7 @@ export function EFacturaPanel({ invoiceId }: { invoiceId: number }) {
 
       <div className="ef-safety-line">
         <ShieldCheck size={17}/>
-        <span>{data?.autoEfactura ? "Trimitere la emitere numai cu confirmare. Facturile noi amânate sunt preluate automat din ziua următoare; statusul transmiterilor este reverificat zilnic." : "Trimiterea automată nu este activă pentru această factură."}</span>
+        <span>{connection && (!connection.configured || !connection.connected) ? "Conexiunea ANAF/SPV nu este activă. Factura nu poate fi transmisă automat până la configurarea și conectarea contului." : data?.autoEfactura ? "Trimitere la emitere numai cu confirmare. Facturile noi amânate sunt preluate automat din ziua următoare; statusul transmiterilor este reverificat zilnic." : "Trimiterea automată nu este activă pentru această factură."}</span>
       </div>
 
       {data && data.errors.length > 0 && <ul className="ef-errors">{data.errors.map((item) => <li key={item}>{item}</li>)}</ul>}
