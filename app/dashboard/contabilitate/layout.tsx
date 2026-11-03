@@ -9,11 +9,7 @@ export default async function AccountingLayout({ children }: { children: React.R
   return (
     <div className="accounting-root">
       <div className="accounting-heading">
-        <div>
-          <span>Administrare financiară</span>
-          <h1>Contabilitate</h1>
-          <p>Facturare, contabilitate în partidă dublă, rapoarte și declarații într-un singur loc.</p>
-        </div>
+        <span>Administrare financiară</span><h1>Contabilitate</h1>
       </div>
       <AccountingNav />
       <div className="accounting-content">{children}</div>

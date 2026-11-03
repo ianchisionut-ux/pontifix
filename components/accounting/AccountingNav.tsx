@@ -25,15 +25,16 @@ const items = [
 
 export function AccountingNav() {
   const pathname = usePathname()
+  const primary = items.slice(0, 9)
+  const secondary = items.slice(9)
+  const renderLink = ({ href, label, icon: Icon, exact }: typeof items[number]) => {
+    const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
+    return <Link key={href} href={href} className={active ? 'active' : ''}><Icon size={14}/><span>{label}</span></Link>
+  }
   return (
     <div className="accounting-toolbar screen-only">
-      <nav className="accounting-nav">
-        {items.map(({ href, label, icon: Icon, exact }) => {
-          const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
-          return <Link key={href} href={href} className={active ? 'active' : ''}><Icon size={15}/><span>{label}</span></Link>
-        })}
-      </nav>
-      <CurrentUserBox />
+      <div className="accounting-nav-row"><nav className="accounting-nav" aria-label="Contabilitate - navigare principală">{primary.map(renderLink)}</nav><CurrentUserBox /></div>
+      <nav className="accounting-nav accounting-nav-secondary" aria-label="Contabilitate - alte secțiuni">{secondary.map(renderLink)}</nav>
     </div>
   )
 }

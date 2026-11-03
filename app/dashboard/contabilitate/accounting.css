@@ -271,3 +271,44 @@
 .declaration-operations select.input { min-width:205px; padding:7px 9px; font-size:11px; }
 .declaration-bottom { margin-bottom:0; }.declaration-notes { display:flex; flex-direction:column; gap:9px; }.declaration-notes textarea { resize:vertical; }
 @media (max-width:1050px){.declaration-grid{grid-template-columns:1fr}.declaration-workflow{align-items:stretch;flex-direction:column}.declaration-steps{overflow-x:auto}.declaration-period{flex-wrap:wrap}.declaration-config{grid-template-columns:1fr}.declaration-config-fields{grid-template-columns:1fr 1fr}}
+
+/* Dense accounting workspace; all selectors stay inside Contabilitate. */
+.accounting-root .accounting-heading { display:flex; align-items:baseline; gap:10px; margin:0 auto 7px; }
+.accounting-root .accounting-heading h1 { margin:0; font-size:20px; }
+.accounting-root .accounting-heading span { font-size:9px; letter-spacing:.09em; }
+.accounting-root .accounting-toolbar { display:block; margin-bottom:9px; padding:4px 8px; border-radius:10px; }
+.accounting-root .accounting-nav-row { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
+.accounting-root .accounting-nav { flex:1; flex-wrap:nowrap; overflow-x:auto; gap:2px; scrollbar-width:thin; }
+.accounting-root .accounting-nav a { flex:none; padding:7px 8px; border-radius:7px; font-size:11px; white-space:nowrap; }
+.accounting-root .accounting-nav-secondary { border-top:1px solid var(--border-soft); margin-top:3px; padding-top:3px; }
+.accounting-root .current-user-box { flex:none; min-width:145px; max-width:180px; }
+.accounting-root .accounting-content { max-width:none; padding:12px; border-radius:12px; }
+.accounting-root .page-head { align-items:center; margin-bottom:9px; gap:8px; }
+.accounting-root .page-title { font-size:18px; }
+.accounting-root .page-subtitle { font-size:11px; }
+.accounting-root .stat-grid { gap:6px; margin-bottom:9px; }
+.accounting-root .stat-card { border-radius:8px; padding:9px 10px; }
+.accounting-root .stat-card::before { height:2px; }
+.accounting-root .stat-label { font-size:9px; letter-spacing:0; }
+.accounting-root .stat-value { margin-top:3px; font-size:15px; line-height:1.2; }
+.accounting-root .ef-safety-warning { margin:0 0 8px; padding:6px 9px; border-radius:7px; font-size:11px; }
+.accounting-root .ef-safety-warning svg { width:14px; height:14px; flex:none; }
+.accounting-root .card-table { border-radius:8px; }
+.accounting-root .card-table table { font-size:11px; }
+.accounting-root .card-table th { padding:7px 8px; font-size:9px; }
+.accounting-root .card-table td { padding:5px 8px; }
+.accounting-root .doc-chip { padding:3px 5px; font-size:11px; }
+.accounting-root .badge { padding:3px 6px; font-size:9px; }
+.accounting-overview .stat-grid { grid-template-columns:repeat(7,minmax(0,1fr)); }
+.accounting-overview .stat-card { min-height:58px; }
+.accounting-invoice-filters { display:flex; align-items:center; gap:5px; padding:6px; border:1px solid var(--border-soft); border-bottom:0; border-radius:8px 8px 0 0; background:#fff; }
+.accounting-filter-search { display:flex; align-items:center; flex:1; min-width:150px; gap:5px; color:var(--text-faint); }
+.accounting-filter-search input { width:100%; min-width:0; outline:none; font-size:11px; }
+.accounting-invoice-filters select { max-width:140px; padding:5px 6px; border:1px solid var(--border); border-radius:5px; background:#fff; color:var(--text-dim); font-size:10px; }
+.accounting-invoice-filters .btn-secondary { padding:5px 7px; border-radius:5px; font-size:10px; white-space:nowrap; }
+.accounting-invoice-register .card-table { border-radius:0 0 8px 8px; }
+.accounting-invoice-register table { min-width:960px; }
+.accounting-table-count { padding:6px 3px; color:var(--text-faint); font-size:10px; }
+.accounting-table-count a { color:var(--cyan-strong); font-weight:700; }
+@media (max-width:1250px) { .accounting-overview .stat-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } .accounting-invoice-filters { flex-wrap:wrap; } }
+@media (max-width:700px) { .accounting-root .accounting-heading span { display:none; } .accounting-root .accounting-nav-row { flex-direction:column; align-items:stretch; } .accounting-root .current-user-box { max-width:none; border-left:0; } .accounting-overview .stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }

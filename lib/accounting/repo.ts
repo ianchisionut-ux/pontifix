@@ -1409,6 +1409,9 @@ export async function getDashboardStats() {
        COALESCE(SUM(total - "paidAmount") FILTER (WHERE status IN ('issued','partial')),0) AS "totalOutstanding",
        COALESCE(SUM("paidAmount"),0) AS "totalCollected",
        COALESCE(SUM(total) FILTER (WHERE substring("issueDate",1,7)=$1),0) AS "monthRevenue",
+       COALESCE(SUM("vatTotal") FILTER (WHERE substring("issueDate",1,7)=$1),0) AS "monthVat",
+       COUNT(*) FILTER (WHERE "dueDate"=CURRENT_DATE::text AND status IN ('issued','partial'))::int AS "dueToday",
+       COUNT(*) FILTER (WHERE "dueDate"<CURRENT_DATE::text AND status IN ('issued','partial'))::int AS "overdueInvoices",
        (SELECT COUNT(*)::int FROM clients) AS "totalClients",
        (SELECT COUNT(*)::int FROM latest_efactura WHERE status IN ('REJECTED','ERROR')) AS "anafProblems"
      FROM invoices`,
@@ -1420,6 +1423,9 @@ export async function getDashboardStats() {
     totalOutstanding: round2(Number(row.totalOutstanding)),
     totalCollected: round2(Number(row.totalCollected)),
     monthRevenue: round2(Number(row.monthRevenue)),
+    monthVat: round2(Number(row.monthVat)),
+    dueToday: Number(row.dueToday),
+    overdueInvoices: Number(row.overdueInvoices),
     totalClients: Number(row.totalClients),
     anafProblems: Number(row.anafProblems),
   };
