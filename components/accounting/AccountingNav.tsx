@@ -25,16 +25,23 @@ const items = [
 
 export function AccountingNav() {
   const pathname = usePathname()
-  const primary = items.slice(0, 9)
-  const secondary = items.slice(9)
+  const billing = [items[0], items[1], items[2], items[7], items[8], items[9], items[12], items[14]]
+  const bookkeeping = [items[3], items[4], items[5], items[6], items[10], items[11], items[13]]
   const renderLink = ({ href, label, icon: Icon, exact }: typeof items[number]) => {
     const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
     return <Link key={href} href={href} className={active ? 'active' : ''}><Icon size={14}/><span>{label}</span></Link>
   }
   return (
     <div className="accounting-toolbar screen-only">
-      <div className="accounting-nav-row"><nav className="accounting-nav" aria-label="Contabilitate - navigare principală">{primary.map(renderLink)}</nav><CurrentUserBox /></div>
-      <nav className="accounting-nav accounting-nav-secondary" aria-label="Contabilitate - alte secțiuni">{secondary.map(renderLink)}</nav>
+      <div className="accounting-nav-group">
+        <span className="accounting-nav-group-title">Facturare</span>
+        <nav className="accounting-nav" aria-label="Facturare">{billing.map(renderLink)}</nav>
+      </div>
+      <div className="accounting-nav-group accounting-nav-group-bookkeeping">
+        <span className="accounting-nav-group-title">Contabilitate</span>
+        <nav className="accounting-nav" aria-label="Contabilitate">{bookkeeping.map(renderLink)}</nav>
+      </div>
+      <CurrentUserBox />
     </div>
   )
 }

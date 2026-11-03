@@ -276,12 +276,14 @@
 .accounting-root .accounting-heading { display:flex; align-items:baseline; gap:10px; margin:0 auto 7px; }
 .accounting-root .accounting-heading h1 { margin:0; font-size:20px; }
 .accounting-root .accounting-heading span { font-size:9px; letter-spacing:.09em; }
-.accounting-root .accounting-toolbar { display:block; margin-bottom:9px; padding:4px 8px; border-radius:10px; }
-.accounting-root .accounting-nav-row { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
-.accounting-root .accounting-nav { flex:1; flex-wrap:nowrap; overflow-x:auto; gap:2px; scrollbar-width:thin; }
+.accounting-root .accounting-toolbar { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto; align-items:stretch; max-width:none; width:100%; margin-bottom:9px; padding:5px 8px; gap:0; border-radius:10px; }
+.accounting-root .accounting-nav-group { display:flex; flex-direction:column; justify-content:center; min-width:0; padding:0 8px; }
+.accounting-root .accounting-nav-group:first-child { padding-left:0; }
+.accounting-root .accounting-nav-group-bookkeeping { border-left:1px solid var(--border); }
+.accounting-root .accounting-nav-group-title { padding:0 7px 2px; color:var(--text-faint); font-size:9px; font-weight:850; letter-spacing:.08em; text-transform:uppercase; }
+.accounting-root .accounting-nav { flex:none; flex-wrap:nowrap; overflow-x:auto; gap:2px; scrollbar-width:thin; }
 .accounting-root .accounting-nav a { flex:none; padding:7px 8px; border-radius:7px; font-size:11px; white-space:nowrap; }
-.accounting-root .accounting-nav-secondary { border-top:1px solid var(--border-soft); margin-top:3px; padding-top:3px; }
-.accounting-root .current-user-box { flex:none; min-width:145px; max-width:180px; }
+.accounting-root .current-user-box { align-self:center; flex:none; min-width:145px; max-width:180px; }
 .accounting-root .accounting-content { max-width:none; padding:12px; border-radius:12px; }
 .accounting-root .page-head { align-items:center; margin-bottom:9px; gap:8px; }
 .accounting-root .page-title { font-size:18px; }
@@ -311,4 +313,5 @@
 .accounting-table-count { padding:6px 3px; color:var(--text-faint); font-size:10px; }
 .accounting-table-count a { color:var(--cyan-strong); font-weight:700; }
 @media (max-width:1250px) { .accounting-overview .stat-grid { grid-template-columns:repeat(4,minmax(0,1fr)); } .accounting-invoice-filters { flex-wrap:wrap; } }
-@media (max-width:700px) { .accounting-root .accounting-heading span { display:none; } .accounting-root .accounting-nav-row { flex-direction:column; align-items:stretch; } .accounting-root .current-user-box { max-width:none; border-left:0; } .accounting-overview .stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:1100px) { .accounting-root .accounting-toolbar { grid-template-columns:minmax(0,1fr) minmax(0,1fr); } .accounting-root .current-user-box { grid-column:1/-1; max-width:none; border-left:0; border-top:1px solid var(--border-soft); margin-top:4px; } }
+@media (max-width:700px) { .accounting-root .accounting-heading span { display:none; } .accounting-root .accounting-toolbar { grid-template-columns:minmax(0,1fr); } .accounting-root .accounting-nav-group { padding:3px 0; } .accounting-root .accounting-nav-group-bookkeeping { border-left:0; border-top:1px solid var(--border); } .accounting-root .current-user-box { max-width:none; border-left:0; } .accounting-overview .stat-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
