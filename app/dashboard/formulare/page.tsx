@@ -19,7 +19,7 @@ export default async function FormsPage() {
 
   const [formRows, submissionRows, connectionRows, projectRows, identityCards, borderouRows] = await Promise.all([
     prisma.$queryRaw<Array<Omit<FormTemplateDto, 'updatedAt'> & { updatedAt: Date }>>`
-      SELECT "id", "title", "category", "documentPathname", "documentName", "sortOrder", "fieldSchema", "stampSchema", "updatedAt"
+      SELECT "id", "title", "category", "documentPathname", "documentName", "deerDocumentKind", "sortOrder", "fieldSchema", "stampSchema", "updatedAt"
       FROM "FormTemplate" WHERE "businessId"=${businessId} ORDER BY "category", "sortOrder", "createdAt"`,
     prisma.$queryRaw<Array<Omit<FormSubmissionDto, 'createdAt' | 'updatedAt'> & { createdAt: Date; updatedAt: Date }>>`
       SELECT "id", "formTemplateId", "title", "sourceType", "sourceId", "values", "fieldSchema", "stampSchema", "createdAt", "updatedAt"

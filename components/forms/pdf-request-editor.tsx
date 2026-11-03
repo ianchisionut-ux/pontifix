@@ -8,7 +8,7 @@ import { useLanguage } from '@/components/language-provider'
 import type { FormField, FormSubmissionDto, FormTemplateDto, StampPlacement } from '@/lib/ensure-form-storage'
 import { CONNECTION_FIELDS, CONNECTION_FIELD_LABELS } from '@/lib/connection-fields'
 import type { IdentityCardRecord } from '@/lib/identity-card-storage'
-import { isBorderouTemplate, type DeerBorderouDto } from '@/lib/deer-borderou-shared'
+import { deerDocumentKindForTemplate, type DeerBorderouDto } from '@/lib/deer-borderou-shared'
 
 export type ConnectionFormOption = { id: string; nib: string; sequenceNumber: number; status: string; deerSubmittedAt: string; createdAt: string; fields: Record<string, string> }
 export type ProjectFormOption = { id: string; name: string; beneficiary: string; beneficiaryPhone: string; address: string; certificateNumber: string; certificateDate: string }
@@ -141,7 +141,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   const router = useRouter()
   const { tr } = useLanguage()
   const isDeer = template.category === 'DEER'
-  const isBorderou = isDeer && isBorderouTemplate(template.title)
+  const caseDocumentKind = deerDocumentKindForTemplate(template)
   const defaultConnection = isDeer && defaultConnectionId ? connections.find((item) => item.id === defaultConnectionId) : undefined
   const [pdf, setPdf] = useState<any>(null)
   const [pageCount, setPageCount] = useState(0)
@@ -167,10 +167,10 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   const [error, setError] = useState('')
   const drag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; field: FormField; box: DOMRect } | null>(null)
   const stampDrag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; item: StampPlacement; box: DOMRect } | null>(null)
-  const borderou = isBorderou && sourceId.startsWith('connection:')
-    ? borderouri.find((item) => item.connectionId === sourceId.slice(11)) : undefined
-  const documentUrl = isBorderou
-    ? borderou ? `/api/formulare/borderou/${borderou.id}/document?v=${documentVersion}` : ''
+  const caseDocument = caseDocumentKind && sourceId.startsWith('connection:')
+    ? borderouri.find((item) => item.connectionId === sourceId.slice(11) && item.documentKind === caseDocumentKind) : undefined
+  const documentUrl = caseDocumentKind
+    ? caseDocument ? `/api/formulare/borderou/${caseDocument.id}/document?v=${documentVersion}` : ''
     : `/api/formulare/${encodeURIComponent(template.id)}/document?v=${documentVersion}`
   const selected = fields.find((field) => field.id === selectedId)
   const selectedStamp = placements.find((item) => item.id === selectedStampId)
@@ -457,7 +457,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
         {!isDeer && <><optgroup label="Cărți de identitate">{identityCards.map((item) => <option key={item.id} value={`identity:${item.id}`}>{item.fullName} - {[item.series, item.number].filter(Boolean).join(' ') || 'fără serie'}</option>)}</optgroup>
         <optgroup label={tr('Proiecte')}>{projects.map((item) => <option key={item.id} value={`project:${item.id}`}>{item.name} - {item.beneficiary || tr('Fără beneficiar')}</option>)}</optgroup></>}
       </select>
-      {canManage && !isBorderou && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
+      {canManage && !caseDocumentKind && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
       {canManage && <button className={`btn-secondary inline-flex items-center gap-2 !py-2 ${layoutMode ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`} onClick={() => setLayoutMode((value) => !value)}><Settings2 size={16}/> {tr('Poziționare')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addField}><Plus size={16}/> {tr('Câmp')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addTodayField}><Plus size={16}/> Data de azi</button>}

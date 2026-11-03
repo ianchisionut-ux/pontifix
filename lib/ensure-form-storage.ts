@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import type { DeerDocumentKind } from '@/lib/deer-borderou-shared'
 
 const INITIAL_FORMS = [
   ['proces-verbal-receptie-terminarea-lucrarilor', 'Proces-verbal de recepție la terminarea lucrărilor', 'proces-verbal-receptie-terminarea-lucrarilor.pdf'],
@@ -52,7 +53,7 @@ async function ensureTable() {
       const [schema] = await prisma.$queryRaw<{ ready: boolean }[]>`
         SELECT to_regclass('"FormTemplate"') IS NOT NULL
           AND (SELECT COUNT(*) FROM pg_attribute WHERE attrelid = to_regclass('"FormTemplate"')
-            AND attname IN ('fieldSchema', 'stampSchema') AND attnum > 0 AND NOT attisdropped) = 2
+            AND attname IN ('fieldSchema', 'stampSchema', 'deerDocumentKind') AND attnum > 0 AND NOT attisdropped) = 3
           AND to_regclass('"FormTemplate_businessId_category_sortOrder_idx"') IS NOT NULL
           AND to_regclass('"FormSubmission"') IS NOT NULL
           AND to_regclass('"FormSubmission_businessId_updatedAt_idx"') IS NOT NULL
@@ -71,6 +72,12 @@ async function ensureTable() {
     )`)
       await prisma.$executeRawUnsafe(`ALTER TABLE "FormTemplate" ADD COLUMN IF NOT EXISTS "fieldSchema" JSONB NOT NULL DEFAULT '[]'::jsonb`)
       await prisma.$executeRawUnsafe(`ALTER TABLE "FormTemplate" ADD COLUMN IF NOT EXISTS "stampSchema" JSONB NOT NULL DEFAULT '[]'::jsonb`)
+      await prisma.$executeRawUnsafe(`ALTER TABLE "FormTemplate" ADD COLUMN IF NOT EXISTS "deerDocumentKind" TEXT`)
+      await prisma.$executeRawUnsafe(`UPDATE "FormTemplate" SET "deerDocumentKind"=CASE
+        WHEN "title" ~* 'borderou' OR "documentName" ~* '(borderou|DINV900)' THEN 'BORDEROU'
+        WHEN "title" ~* 'predare.?primire' OR "documentName" ~* '(predare.?primire|DINV901)' THEN 'PV_PREDARE_PRIMIRE'
+        WHEN "title" ~* '(înștiințare.*(montare|BMP)|instiintare.*(montare|BMP))' OR "documentName" ~* '(DINV906|instiintare.*(montare|BMP))' THEN 'INSTIINTARE_BMP'
+        ELSE NULL END WHERE "category"='DEER' AND "deerDocumentKind" IS NULL`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "FormTemplate_businessId_category_sortOrder_idx" ON "FormTemplate"("businessId", "category", "sortOrder")`)
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "FormSubmission" (
         "id" TEXT NOT NULL, "businessId" TEXT NOT NULL, "formTemplateId" TEXT NOT NULL,
@@ -98,11 +105,18 @@ export async function ensureFormStorage(businessId: string) {
     INSERT INTO "FormTemplate" ("id", "businessId", "title", "category", "documentPathname", "documentName", "sortOrder", "fieldSchema")
     VALUES ${Prisma.join(rows)} ON CONFLICT ("id") DO NOTHING
   `)
+  await prisma.$executeRaw`
+    INSERT INTO "FormTemplate" ("id", "businessId", "title", "category", "documentPathname", "documentName", "deerDocumentKind", "sortOrder")
+    SELECT ${`${businessId}:deer:instiintare-bmp`}, ${businessId}, 'Înștiințare montare BMP', 'DEER', 'case-document:INSTIINTARE_BMP', 'PDF primit de la DEER', 'INSTIINTARE_BMP', 100
+    WHERE NOT EXISTS (SELECT 1 FROM "FormTemplate" WHERE "businessId"=${businessId} AND "category"='DEER' AND "deerDocumentKind"='INSTIINTARE_BMP')
+    ON CONFLICT ("id") DO NOTHING
+  `
 }
 
 export type FormTemplateDto = {
   id: string; title: string; category: 'FORMULAR' | 'CERERE' | 'SEMNARE' | 'DEER'
   documentPathname: string; documentName: string; sortOrder: number
+  deerDocumentKind?: DeerDocumentKind | null
   fieldSchema: FormField[]; stampSchema: StampPlacement[]; updatedAt: string
 }
 export type FormSubmissionDto = {

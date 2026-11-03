@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { deerDocumentKindFromName } from '@/lib/deer-borderou-shared'
 import { ensureFormStorage } from '@/lib/ensure-form-storage'
 
 const schema = z.object({
@@ -23,7 +24,8 @@ export async function POST(request: NextRequest) {
   await ensureFormStorage(businessId)
   const maxRows = await prisma.$queryRaw<Array<{ value: number }>>`SELECT COALESCE(MAX("sortOrder"), -1)::int AS value FROM "FormTemplate" WHERE "businessId"=${businessId} AND "category"=${parsed.data.category}`
   const id = randomUUID()
-  await prisma.$executeRaw`INSERT INTO "FormTemplate" ("id", "businessId", "title", "category", "documentPathname", "documentName", "sortOrder") VALUES (${id}, ${businessId}, ${parsed.data.title}, ${parsed.data.category}, ${parsed.data.documentPathname}, ${parsed.data.documentName}, ${(maxRows[0]?.value ?? -1) + 1})`
+  const deerDocumentKind = parsed.data.category === 'DEER' ? deerDocumentKindFromName(parsed.data.title) || deerDocumentKindFromName(parsed.data.documentName) : null
+  await prisma.$executeRaw`INSERT INTO "FormTemplate" ("id", "businessId", "title", "category", "documentPathname", "documentName", "deerDocumentKind", "sortOrder") VALUES (${id}, ${businessId}, ${parsed.data.title}, ${parsed.data.category}, ${parsed.data.documentPathname}, ${parsed.data.documentName}, ${deerDocumentKind}, ${(maxRows[0]?.value ?? -1) + 1})`
   revalidatePath('/dashboard/formulare')
   return NextResponse.json({ id }, { status: 201 })
 }

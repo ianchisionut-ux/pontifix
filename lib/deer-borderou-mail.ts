@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/crypto'
 import { getStoredEmailSettings } from '@/lib/email-settings'
 import { emailAttachmentKey, ensureDeerBorderouStorage, extractDeerEmailIdentity, findDeerCase, saveDeerBorderou } from '@/lib/deer-borderou'
+import { deerDocumentKindFromName } from '@/lib/deer-borderou-shared'
 
 const DEER_SENDERS = [
   'noreply_energieelectrica_mn@distributie-energie.ro',
@@ -21,7 +22,7 @@ export async function syncDeerBorderouri(businessId: string) {
     connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 30000,
   })
   await ensureDeerBorderouStorage()
-  const result = { scanned: 0, imported: 0, matched: 0, pending: 0 }
+  const result = { scanned: 0, imported: 0, matched: 0, pending: 0, corrected: 0 }
   try {
     await client.connect()
     await client.mailboxOpen('INBOX', { readOnly: true })
@@ -42,22 +43,27 @@ export async function syncDeerBorderouri(businessId: string) {
       const connectionId = await findDeerCase(businessId, dossierNumber, beneficiary)
       for (const attachment of mail.attachments) {
         const filename = attachment.filename || ''
-        if (!/borderou.*\.pdf$/i.test(filename)) continue
+        if (!/\.pdf$/i.test(filename)) continue
+        const documentKind = deerDocumentKindFromName(filename)
+        if (!documentKind) continue
         const content = attachment.content
         if (!content || content.length < 100 || content.length > MAX_PDF_BYTES || content.subarray(0, 5).toString() !== '%PDF-') continue
         const sourceKey = emailAttachmentKey(mail.messageId || String(uid), filename, content)
-        const exists = await prisma.$queryRaw<Array<{ id: string; connectionId: string | null }>>`
-          SELECT "id", "connectionId" FROM "DeerBorderou" WHERE "businessId"=${businessId} AND "sourceKey"=${sourceKey} LIMIT 1
+        const exists = await prisma.$queryRaw<Array<{ id: string; connectionId: string | null; documentKind: string }>>`
+          SELECT "id", "connectionId", "documentKind" FROM "DeerBorderou" WHERE "businessId"=${businessId} AND "sourceKey"=${sourceKey} LIMIT 1
         `
         if (exists.length) {
-          if (!exists[0].connectionId && (dossierNumber || beneficiary)) await prisma.$executeRaw`
-            UPDATE "DeerBorderou" SET "connectionId"=${connectionId}, "dossierNumber"=${dossierNumber || null}, "beneficiary"=${beneficiary || null}
-            WHERE "id"=${exists[0].id} AND "businessId"=${businessId} AND "connectionId" IS NULL
-          `
+          if (connectionId && (exists[0].connectionId !== connectionId || exists[0].documentKind !== documentKind)) {
+            await prisma.$executeRaw`
+              UPDATE "DeerBorderou" SET "connectionId"=${connectionId}, "documentKind"=${documentKind}, "dossierNumber"=${dossierNumber}, "beneficiary"=${beneficiary}
+              WHERE "id"=${exists[0].id} AND "businessId"=${businessId} AND "source"='EMAIL'
+            `
+            result.corrected++
+          }
           continue
         }
         await saveDeerBorderou({
-          businessId, connectionId, documentPathname: `db:${sourceKey}`, documentData: content, documentName: filename,
+          businessId, connectionId, documentKind, documentPathname: `db:${sourceKey}`, documentData: content, documentName: filename,
           source: 'EMAIL', sourceKey, sender, subject, dossierNumber, beneficiary,
           receivedAt: mail.date || (message.internalDate ? new Date(message.internalDate) : new Date()),
         })

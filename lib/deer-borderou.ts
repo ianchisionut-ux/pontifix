@@ -3,10 +3,12 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { extractDeerDossierNumber } from '@/lib/deer-submission'
 import { ensureConnectionStorage } from '@/lib/ensure-connection-storage'
+import type { DeerDocumentKind } from '@/lib/deer-borderou-shared'
 
 export type DeerBorderou = {
   id: string
   connectionId: string | null
+  documentKind: DeerDocumentKind
   documentPathname: string
   documentName: string
   source: string
@@ -23,6 +25,7 @@ export function ensureDeerBorderouStorage() {
     "id" TEXT NOT NULL PRIMARY KEY,
     "businessId" TEXT NOT NULL,
     "connectionId" TEXT,
+    "documentKind" TEXT NOT NULL DEFAULT 'BORDEROU',
     "documentPathname" TEXT NOT NULL,
     "documentData" BYTEA,
     "documentName" TEXT NOT NULL,
@@ -37,6 +40,7 @@ export function ensureDeerBorderouStorage() {
     CONSTRAINT "DeerBorderou_business_source_unique" UNIQUE ("businessId", "sourceKey")
   )`).then(async () => {
     await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "documentData" BYTEA`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "documentKind" TEXT NOT NULL DEFAULT 'BORDEROU'`)
   }).catch((error) => { ready = null; throw error })
   return ready
 }
@@ -48,7 +52,9 @@ export function normalizePerson(value: string) {
 export function extractDeerEmailIdentity(text: string) {
   const dossierNumber = extractDeerDossierNumber(text)
   const afterNumber = dossierNumber ? text.slice(text.indexOf(dossierNumber) + dossierNumber.length) : ''
-  const beneficiary = afterNumber.match(/^\s*[,;:–-]\s*([A-ZĂÂÎȘȚ][A-ZĂÂÎȘȚ\s-]{3,80})(?=\s*[,.;]|\s+achitat|\s+pentru|\s+este|$)/i)?.[1]?.trim() || ''
+  const after = afterNumber.match(/^\s*[,;:–-]\s*([A-ZĂÂÎȘȚ][A-ZĂÂÎȘȚ\s-]{3,80})(?=\s*[,.;]|\s+achitat|\s+pentru|\s+este|$)/i)?.[1]?.trim()
+  const before = text.match(/(?:utilizatorului|beneficiar(?:ului)?|solicitant(?:ului)?)\s+([A-ZĂÂÎȘȚ][A-ZĂÂÎȘȚ\s-]{3,80})\s*[.,;:]\s*ATR\s*nr\.?\s*\d{13}/i)?.[1]?.trim()
+  const beneficiary = after || before || ''
   return { dossierNumber, beneficiary }
 }
 
@@ -79,13 +85,14 @@ export async function findDeerCase(businessId: string, dossierNumber: string, be
 export async function listDeerBorderouri(businessId: string) {
   await ensureDeerBorderouStorage()
   return prisma.$queryRaw<DeerBorderou[]>`
-    SELECT "id", "connectionId", "documentPathname", "documentName", "source", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt"
+    SELECT "id", "connectionId", "documentKind", "documentPathname", "documentName", "source", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt"
     FROM "DeerBorderou" WHERE "businessId"=${businessId} ORDER BY "receivedAt" DESC, "createdAt" DESC
   `
 }
 
 export async function saveDeerBorderou(input: {
   businessId: string; connectionId: string | null; documentPathname: string; documentName: string
+  documentKind: DeerDocumentKind
   documentData?: Buffer
   source: 'EMAIL' | 'UPLOAD'; sourceKey?: string; sender?: string; subject?: string
   dossierNumber?: string; beneficiary?: string; receivedAt?: Date
@@ -95,8 +102,8 @@ export async function saveDeerBorderou(input: {
   const sourceKey = input.sourceKey || `upload:${id}`
   const receivedAt = input.receivedAt || new Date()
   await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO "DeerBorderou" ("id", "businessId", "connectionId", "documentPathname", "documentData", "documentName", "source", "sourceKey", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt")
-    VALUES (${id}, ${input.businessId}, ${input.connectionId}, ${input.documentPathname}, ${input.documentData || null}, ${input.documentName}, ${input.source}, ${sourceKey}, ${input.sender || null}, ${input.subject || null}, ${input.dossierNumber || null}, ${input.beneficiary || null}, ${receivedAt})
+    INSERT INTO "DeerBorderou" ("id", "businessId", "connectionId", "documentKind", "documentPathname", "documentData", "documentName", "source", "sourceKey", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt")
+    VALUES (${id}, ${input.businessId}, ${input.connectionId}, ${input.documentKind}, ${input.documentPathname}, ${input.documentData || null}, ${input.documentName}, ${input.source}, ${sourceKey}, ${input.sender || null}, ${input.subject || null}, ${input.dossierNumber || null}, ${input.beneficiary || null}, ${receivedAt})
     ON CONFLICT ("businessId", "sourceKey") DO NOTHING
   `)
   return id

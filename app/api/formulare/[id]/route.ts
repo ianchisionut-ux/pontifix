@@ -17,11 +17,12 @@ const stampSchema = z.array(z.object({
   height: z.number().min(.01).max(1), rotation: z.number().min(-360).max(360),
 })).max(250)
 const schema = z.object({
+  title: z.string().trim().min(2).max(180).optional(),
   documentPathname: z.string().trim().min(2).max(1000).optional(),
   documentName: z.string().trim().min(1).max(255).optional(),
   fieldSchema: fieldSchema.optional(),
   stampSchema: stampSchema.optional(),
-}).refine((data) => data.fieldSchema !== undefined || data.stampSchema !== undefined || (!!data.documentPathname && !!data.documentName))
+}).refine((data) => data.title !== undefined || data.fieldSchema !== undefined || data.stampSchema !== undefined || (!!data.documentPathname && !!data.documentName))
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth()
@@ -34,6 +35,9 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   const { id } = await params
   const exists = await prisma.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "FormTemplate" WHERE "id"=${id} AND "businessId"=${businessId} LIMIT 1`
   if (!exists[0]) return NextResponse.json({ error: 'Model inexistent.' }, { status: 404 })
+  if (parsed.data.title) {
+    await prisma.$executeRaw`UPDATE "FormTemplate" SET "title"=${parsed.data.title}, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${businessId} AND "category"='DEER'`
+  }
   if (parsed.data.documentPathname && parsed.data.documentName) {
     await prisma.$executeRaw`UPDATE "FormTemplate" SET "documentPathname"=${parsed.data.documentPathname}, "documentName"=${parsed.data.documentName}, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${businessId}`
   }

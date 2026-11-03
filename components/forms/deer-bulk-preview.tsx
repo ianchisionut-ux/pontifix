@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react'
 import { Download, Loader2, Printer, X } from 'lucide-react'
 import type { FormField, FormSubmissionDto, FormTemplateDto, StampPlacement } from '@/lib/ensure-form-storage'
 import { boundValue, loadImage, transparentStamp, type ConnectionFormOption } from './pdf-request-editor'
-import { isBorderouTemplate } from '@/lib/deer-borderou-shared'
+import { deerDocumentKindForTemplate, type DeerDocumentKind } from '@/lib/deer-borderou-shared'
 
 type PreviewProps = {
   templates: FormTemplateDto[]
   submissions: FormSubmissionDto[]
   connection: ConnectionFormOption
-  borderouDocumentId?: string
+  caseDocumentIds: Partial<Record<DeerDocumentKind, string>>
   onClose: () => void
 }
 
@@ -45,7 +45,7 @@ function drawField(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement,
   if (line) context.fillText(line, x, y + lineNo * size * 1.18)
 }
 
-export function DeerBulkPreview({ templates, submissions, connection, borderouDocumentId, onClose }: PreviewProps) {
+export function DeerBulkPreview({ templates, submissions, connection, caseDocumentIds, onClose }: PreviewProps) {
   const [previewUrl, setPreviewUrl] = useState('')
   const [error, setError] = useState('')
   const [current, setCurrent] = useState('')
@@ -64,8 +64,10 @@ export function DeerBulkPreview({ templates, submissions, connection, borderouDo
         for (const template of templates) {
           if (cancelled) return
           setCurrent(template.title)
-          const documentUrl = isBorderouTemplate(template.title) && borderouDocumentId
-            ? `/api/formulare/borderou/${encodeURIComponent(borderouDocumentId)}/document`
+          const kind = deerDocumentKindForTemplate(template)
+          const caseDocumentId = kind ? caseDocumentIds[kind] : undefined
+          const documentUrl = kind && caseDocumentId
+            ? `/api/formulare/borderou/${encodeURIComponent(caseDocumentId)}/document`
             : `/api/formulare/${encodeURIComponent(template.id)}/document`
           const response = await fetch(documentUrl, { signal: controller.signal })
           if (!response.ok) throw new Error(`PDF-ul „${template.title}” nu poate fi deschis.`)
@@ -117,7 +119,7 @@ export function DeerBulkPreview({ templates, submissions, connection, borderouDo
       }
     })()
     return () => { cancelled = true; controller.abort(); if (url) URL.revokeObjectURL(url) }
-  }, [templates, submissions, connection, borderouDocumentId])
+  }, [templates, submissions, connection, caseDocumentIds])
 
   function printAll() {
     if (!previewUrl) return
