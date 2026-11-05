@@ -49,11 +49,14 @@ export function AccountingNav() {
 
   return (
     <div className="accounting-navigation screen-only">
-      <div className="accounting-toolbar">
+      <div className="accounting-heading">
+        <div className="accounting-heading-title"><span>Administrare financiară</span><h1>Contabilitate</h1></div>
         <div className="accounting-zone-switch" aria-label="Alege zona">
           <Link href={root} className={activeZone === 'billing' && !isCompany ? 'active' : ''}>Facturare</Link>
           <Link href={`${root}/ledger`} className={activeZone === 'accounting' && !isCompany ? 'active' : ''}>Contabilitate</Link>
         </div>
+      </div>
+      <div className="accounting-toolbar">
         <div className={`accounting-nav-group accounting-nav-group-billing ${activeZone === 'billing' ? 'zone-active' : ''}`}>
           <span className="accounting-nav-group-title">Facturare</span>
           <nav className="accounting-nav" aria-label="Funcții de facturare">{renderItems(billingItems)}</nav>
