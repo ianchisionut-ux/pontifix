@@ -42,6 +42,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const { id } = use(params);
   const router = useRouter();
   const [data, setData] = useState<FullInvoice | null>(null);
+  const [loadError, setLoadError] = useState("");
   const [payAmount, setPayAmount] = useState<number>(0);
   const [payDate, setPayDate] = useState(bucharestDate());
   const [payMethod, setPayMethod] = useState("numerar");
@@ -49,12 +50,17 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const [receiptBusy, setReceiptBusy] = useState(false);
 
   function load() {
+    setLoadError("");
     fetch(`/api/accounting/invoices/${id}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error(r.status === 404 ? "Factura nu există în firma activă." : "Factura nu a putut fi încărcată.");
+        return r.json();
+      })
       .then((d) => {
         setData(d);
         setPayAmount(Math.max(0, d.invoice.total - d.invoice.paidAmount));
-      });
+      })
+      .catch((error) => setLoadError(error instanceof Error ? error.message : "Factura nu a putut fi încărcată."));
   }
   useEffect(load, [id]);
 
@@ -109,6 +115,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
     router.push("/dashboard/contabilitate/invoices");
   }
 
+  if (loadError) return <div className="card p-8"><h1 className="text-xl font-semibold">{loadError}</h1><Link href="/dashboard/contabilitate/invoices" className="btn-secondary mt-5">Înapoi la facturi</Link></div>;
   if (!data) return <div style={{ color: "var(--text-faint)" }}>Se incarca...</div>;
   const { invoice, items, client, user, receipts, payments } = data;
   const rest = invoice.total - invoice.paidAmount;

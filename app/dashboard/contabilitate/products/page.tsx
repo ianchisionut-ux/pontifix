@@ -1,12 +1,18 @@
 "use client";
+import { AccountHints } from "@/components/accounting/AccountHints";
+import { AccountPicker } from "@/components/accounting/AccountPicker";
 
 import { useEffect, useState } from "react";
+import { useAccountSuggestion } from "@/components/accounting/useAccountSuggestion";
 import { Plus, Download } from "lucide-react";
 
 type Product = { id: number; name: string; um: string; price: number; cost: number; vatRate: number; unitCode: string; vatCategoryCode: string; taxExemptionReasonCode: string; taxExemptionReason: string; revenueAccount: string };
 const emptyForm = { name: "", um: "buc", price: 0, cost: 0, vatRate: 21, unitCode: "H87", vatCategoryCode: "S", taxExemptionReasonCode: "", taxExemptionReason: "", revenueAccount: "704" };
 
 export default function ProductsPage() {
+  const accountSuggestion=useAccountSuggestion("INCOME");
+  const [accounts,setAccounts]=useState<{code:string;name:string}[]>([]);
+  useEffect(()=>{fetch("/api/accounting/ledger/accounts").then(r=>r.json()).then(rows=>setAccounts(rows.filter((a:{active:number;allowPosting:number;code:string})=>a.active&&a.allowPosting&&a.code.startsWith("7"))))},[]);
   const [products, setProducts] = useState<Product[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -34,6 +40,7 @@ export default function ProductsPage() {
         body: JSON.stringify(form),
       });
     }
+    accountSuggestion.reset();
     setForm(emptyForm);
     setEditingId(null);
     setShowForm(false);
@@ -41,6 +48,8 @@ export default function ProductsPage() {
   }
 
   function edit(p: Product) {
+    accountSuggestion.reset();
+    accountSuggestion.chooseManually(0);
     setForm({ name: p.name, um: p.um, price: p.price, cost: p.cost, vatRate: p.vatRate, unitCode: p.unitCode || "H87", vatCategoryCode: p.vatCategoryCode || "S", taxExemptionReasonCode: p.taxExemptionReasonCode || "", taxExemptionReason: p.taxExemptionReason || "", revenueAccount: p.revenueAccount || "704" });
     setEditingId(p.id);
     setShowForm(true);
@@ -82,7 +91,8 @@ export default function ProductsPage() {
         <div className="card mb-6 grid grid-cols-4 gap-3 items-end">
           <div className="col-span-2">
             <label className="field-label">Denumire</label>
-            <input className="input" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <input className="input" value={form.name} onChange={(e) => {const name=e.target.value;setForm(f=>({...f,name}));accountSuggestion.suggest(0,name,code=>setForm(f=>f.name===name?{...f,revenueAccount:code}:f))}} />
+
           </div>
           <div>
             <label className="field-label">U.M.</label>
@@ -120,11 +130,8 @@ export default function ProductsPage() {
           </div>
           <div>
             <label className="field-label">Cont venit</label>
-            <select className="input" value={form.revenueAccount} onChange={(e) => setForm({ ...form, revenueAccount: e.target.value })}>
-              <option value="704">704 · Servicii prestate</option>
-              <option value="707">707 · Vânzarea mărfurilor</option>
-              <option value="708">708 · Alte activități</option>
-            </select>
+            <AccountPicker label="Cont venit produs" accounts={accounts} value={form.revenueAccount} onChange={code=>{accountSuggestion.chooseManually(0);setForm({...form,revenueAccount:code})}}/>
+                  <AccountHints value={form.revenueAccount} suggestions={accountSuggestion.suggestions.get(0)||[]} onChoose={code=>{accountSuggestion.chooseManually(0);setForm({...form,revenueAccount:code})}}/>
           </div>
           <div>
             <label className="field-label">Cod U.M. UBL</label>

@@ -1,6 +1,7 @@
 import { accountingApi } from '@/lib/accounting/access'
 import { NextRequest, NextResponse } from "next/server";
 import { getClient, updateClient, deleteClient } from "@/lib/accounting/repo";
+import { clientSchema, clientFieldErrors } from '@/lib/accounting/client-validation'
 
 async function GETHandler(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -11,8 +12,9 @@ async function GETHandler(_req: NextRequest, { params }: { params: Promise<{ id:
 
 async function PUTHandler(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const data = await req.json();
-  await updateClient(Number(id), data);
+  const parsed = clientSchema.safeParse(await req.json());
+  if (!parsed.success) return NextResponse.json({ error: 'Completează câmpurile obligatorii ale clientului.', fieldErrors: clientFieldErrors(parsed.error) }, { status: 400 });
+  await updateClient(Number(id), parsed.data);
   return NextResponse.json({ ok: true });
 }
 

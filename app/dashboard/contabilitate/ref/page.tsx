@@ -1,22 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { VAT_REGIME_LABELS, VAT_REGIME_OPTIONS, calculateIncludedVat, defaultVatRegimeReason, suggestVatRegime, vatRatesForDate, vatRegimeNeedsReason, type VatRegimeCode } from "@/lib/accounting/vat-regime";
 
 type RefRow = {
   id: number; type: "INCOME" | "EXPENSE"; date: string; documentType: string; documentNumber: string;
   explanation: string; grossAmount: number; vatAmount: number; vatRate:number|null; vatCategoryCode:VatRegimeCode; taxExemptionReasonCode:string; taxExemptionReason:string; netAmount: number; fiscalCategory: string;
-  deductibilityPercent: number; fiscalAmount: number; source: "MANUAL" | "AUTO_PAYMENT";
+  deductibilityPercent: number; fiscalAmount: number; source: "MANUAL" | "AUTO_PAYMENT" | "AUTO_PAYROLL";
   partnerName: string; partnerCif: string; partnerCountryCode: string; partnerVatPayer:number;
   partnerRegCom:string; partnerAddress:string; partnerCounty:string; partnerCity:string; partnerPostalCode:string; partnerPhone:string; partnerRegistrationStatus:string; partnerInactive:number;
 };
-type AccountSummary = { accountCode:string; accountName:string; type:"INCOME"|"EXPENSE"; debit:number; credit:number; fiscalAmount:number; entries:number };
+type AccountSummary = { accountCode:string; accountName:string; type:"INCOME"|"EXPENSE"; debit:number; credit:number; accountingAmount:number; entries:number };
 type Summary = { totalIncome: number; taxableIncome: number; totalExpenses: number; deductibleExpenses: number; fiscalResult: number };
 const emptySummary: Summary = { totalIncome: 0, taxableIncome: 0, totalExpenses: 0, deductibleExpenses: 0, fiscalResult: 0 };
 const currentYear = new Date().getFullYear();
 const money = (value: number) => value.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const categoryLabels: Record<string, string> = { TAXABLE_INCOME: "Venit impozabil", NON_TAXABLE_INCOME: "Venit neimpozabil", DEDUCTIBLE_EXPENSE: "Deductibilă integral", PARTIAL_EXPENSE: "Parțial deductibilă", NON_DEDUCTIBLE_EXPENSE: "Nedeductibilă" };
+const sourceLabels:Record<RefRow['source'],string> = {MANUAL:'Poziție manuală',AUTO_PAYMENT:'Încasare factură',AUTO_PAYROLL:'Plată salarială'};
 
 export default function RefPage() {
   const [year, setYear] = useState(currentYear);
@@ -29,17 +30,22 @@ export default function RefPage() {
   const [anafLoading, setAnafLoading] = useState(false);
   const [anafNotice, setAnafNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [error, setError] = useState("");
+  const loadController=useRef<AbortController|null>(null);
   const [form, setForm] = useState({ type: "EXPENSE" as "INCOME" | "EXPENSE", date: new Date().toISOString().slice(0, 10), documentType: "FACTURA", documentNumber: "", explanation: "", grossAmount: "", vatAmount: "0", vatRate:"21", vatCategoryOverride:"" as "" | VatRegimeCode, taxExemptionReasonCode:"", taxExemptionReason:"", fiscalCategory: "DEDUCTIBLE_EXPENSE", deductibilityPercent: "100", notes: "", partnerName: "", partnerCif: "", partnerCountryCode: "RO",partnerVatPayer:"1", partnerRegCom:"",partnerAddress:"",partnerCounty:"",partnerCity:"",partnerPostalCode:"",partnerPhone:"",partnerRegistrationStatus:"",partnerInactive:0 });
 
   const load = useCallback(async () => {
-    setLoading(true); setError("");
-    const response = await fetch(`/api/accounting/ref/transactions?year=${year}`);
-    const data = await response.json();
-    if (!response.ok) setError(data.error || "Registrul nu a putut fi încărcat.");
-    else { setRows(data.transactions); setAccountSummary(data.accountSummary || []); setSummary(data.summary); setVatPayer(data.vatPayer); }
-    setLoading(false);
+    loadController.current?.abort();
+    const controller=new AbortController();loadController.current=controller;
+    setLoading(true);setError("");setRows([]);setAccountSummary([]);setSummary(emptySummary);
+    try {
+      const response = await fetch(`/api/accounting/ref/transactions?year=${year}`,{cache:'no-store',signal:controller.signal});
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !Array.isArray(data.transactions) || !data.summary) throw new Error(data.error || "Registrul nu a putut fi încărcat.");
+      if (!controller.signal.aborted) {setRows(data.transactions);setAccountSummary(data.accountSummary || []);setSummary(data.summary);setVatPayer(data.vatPayer);}
+    } catch(error) {if(!controller.signal.aborted)setError(error instanceof Error?error.message:'Registrul nu a putut fi încărcat.');}
+    finally {if(!controller.signal.aborted)setLoading(false);}
   }, [year]);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load();return () => loadController.current?.abort(); }, [load]);
 
   const domesticNonVatSupplier = form.type === "EXPENSE" && form.partnerCountryCode.toUpperCase() === "RO" && form.partnerVatPayer === "0";
   const availableVatRates = vatRatesForDate(form.date);
@@ -128,15 +134,29 @@ export default function RefPage() {
       <div><div className="eyebrow">ANAF · evidență în sistem real</div><h2 className="page-title">Registrul de evidență fiscală</h2><p className="page-subtitle">Încasări și plăți efective, clasificate fiscal pentru anul selectat.</p></div>
       <div className="ref-actions"><select className="input ref-year" value={year} onChange={(event) => setYear(Number(event.target.value))}>{Array.from({ length: 7 }, (_, index) => currentYear - 5 + index).reverse().map((value) => <option key={value}>{value}</option>)}</select><a className="btn-secondary" href={`/api/accounting/ref/export/pdf?year=${year}`}><Download size={15}/>Export PDF</a></div>
     </div>
-    <div className="ref-notice"><strong>Regulă de calcul:</strong> veniturile automate apar la data încasării, nu la emiterea facturii. {vatPayer ? "Firma este marcată plătitoare de TVA; baza fiscală exclude TVA." : "Firma este marcată neplătitoare de TVA; baza fiscală folosește suma brută."}</div>
-    {error && <div className="ref-error">{error}</div>}
-    <div className="ref-summary-grid">
-      {[['Venituri încasate', summary.totalIncome, 'var(--cyan)'], ['Venituri impozabile', summary.taxableIncome, 'var(--emerald)'], ['Cheltuieli efectuate', summary.totalExpenses, 'var(--amber)'], ['Cheltuieli deductibile', summary.deductibleExpenses, 'var(--purple)'], ['Rezultat fiscal', summary.fiscalResult, summary.fiscalResult >= 0 ? 'var(--emerald)' : 'var(--red)']].map(([label, value, color]) => <div className="stat-card" style={{ '--accent': color } as React.CSSProperties} key={String(label)}><div className="stat-label">{label}</div><div className="stat-value">{money(Number(value))} RON</div></div>)}
+    <div className="ref-notice"><strong>Regulă de calcul:</strong> totalurile REF includ încasările și plățile înregistrate, la data efectuării lor. Emiterea facturii și calcularea salariilor apar separat, în rulajele contabile. {vatPayer ? "Firma este marcată plătitoare de TVA; baza fiscală exclude TVA." : "Firma este marcată neplătitoare de TVA; baza fiscală folosește suma brută."}</div>
+    {error && <div className="ref-error" role="alert">{error}</div>}
+    <div className="ref-summary-grid" aria-busy={loading}>
+      {[['Venituri încasate', summary.totalIncome, 'var(--cyan)'], ['Venituri impozabile', summary.taxableIncome, 'var(--emerald)'], ['Cheltuieli efectuate', summary.totalExpenses, 'var(--amber)'], ['Cheltuieli deductibile', summary.deductibleExpenses, 'var(--purple)'], ['Rezultat fiscal', summary.fiscalResult, summary.fiscalResult >= 0 ? 'var(--emerald)' : 'var(--red)']].map(([label, value, color]) => <div className="stat-card" style={{ '--accent': color } as React.CSSProperties} key={String(label)}><div className="stat-label">{label}</div><div className="stat-value">{loading ? "…" : error ? "—" : `${money(Number(value))} RON`}</div></div>)}
     </div>
     <div className="ref-layout">
-            <div><div className="section-label">Totaluri REF pe conturi · {year}</div><div className="card-table"><table className="ref-table"><thead><tr><th>Cont</th><th>Denumire</th><th>Tip</th><th className="text-right">Rulaj debit</th><th className="text-right">Rulaj credit</th><th className="text-right">Total fiscal</th><th className="text-right">Note</th></tr></thead><tbody>
-        {loading ? <tr><td colSpan={7} className="empty-row">Se încarcă…</td></tr> : accountSummary.length === 0 ? <tr><td colSpan={7} className="empty-row">Nu există rulaje pe conturi pentru anul {year}.</td></tr> : accountSummary.map((row) => <tr key={row.accountCode}><td><span className="doc-chip">{row.accountCode}</span></td><td><strong>{row.accountName}</strong></td><td><span className={`badge ${row.type==="INCOME"?"badge-paid":"badge-partial"}`}>{row.type==="INCOME"?"VENIT":"CHELTUIALĂ"}</span></td><td className="text-right num">{money(row.debit)}</td><td className="text-right num">{money(row.credit)}</td><td className="text-right num"><strong>{money(row.fiscalAmount)} RON</strong></td><td className="text-right num">{row.entries}</td></tr>)}
-      </tbody></table></div></div>
+      <div className="ref-register-stack">
+        <section aria-label="Mișcări din registrul fiscal"><div className="section-label">Încasări și plăți incluse în REF · {year}</div>
+          <div className="card-table"><table className="ref-table"><thead><tr><th>Data</th><th>Document</th><th>Explicație</th><th>Tip / clasificare</th><th className="text-right">Sumă</th><th className="text-right">Valoare fiscală</th><th>Sursă</th><th>Acțiuni</th></tr></thead><tbody>
+            {loading ? <tr><td colSpan={8} className="empty-row">Se încarcă…</td></tr> : error ? <tr><td colSpan={8} className="empty-row">Raportul nu poate fi afișat. Reîncarcă pagina.</td></tr> : rows.length === 0 ? <tr><td colSpan={8} className="empty-row">Nu există încasări sau plăți în REF pentru {year}. Facturile emise și salariile calculate nu reprezintă automat încasări ori plăți.</td></tr> : rows.map(row => <tr key={row.id}>
+              <td>{new Date(`${row.date}T12:00:00`).toLocaleDateString('ro-RO')}</td><td>{row.documentType}<br/>{row.documentNumber || '—'}</td><td>{row.explanation}</td>
+              <td><span className={`badge ${row.type==='INCOME'?'badge-paid':'badge-partial'}`}>{row.type==='INCOME'?'VENIT':'CHELTUIALĂ'}</span><div className="ref-row-note">{categoryLabels[row.fiscalCategory] || row.fiscalCategory}</div></td>
+              <td className="text-right num">{money(row.grossAmount)} RON</td><td className="text-right num"><strong>{money(row.fiscalAmount)} RON</strong></td><td>{sourceLabels[row.source] || row.source}</td>
+              <td>{row.source==='MANUAL'?<button type="button" className="btn-secondary" aria-label={`Șterge poziția ${row.id}`} onClick={() => void remove(row)}><Trash2 size={14}/></button>:'—'}</td>
+            </tr>)}
+          </tbody></table></div>
+        </section>
+        <section aria-label="Rulaje contabile informative"><div className="section-label">Rulaje contabile · informativ · {year}</div><p className="ref-ledger-note">Sume din articolele contabile, inclusiv facturi neîncasate și salarii neachitate. Aceste rulaje nu sunt totalurile REF și nu stabilesc deductibilitatea fiscală.</p>
+          <div className="card-table"><table className="ref-table"><thead><tr><th>Cont</th><th>Denumire</th><th>Tip</th><th className="text-right">Rulaj debit</th><th className="text-right">Rulaj credit</th><th className="text-right">Rulaj net contabil</th><th className="text-right">Articole</th></tr></thead><tbody>
+            {loading ? <tr><td colSpan={7} className="empty-row">Se încarcă…</td></tr> : accountSummary.length === 0 ? <tr><td colSpan={7} className="empty-row">Nu există rulaje pe conturi pentru anul {year}.</td></tr> : accountSummary.map(row => <tr key={row.accountCode}><td><span className="doc-chip">{row.accountCode}</span></td><td><strong>{row.accountName}</strong></td><td><span className={`badge ${row.type==='INCOME'?'badge-paid':'badge-partial'}`}>{row.type==='INCOME'?'VENIT':'CHELTUIALĂ'}</span></td><td className="text-right num">{money(row.debit)}</td><td className="text-right num">{money(row.credit)}</td><td className="text-right num"><strong>{money(row.accountingAmount)} RON</strong></td><td className="text-right num">{row.entries}</td></tr>)}
+          </tbody></table></div>
+        </section>
+      </div>
       <form className="card ref-form" onSubmit={submit}><div className="section-label"><Plus size={13}/>Adaugă poziție manuală</div><div className="ref-type-toggle"><button type="button" className={form.type === "INCOME" ? "active" : ""} onClick={() => setType("INCOME")}>Venit</button><button type="button" className={form.type === "EXPENSE" ? "active" : ""} onClick={() => setType("EXPENSE")}>Cheltuială</button></div>
         <label className="field-label">Data încasării/plății<input className="input" type="date" required value={form.date} onChange={(e) => setDocumentDate(e.target.value)}/></label>
         <div className="ref-form-row"><label className="field-label">Document<select className="input" value={form.documentType} onChange={(e) => setForm({ ...form, documentType: e.target.value })}><option value="FACTURA">Factură</option><option value="CHITANTA">Chitanță</option><option value="EXTRAS_BANCAR">Extras bancar</option><option value="BON_FISCAL">Bon fiscal</option><option value="ALTELE">Alt document</option></select></label><label className="field-label">Număr<input className="input" value={form.documentNumber} onChange={(e) => setForm({ ...form, documentNumber: e.target.value })}/></label></div>

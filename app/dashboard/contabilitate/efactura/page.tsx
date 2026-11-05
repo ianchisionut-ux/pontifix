@@ -1,4 +1,6 @@
 "use client";
+import { ReceivedInvoiceReview } from "@/components/accounting/ReceivedInvoiceReview";
+import type { PurchaseInput } from "@/lib/accounting/purchases";
 import { useEffect, useState } from "react";
 import {
   CheckCircle2,
@@ -37,11 +39,14 @@ type Message = {
   documentDate: string;
   downloadId: string;
   createdAt: string;
+  importStatus?:string; importIssues?:string[]; purchaseId?:number;
 };
 
 const BUCHAREST_TIME_ZONE = "Europe/Bucharest";
 
 export default function EFacturaPage() {
+  const [review,setReview]=useState<{messageId:string;payload:PurchaseInput;issues:string[]}|null>(null);
+  async function importMessage(messageId:string){setBusy(true);setError("");try{const response=await fetch(`/api/accounting/efactura/messages/${encodeURIComponent(messageId)}/import`,{method:"POST"}),result=await response.json();if(!response.ok)throw new Error(result.error);if(result.purchaseId){setNotice("Factura este înregistrată în Intrări și în jurnalul contabil.");await load()}else if(result.payload){setReview({messageId,payload:result.payload,issues:result.issues});await load()}else{throw new Error(result.issues?.join(" ")||"Importul nu a reușit.")}}catch(reason){setError((reason as Error).message)}finally{setBusy(false)}}
   const [status, setStatus] = useState<Status | null>(null),
     [messages, setMessages] = useState<Message[]>([]),
     [busy, setBusy] = useState(false),
@@ -95,13 +100,14 @@ export default function EFacturaPage() {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Sincronizarea a eșuat.");
       await load();
+      if(d.imports)setNotice(`Import facturi primite: ${d.imports.posted} contate, ${d.imports.review} de verificat, ${d.imports.duplicate} deja existente, ${d.imports.failed} erori.`);
       const count = Number(d.count || 0);
       const time = new Intl.DateTimeFormat("ro-RO", {
         hour: "2-digit",
         minute: "2-digit",
         timeZone: BUCHAREST_TIME_ZONE,
       }).format(new Date());
-      setNotice(
+      if(!d.imports)setNotice(
         count === 0
           ? `Sincronizare finalizată la ${time}. ANAF nu a returnat mesaje în ultimele 60 de zile.`
           : `Sincronizare finalizată la ${time}. ANAF a returnat ${count} ${count === 1 ? "mesaj" : "mesaje"}.`,
@@ -135,7 +141,7 @@ export default function EFacturaPage() {
     }
   }
   async function disconnect() {
-    if (!confirm("Deconectezi contul ANAF?")) return;
+    if (!confirm("Deconectezi contul ANAF/SPV al firmei Elmont?")) return;
     await fetch("/api/accounting/efactura/disconnect", { method: "POST" });
     setNotice("");
     load().catch((reason) =>
@@ -177,6 +183,8 @@ export default function EFacturaPage() {
           </div>
         )}
       </div>
+      <div className="ref-notice mb-4">Conexiunea SPV aparține firmei Elmont. Sincronizarea importă facturile primite și verifică duplicatele după furnizor, număr și dată.</div>
+      {review&&<ReceivedInvoiceReview messageId={review.messageId} payload={review.payload} issues={review.issues} onClose={()=>setReview(null)} onSaved={()=>{setReview(null);setNotice("Factura a fost înregistrată și contată.");void load()}}/>}
       {error && <div className="ref-error">{error}</div>}
       {notice && (
         <div className="ef-success">
@@ -314,7 +322,7 @@ export default function EFacturaPage() {
                   </td>
                   <td className="num">{m.messageId}</td>
                   <td>{m.cif || "—"}</td>
-                  <td>{m.details || "—"}</td>
+                  <td>{m.details || "—"}{m.direction==="RECEIVED"&&<div className="mt-2 text-xs font-semibold">{m.importStatus==="POSTED"?"Contabilizată":m.importStatus==="DUPLICATE"?"Deja înregistrată":m.importStatus==="REVIEW"?"Necesită verificare":m.importStatus==="ERROR"?"Eroare import":"Așteaptă importul"}{m.importIssues?.length?<p className="font-normal text-amber-700">{m.importIssues.join(" ")}</p>:null}</div>}</td>
                   <td>
                     {m.documentDate ||
                       new Date(m.createdAt).toLocaleDateString("ro-RO", {
@@ -323,6 +331,8 @@ export default function EFacturaPage() {
                   </td>
                   <td>
                     <div className="flex gap-2 flex-wrap">
+                      {m.direction==="RECEIVED"&&!m.purchaseId&&<button className="btn-primary" disabled={busy} onClick={()=>void importMessage(m.messageId)}>{m.importStatus==="REVIEW"?"Verifică și contează":"Importă în Intrări"}</button>}
+                      {m.purchaseId&&<a className="btn-secondary" href="/dashboard/contabilitate/purchases">Vezi în Intrări</a>}
                       <a className="btn-primary" target="_blank" rel="noreferrer" href={`/api/accounting/efactura/messages/${m.downloadId}/pdf`}><Eye size={13}/>Vezi PDF</a>
                       <a className="btn-secondary" href={`/api/accounting/efactura/messages/${m.downloadId}/pdf?download=1`}><FileText size={13}/>PDF</a>
                       <a className="btn-secondary" href={`/api/accounting/efactura/messages/${m.downloadId}/download`}><Download size={13}/>ZIP</a>

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { processAutomaticEFactura, recordAutomationFailure } from "@/lib/accounting/efactura";
+import { processAutomaticEFactura, recordAutomationFailure, syncAnafMessages, getAnafConnectionStatus } from "@/lib/accounting/efactura";
+import { importReceivedBatch } from "@/lib/accounting/efactura-import";
+import { getCompany } from "@/lib/accounting/repo";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -10,7 +12,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Neautorizat." }, { status: 401 });
   }
   try {
-    return NextResponse.json(await processAutomaticEFactura(50));
+    const connection = await getAnafConnectionStatus();
+    const company = await getCompany();
+    let received;
+    if (connection.configured && connection.connected && company.cif) {
+      await syncAnafMessages(company.cif);
+      received = await importReceivedBatch(20);
+    }
+    const sent = await processAutomaticEFactura(50);
+    return NextResponse.json({ sent, received });
   } catch (error) {
     try { await recordAutomationFailure(error); } catch {}
     return NextResponse.json(

@@ -1,2 +1,4 @@
 import { NextResponse } from "next/server"; import { accountingApi } from "@/lib/accounting/access"; import { getCompany } from "@/lib/accounting/repo"; import { syncAnafMessages } from "@/lib/accounting/efactura";
-async function POSTHandler(){try{const company=await getCompany();if(!company.cif)throw new Error("Completează CIF-ul firmei.");return NextResponse.json({count:await syncAnafMessages(company.cif)});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Sincronizarea a eșuat."},{status:400});}}export const POST=accountingApi(POSTHandler);
+import { importReceivedBatch } from "@/lib/accounting/efactura-import";
+export const maxDuration=180;
+async function POSTHandler(){try{const company=await getCompany();if(!company.cif)throw new Error("Completează CIF-ul firmei.");const count=await syncAnafMessages(company.cif);return NextResponse.json({count,imports:await importReceivedBatch(20)});}catch(e){return NextResponse.json({error:e instanceof Error?e.message:"Sincronizarea a eșuat."},{status:400});}}export const POST=accountingApi(POSTHandler);

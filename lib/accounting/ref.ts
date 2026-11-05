@@ -1,5 +1,7 @@
 import type { PoolClient } from "pg";
 import { ready } from "@/lib/accounting/db";
+import { auth } from '@/lib/auth';
+import { syncPaidPayrollToRef } from './payroll-ref';
 import { defaultVatRegimeReason, isVatRateAllowedForDate, isVatRegimeCode, suggestVatRegime, vatRegimeNeedsReason, type VatRegimeCode } from "@/lib/accounting/vat-regime";
 
 export type RefTransactionType = "INCOME" | "EXPENSE";
@@ -29,7 +31,7 @@ export type RefTransaction = {
   fiscalAmount: number;
   invoiceId: number | null;
   paymentId: number | null;
-  source: "MANUAL" | "AUTO_PAYMENT";
+  source: "MANUAL" | "AUTO_PAYMENT" | "AUTO_PAYROLL";
   partnerName: string;
   partnerCif: string;
   partnerCountryCode: string;
@@ -239,7 +241,7 @@ export async function createRefIncomeForPayment(input: {
 export async function listRefTransactions(year: number): Promise<RefTransaction[]> {
   const pool = await ready();
   const { rows } = await pool.query(
-    `SELECT * FROM ref_transactions WHERE EXTRACT(YEAR FROM date)=$1 ORDER BY date, id`,
+    `SELECT r.*,r.date::text AS date FROM ref_transactions r WHERE EXTRACT(YEAR FROM r.date)=$1 ORDER BY r.date,r.id`,
     [year]
   );
   return rows.map(mapTransaction);
@@ -271,7 +273,9 @@ export type RefAccountSummary = {
   type: "INCOME" | "EXPENSE";
   debit: number;
   credit: number;
-  fiscalAmount: number;
+  accountingAmount: number;
+  /** @deprecated Compatibility for already open clients; this is a journal amount, not a fiscal classification. */
+  fiscalAmount?: number;
   entries: number;
 };
 
@@ -281,16 +285,19 @@ export async function listRefAccountSummary(year: number): Promise<RefAccountSum
     `SELECT a.code AS "accountCode",a.name AS "accountName",
             CASE WHEN a.code LIKE '7%' THEN 'INCOME' ELSE 'EXPENSE' END AS type,
             ROUND(SUM(l.debit)::numeric,2) AS debit,ROUND(SUM(l.credit)::numeric,2) AS credit,
-            ROUND(CASE WHEN a.code LIKE '7%' THEN SUM(l.credit-l.debit) ELSE SUM(l.debit-l.credit) END::numeric,2) AS "fiscalAmount",
+            ROUND(CASE WHEN a.code LIKE '7%' THEN SUM(l.credit-l.debit) ELSE SUM(l.debit-l.credit) END::numeric,2) AS "accountingAmount",
             COUNT(DISTINCT e.id)::int AS entries
        FROM journal_lines l JOIN journal_entries e ON e.id=l."entryId"
        JOIN accounting_accounts a ON a.code=l."accountCode"
       WHERE e.status='POSTED' AND EXTRACT(YEAR FROM e.date)=$1 AND (a.code LIKE '6%' OR a.code LIKE '7%')
       GROUP BY a.code,a.name ORDER BY a.code`, [year]
   );
-  return rows.map((row)=>({...row,debit:Number(row.debit),credit:Number(row.credit),fiscalAmount:Number(row.fiscalAmount),entries:Number(row.entries)}));
+  return rows.map((row)=>({...row,debit:Number(row.debit),credit:Number(row.credit),accountingAmount:Number(row.accountingAmount),fiscalAmount:Number(row.accountingAmount),entries:Number(row.entries)}));
 }
 export async function getRefReport(year: number) {
+  const session = await auth();
+  const businessId = (session as { businessId?: string } | null)?.businessId;
+  if (businessId) await syncPaidPayrollToRef(await ready(),businessId,{year});
   const transactions = await listRefTransactions(year);
   return { transactions, accountSummary: await listRefAccountSummary(year), summary: summarizeRefTransactions(transactions), vatPayer: await getRefVatPayer() };
 }

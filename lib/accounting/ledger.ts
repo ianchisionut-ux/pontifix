@@ -1,6 +1,7 @@
 import type { PoolClient } from "pg";
 import { createHash, randomUUID } from "node:crypto";
 import { ready } from "./db";
+import { syncPaidPayrollToRef } from "./payroll-ref";
 
 export type AccountNature = "DEBIT" | "CREDIT" | "BOTH" | "GROUP";
 
@@ -288,6 +289,7 @@ export async function postPayrollPayment(input: {
       ],
     });
     await connection.query(`UPDATE "PayrollPayment" SET "journalEntryId"=$2 WHERE id=$1`, [paymentId, entryId]);
+    await syncPaidPayrollToRef(connection, input.businessId, { paymentId });
     await connection.query("COMMIT");
     return { id: paymentId, type: input.type, method: input.method, amount, paidAt: input.paidAt, journalEntryId: entryId };
   } catch (error) {

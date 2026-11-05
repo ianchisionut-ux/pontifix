@@ -2,46 +2,60 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { BarChart3, BookOpenCheck, Building2, CloudCog, ContactRound, FilePlus2, FileSpreadsheet, FileText, Landmark, WalletCards, LayoutDashboard, Package, ShoppingCart, Users, UserRoundCog } from 'lucide-react'
+import { BarChart3, BookOpenCheck, Building2, CloudCog, ContactRound, FilePlus2, FileSpreadsheet, FileText, Landmark, LayoutDashboard, Package, ShoppingCart, Users, UserRoundCog, WalletCards } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { CurrentUserBox } from './CurrentUserBox'
 
-const items = [
-  { href: '/dashboard/contabilitate', label: 'Panou', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/contabilitate/invoices', label: 'Facturi', icon: FileText },
-  { href: '/dashboard/contabilitate/invoices/new', label: 'Factură nouă', icon: FilePlus2 },
-  { href: '/dashboard/contabilitate/ledger', label: 'Contabilitate', icon: Landmark },
-  { href: '/dashboard/contabilitate/purchases', label: 'Achiziții', icon: ShoppingCart },
-  { href: '/dashboard/contabilitate/registers', label: 'Casă / bancă', icon: WalletCards },
-  { href: '/dashboard/contabilitate/suppliers', label: 'Furnizori', icon: ContactRound },
-  { href: '/dashboard/contabilitate/clients', label: 'Clienți', icon: Users },
-  { href: '/dashboard/contabilitate/products', label: 'Produse', icon: Package },
-  { href: '/dashboard/contabilitate/users', label: 'Emitenți', icon: UserRoundCog },
-  { href: '/dashboard/contabilitate/reports', label: 'Rapoarte', icon: BarChart3 },
-  { href: '/dashboard/contabilitate/ref', label: 'Registru fiscal', icon: BookOpenCheck },
-  { href: '/dashboard/contabilitate/efactura', label: 'e-Factura', icon: CloudCog },
-  { href: '/dashboard/contabilitate/declarations', label: 'Declarații ANAF', icon: FileSpreadsheet },
-  { href: '/dashboard/contabilitate/company', label: 'Firma', icon: Building2 },
+const root = '/dashboard/contabilitate'
+type NavItem = { href: string; label: string; icon: LucideIcon; exact?: boolean }
+
+const billingItems: NavItem[] = [
+  { href: root, label: 'Panou facturare', icon: LayoutDashboard, exact: true },
+  { href: `${root}/invoices`, label: 'Facturi emise', icon: FileText },
+  { href: `${root}/invoices/new`, label: 'Factură nouă', icon: FilePlus2, exact: true },
+  { href: `${root}/clients`, label: 'Clienți', icon: Users },
+  { href: `${root}/products`, label: 'Produse', icon: Package },
+  { href: `${root}/users`, label: 'Emitenți', icon: UserRoundCog },
+  { href: `${root}/efactura`, label: 'e-Factura', icon: CloudCog },
+  { href: `${root}/integrations`, label: 'Integrări instituții', icon: CloudCog },
+  { href: `${root}/reports`, label: 'Rapoarte vânzări', icon: BarChart3 },
 ]
+
+const accountingItems: NavItem[] = [
+  { href: `${root}/ledger`, label: 'Jurnal contabil', icon: Landmark },
+  { href: `${root}/purchases`, label: 'Intrări / achiziții', icon: ShoppingCart },
+  { href: `${root}/registers`, label: 'Casă / bancă', icon: WalletCards },
+  { href: `${root}/suppliers`, label: 'Furnizori', icon: ContactRound },
+  { href: `${root}/ref`, label: 'Registru fiscal', icon: BookOpenCheck },
+  { href: `${root}/declarations`, label: 'Declarații ANAF', icon: FileSpreadsheet },
+]
+
+function isActive(pathname: string, href: string, exact = false) {
+  return pathname === href || (!exact && pathname.startsWith(`${href}/`))
+}
 
 export function AccountingNav() {
   const pathname = usePathname()
-  const billing = [items[0], items[1], items[2], items[7], items[8], items[9], items[12], items[14]]
-  const bookkeeping = [items[3], items[4], items[5], items[6], items[10], items[11], items[13]]
-  const renderLink = ({ href, label, icon: Icon, exact }: typeof items[number]) => {
-    const active = exact ? pathname === href : pathname === href || pathname.startsWith(href + '/')
-    return <Link key={href} href={href} className={active ? 'active' : ''}><Icon size={14}/><span>{label}</span></Link>
-  }
+  const isCompany = isActive(pathname, `${root}/company`)
+  const isAccounting = accountingItems.some(({ href }) => isActive(pathname, href))
+  const zone = isCompany ? 'shared' : isAccounting ? 'accounting' : 'billing'
+  const items = zone === 'accounting' ? accountingItems : zone === 'billing' ? billingItems : []
+
   return (
-    <div className="accounting-toolbar screen-only">
-      <div className="accounting-nav-group">
-        <span className="accounting-nav-group-title">Facturare</span>
-        <nav className="accounting-nav" aria-label="Facturare">{billing.map(renderLink)}</nav>
+    <div className="accounting-navigation screen-only">
+      <div className="accounting-toolbar">
+        <nav className="accounting-nav" aria-label={zone === 'accounting' ? 'Funcții de contabilitate' : zone === 'billing' ? 'Funcții de facturare' : 'Setări comune'}>
+          {zone === 'shared' && <span className="accounting-context-note">Datele firmei se folosesc în ambele zone.</span>}
+          {items.map(({ href, label, icon: Icon, exact }) => {
+            const active = isActive(pathname, href, exact) && !(href === `${root}/invoices` && pathname === `${root}/invoices/new`)
+            return <Link key={href} href={href} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined}><Icon size={16} aria-hidden="true"/><span>{label}</span></Link>
+          })}
+        </nav>
+        <div className="accounting-toolbar-actions">
+          <Link href={`${root}/company`} className={`accounting-shared-link ${isCompany ? 'active' : ''}`} aria-current={isCompany ? 'page' : undefined}><Building2 size={16} aria-hidden="true"/> Firma</Link>
+          <CurrentUserBox />
+        </div>
       </div>
-      <div className="accounting-nav-group accounting-nav-group-bookkeeping">
-        <span className="accounting-nav-group-title">Contabilitate</span>
-        <nav className="accounting-nav" aria-label="Contabilitate">{bookkeeping.map(renderLink)}</nav>
-      </div>
-      <CurrentUserBox />
     </div>
   )
 }

@@ -250,6 +250,8 @@ async function ensureSchema(pool: Pool) {
       ON ref_transactions ("paymentId") WHERE "paymentId" IS NOT NULL;
     CREATE INDEX IF NOT EXISTS "ref_transactions_date_idx" ON ref_transactions (date);
   `);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "payrollPaymentId" TEXT;`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ref_transactions_payrollPaymentId_key" ON ref_transactions ("payrollPaymentId") WHERE "payrollPaymentId" IS NOT NULL;`);
 
   await pool.query(`
     CREATE TABLE IF NOT EXISTS anaf_connections (
@@ -560,6 +562,14 @@ async function ensureSchema(pool: Pool) {
     ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS "supplierId" INTEGER REFERENCES suppliers(id) ON DELETE SET NULL;
   `);
   await pool.query(`ALTER TABLE purchase_invoice_items ADD COLUMN IF NOT EXISTS "vatCategoryCode" TEXT NOT NULL DEFAULT '';`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS efactura_imports (
+    environment TEXT NOT NULL, "messageId" TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'REVIEW' CHECK(status IN ('REVIEW','POSTED','DUPLICATE','ERROR')),
+    document JSONB, payload JSONB, issues JSONB NOT NULL DEFAULT '[]',
+    "purchaseId" INTEGER REFERENCES purchase_invoices(id),
+    "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL DEFAULT now(),
+    PRIMARY KEY(environment,"messageId")
+  );`);
   await pool.query(`ALTER TABLE purchase_invoice_items ADD COLUMN IF NOT EXISTS "taxExemptionReasonCode" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`ALTER TABLE purchase_invoice_items ADD COLUMN IF NOT EXISTS "taxExemptionReason" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`UPDATE purchase_invoice_items pi SET "vatCategoryCode"=CASE WHEN p."reverseCharge"=1 THEN 'AE' WHEN pi."vatRate">0 THEN 'S' ELSE 'Z' END, "taxExemptionReason"=CASE WHEN p."reverseCharge"=1 THEN 'Taxare inversă conform Codului fiscal.' ELSE pi."taxExemptionReason" END FROM purchase_invoices p WHERE p.id=pi."purchaseInvoiceId" AND pi."vatCategoryCode"='';`);

@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAnafChoice } from "@/components/accounting/useAnafChoice";
+import { AccountPicker } from "@/components/accounting/AccountPicker";
+import { AccountHints } from "@/components/accounting/AccountHints";
+import { useAccountSuggestion } from "@/components/accounting/useAccountSuggestion";
 import { useRouter } from "next/navigation";
 import { CURRENT_USER_KEY } from "@/components/accounting/CurrentUserBox";
 import { Plus, X, Cable, RefreshCw, FileText } from "lucide-react";
@@ -58,7 +61,7 @@ export default function NewInvoicePage() {
   const [nextNumber, setNextNumber] = useState<number | null>(null);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [issueDate, setIssueDate] = useState(bucharestDate());
-  const [dueDate, setDueDate] = useState("");
+  const [dueDate, setDueDate] = useState(bucharestDate());
   const [taxPointDate, setTaxPointDate] = useState("");
   const [paymentMeansCode, setPaymentMeansCode] = useState("30");
   const [paidOnSpot, setPaidOnSpot] = useState(false);
@@ -215,16 +218,10 @@ export default function NewInvoicePage() {
     if (u) applyUser(u);
   }
 
-  const suggestionTimers = useRef(new Map<number, ReturnType<typeof setTimeout>>());
+  const accountSuggestion = useAccountSuggestion("INCOME");
   function suggestItemAccount(key:number, description:string) {
     updateItem(key,{description,productId:null});
-    const old=suggestionTimers.current.get(key); if(old) clearTimeout(old);
-    if(description.trim().length<2)return;
-    suggestionTimers.current.set(key,setTimeout(async()=>{
-      const response=await fetch(`/api/accounting/account-suggestions?direction=INCOME&q=${encodeURIComponent(description)}`);
-      if(!response.ok)return;const suggestions=await response.json();
-      if(suggestions[0]?.confidence>=70)updateItem(key,{revenueAccount:suggestions[0].code});
-    },280));
+    accountSuggestion.suggest(key,description,code=>setItems(current=>current.map(item=>item.key===key&&item.description===description&&!item.productId?{...item,revenueAccount:code}:item)));
   }
   function updateItem(key: number, patch: Partial<Item>) {
     setItems((its) => its.map((it) => (it.key === key ? { ...it, ...patch } : it)));
@@ -236,6 +233,7 @@ export default function NewInvoicePage() {
   }
 
   function removeItem(key: number) {
+    accountSuggestion.cancel(key);
     setItems((its) => (its.length > 1 ? its.filter((it) => it.key !== key) : its));
   }
 
@@ -270,6 +268,10 @@ export default function NewInvoicePage() {
     }
     if (paidOnSpot && currency !== "RON") {
       alert("Factura achitată pe loc și chitanța pot fi emise doar în RON.");
+      return;
+    }
+    if (!paidOnSpot && !dueDate) {
+      alert("Completează data scadenței pentru factura cu sold de plată.");
       return;
     }
     const choice = await ask();
@@ -421,14 +423,14 @@ export default function NewInvoicePage() {
         </div>
         <div>
           <label className="field-label">Data emiterii</label>
-          <input type="date" className="input" value={issueDate} onChange={(e) => setIssueDate(e.target.value)} />
+          <input type="date" className="input" value={issueDate} onChange={(e) => { const next=e.target.value; setDueDate(current=>current===issueDate?next:current); setIssueDate(next); }} />
         </div>
       </div>
 
       <div className="card mb-4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 16 }}>
         <div>
-          <label className="field-label">Data scadenta (optional)</label>
-          <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          <label className="field-label">Data scadenței {paidOnSpot ? "(opțională)" : "(obligatorie)"}</label>
+          <input type="date" className="input" required={!paidOnSpot} min={issueDate} value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
         </div>
         <div>
           <label className="field-label">Discount (%)</label>
@@ -534,9 +536,8 @@ export default function NewInvoicePage() {
                   />
                 </td>
                 <td>
-                  <select className="input" value={it.revenueAccount} onChange={(e)=>updateItem(it.key,{revenueAccount:e.target.value})}>
-                    {accounts.filter((a)=>a.active&&a.allowPosting&&/^7/.test(a.code)).map((a)=><option key={a.code} value={a.code}>{a.code} · {a.name}</option>)}
-                  </select>
+                  <AccountPicker label={`Cont venit ${idx + 1}`} accounts={accounts.filter((a)=>a.active&&a.allowPosting&&/^7/.test(a.code))} value={it.revenueAccount} onChange={(code)=>{accountSuggestion.chooseManually(it.key);updateItem(it.key,{revenueAccount:code})}}/>
+                  <AccountHints value={it.revenueAccount} suggestions={accountSuggestion.suggestions.get(it.key)||[]} onChoose={(code)=>{accountSuggestion.chooseManually(it.key);updateItem(it.key,{revenueAccount:code})}}/>
                 </td>
                 <td>
                   <input className="input" value={it.um} onChange={(e) => updateItem(it.key, { um: e.target.value })} />

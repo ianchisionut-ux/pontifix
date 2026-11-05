@@ -153,7 +153,7 @@ export async function getAnafConnectionStatus() {
 export async function disconnectAnaf() {
   await (await ready()).query(`DELETE FROM anaf_connections WHERE id=1`);
 }
-async function accessToken() {
+export async function accessToken() {
   const pool = await ready();
   const environment = config().environment;
   const { rows } = await pool.query(
@@ -813,7 +813,7 @@ export async function listAnafMessages() {
   const { rows } = await (
     await ready()
   ).query(
-    `SELECT * FROM efactura_messages WHERE environment=$1 ORDER BY "createdAt" DESC LIMIT 500`,
+    `SELECT m.*,i.status AS "importStatus",i.issues AS "importIssues",i."purchaseId" FROM efactura_messages m LEFT JOIN efactura_imports i ON i.environment=m.environment AND i."messageId"=m."messageId" WHERE m.environment=$1 ORDER BY m."createdAt" DESC LIMIT 500`,
     [environment],
   );
   return rows;
