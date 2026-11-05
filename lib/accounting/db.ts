@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import chartOfAccounts from "./chart-of-accounts.ro.json";
 
-const ACCOUNTING_SCHEMA_VERSION = 19;
+const ACCOUNTING_SCHEMA_VERSION = 20;
 
 declare global {
   // eslint-disable-next-line no-var
