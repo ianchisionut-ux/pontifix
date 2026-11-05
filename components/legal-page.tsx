@@ -35,6 +35,7 @@ export function LegalPage({ title, description, updatedAt, sections }: {
         <footer className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-500">
           <Link href="/termeni-si-conditii" className="hover:text-blue-600">Termeni și condiții</Link>
           <Link href="/politica-de-confidentialitate" className="hover:text-blue-600">Politica de confidențialitate</Link>
+          <Link href="/politica-cookies" className="hover:text-blue-600">Politica de cookie-uri</Link>
           <a href="mailto:elmont_zalau@yahoo.com" className="hover:text-blue-600">Contact: elmont_zalau@yahoo.com</a>
         </footer>
       </div>

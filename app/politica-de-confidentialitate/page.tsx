@@ -44,7 +44,7 @@ export default function PrivacyPage() {
         <p>Aveți și dreptul de a depune o plângere la Autoritatea Națională de Supraveghere a Prelucrării Datelor cu Caracter Personal.</p>
       </> },
       { title: 'Cookie-uri și autentificare', content: <>
-        <p>Elmont utilizează cookie-uri strict necesare pentru autentificare, menținerea sesiunii și securitate. Platforma nu utilizează cookie-uri publicitare în paginile sale operaționale.</p>
+        <p>Elmont utilizează cookie-uri strict necesare pentru autentificare, menținerea sesiunii și securitate. Platforma nu utilizează cookie-uri publicitare în paginile sale operaționale. Detalii despre cookie-uri și stocarea locală sunt disponibile în <a className="font-semibold text-blue-600 hover:underline" href="/politica-cookies">politica de cookie-uri</a>.</p>
       </> },
       { title: 'Actualizarea politicii', content: <>
         <p>Politica poate fi actualizată atunci când se schimbă funcționalitățile sau cerințele legale. Noua versiune este publicată pe această pagină împreună cu data ultimei actualizări.</p>

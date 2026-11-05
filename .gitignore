@@ -33,3 +33,8 @@ next-env.d.ts
 
 # Arhiva locala nerepublicata
 legacy-bookeasy/
+
+# Temporary ANAF package downloads and JVM crash reports
+.tmp-softj/
+hs_err_pid*.log
+.env*

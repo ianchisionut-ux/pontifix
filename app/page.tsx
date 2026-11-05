@@ -8,6 +8,7 @@ import { LanguageSwitcher } from '@/components/language-switcher'
 import { useLanguage } from '@/components/language-provider'
 import { CustomerChatWidget } from '@/components/customer-chat-widget'
 import { PublicConnectionStatus } from '@/components/public-connection-status'
+import { PublicCookieNotice } from '@/components/public-cookie-notice'
 import './public-site.css'
 
 const services = [
@@ -136,8 +137,13 @@ export default function HomePage() {
           <div><span className="footer-title">{tr('Navigare')}</span><div className="mt-5 grid gap-3 text-sm text-blue-100/60">{[['Despre noi','#despre'],['Servicii','#servicii'],['Certificări','#certificari'],['Cere ofertă','#oferta']].map(([label,href])=><a key={href} href={href} className="flex items-center gap-2 hover:text-white"><ChevronRight size={14}/>{tr(label)}</a>)}</div></div>
           <div><span className="footer-title">{tr('Date companie')}</span><div className="mt-5 space-y-4 text-sm text-blue-100/60"><p className="flex gap-3"><MapPin size={18} className="shrink-0 text-[#49a6d4]"/>Str. 22 Decembrie 1989, Nr. 113<br/>Zalău, Sălaj</p><p className="flex gap-3"><Building2 size={18} className="shrink-0 text-[#49a6d4]"/>CUI 9710508</p><a href="tel:+40260611133" className="flex gap-3 hover:text-white"><Phone size={18} className="shrink-0 text-[#49a6d4]"/>0260 611 133</a></div></div>
         </div>
-        <div className="border-t border-white/10"><div className="mx-auto flex max-w-[1280px] flex-col justify-between gap-4 px-5 py-6 text-xs text-blue-100/70 sm:flex-row lg:px-10"><span>© 2026 Elmont S.A. Toate drepturile rezervate.</span><div className="flex flex-wrap items-center gap-x-5 gap-y-3"><Link href="/termeni-si-conditii" className="hover:text-white">{tr('Termeni și condiții')}</Link><Link href="/politica-de-confidentialitate" className="font-bold text-white underline decoration-[#49a6d4] underline-offset-4 hover:text-[#8bc8e5]">GDPR · {tr('Confidențialitate')}</Link><Link href="/login" className="hover:text-white">{tr('Portal companie')}</Link></div></div></div>
+        <div className="border-t border-white/10"><div className="mx-auto flex max-w-[1280px] flex-wrap items-center gap-4 px-5 py-6 lg:px-10">
+          <a href="https://www.anpc.ro/" target="_blank" rel="noopener noreferrer" aria-label="Protecția consumatorilor – ANPC" className="flex h-[66px] w-[250px] items-center justify-center rounded-lg bg-white px-3"><Image src="/anpc-logo.png" alt="Autoritatea Națională pentru Protecția Consumatorilor" width={216} height={102} className="h-auto max-h-[52px] w-auto max-w-full object-contain"/></a>
+          <a href="https://reclamatiisal.anpc.ro/" target="_blank" rel="noopener noreferrer" aria-label="Soluționarea alternativă a litigiilor – SAL" className="rounded-lg bg-white p-2"><Image src="/anpc-sal.png" alt="ANPC – Soluționarea alternativă a litigiilor" width={250} height={50} className="h-[50px] w-[250px] object-contain"/></a>
+        </div></div>
+        <div className="border-t border-white/10"><div className="mx-auto flex max-w-[1280px] flex-col justify-between gap-4 px-5 py-6 text-xs text-blue-100/70 sm:flex-row lg:px-10"><span>© 2026 Elmont S.A. Toate drepturile rezervate.</span><div className="flex flex-wrap items-center gap-x-5 gap-y-3"><Link href="/termeni-si-conditii" className="hover:text-white">{tr('Termeni și condiții')}</Link><Link href="/politica-de-confidentialitate" className="font-bold text-white underline decoration-[#49a6d4] underline-offset-4 hover:text-[#8bc8e5]">GDPR · {tr('Confidențialitate')}</Link><Link href="/politica-cookies" className="hover:text-white">Politica de cookie-uri</Link><Link href="/login" className="hover:text-white">{tr('Portal companie')}</Link></div></div></div>
       </footer>
+      <PublicCookieNotice/>
       <CustomerChatWidget/>
     </main>
   )
