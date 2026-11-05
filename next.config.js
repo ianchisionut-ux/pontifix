@@ -5,6 +5,7 @@ const nextConfig = {
     '/api/formulare/**': ['./assets/formulare/**/*'],
   },
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',

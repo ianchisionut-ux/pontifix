@@ -90,7 +90,7 @@ export function quoteNotificationEmail(data: QuoteNotificationData) {
           </tr>
           <tr>
             <td style="padding:18px 30px;background:#082b4d;color:#b8d5e6;font-size:11px;line-height:1.6;">
-              <strong style="color:#ffffff;">ELMONT S.A.</strong> · Str. 22 Decembrie 1989, nr. 113, Zalău · 0260 611 133
+              <strong style="color:#ffffff;">ELMONT S.A.</strong> · Str. 22 Decembrie 1989, nr. 113, Zalău · 0260 611 192
             </td>
           </tr>
         </table>
