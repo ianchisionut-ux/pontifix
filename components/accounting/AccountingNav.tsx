@@ -38,19 +38,30 @@ export function AccountingNav() {
   const pathname = usePathname()
   const isCompany = isActive(pathname, `${root}/company`)
   const isAccounting = accountingItems.some(({ href }) => isActive(pathname, href))
-  const zone = isCompany ? 'shared' : isAccounting ? 'accounting' : 'billing'
-  const items = zone === 'accounting' ? accountingItems : zone === 'billing' ? billingItems : []
+  const activeZone = isAccounting ? 'accounting' : 'billing'
+
+  function renderItems(items: NavItem[]) {
+    return items.map(({ href, label, icon: Icon, exact }) => {
+      const active = isActive(pathname, href, exact) && !(href === `${root}/invoices` && pathname === `${root}/invoices/new`)
+      return <Link key={href} href={href} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined} title={label}><Icon size={16} aria-hidden="true"/><span>{label}</span></Link>
+    })
+  }
 
   return (
     <div className="accounting-navigation screen-only">
       <div className="accounting-toolbar">
-        <nav className="accounting-nav" aria-label={zone === 'accounting' ? 'Funcții de contabilitate' : zone === 'billing' ? 'Funcții de facturare' : 'Setări comune'}>
-          {zone === 'shared' && <span className="accounting-context-note">Datele firmei se folosesc în ambele zone.</span>}
-          {items.map(({ href, label, icon: Icon, exact }) => {
-            const active = isActive(pathname, href, exact) && !(href === `${root}/invoices` && pathname === `${root}/invoices/new`)
-            return <Link key={href} href={href} className={active ? 'active' : ''} aria-current={active ? 'page' : undefined}><Icon size={16} aria-hidden="true"/><span>{label}</span></Link>
-          })}
-        </nav>
+        <div className="accounting-zone-switch" aria-label="Alege zona">
+          <Link href={root} className={activeZone === 'billing' && !isCompany ? 'active' : ''}>Facturare</Link>
+          <Link href={`${root}/ledger`} className={activeZone === 'accounting' && !isCompany ? 'active' : ''}>Contabilitate</Link>
+        </div>
+        <div className={`accounting-nav-group accounting-nav-group-billing ${activeZone === 'billing' ? 'zone-active' : ''}`}>
+          <span className="accounting-nav-group-title">Facturare</span>
+          <nav className="accounting-nav" aria-label="Funcții de facturare">{renderItems(billingItems)}</nav>
+        </div>
+        <div className={`accounting-nav-group accounting-nav-group-bookkeeping ${activeZone === 'accounting' ? 'zone-active' : ''}`}>
+          <span className="accounting-nav-group-title">Contabilitate</span>
+          <nav className="accounting-nav" aria-label="Funcții de contabilitate">{renderItems(accountingItems)}</nav>
+        </div>
         <div className="accounting-toolbar-actions">
           <Link href={`${root}/company`} className={`accounting-shared-link ${isCompany ? 'active' : ''}`} aria-current={isCompany ? 'page' : undefined}><Building2 size={16} aria-hidden="true"/> Firma</Link>
           <CurrentUserBox />
