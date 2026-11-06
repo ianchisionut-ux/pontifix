@@ -314,6 +314,10 @@ body {
 
 /* Identitate vizuală Elmont */
 .elmont-sidebar { border-right:1px solid rgba(25,127,181,.14); }
+@media (min-width:1024px) { .elmont-shell { grid-template-columns:var(--elmont-sidebar-width) minmax(0,1fr); } }
+.elmont-sidebar-resizer { position:absolute; z-index:5; top:0; right:-5px; bottom:0; width:10px; cursor:col-resize; touch-action:none; }
+.elmont-sidebar-resizer::after { content:''; position:absolute; top:0; bottom:0; left:4px; width:2px; background:transparent; transition:background .15s; }
+.elmont-sidebar-resizer:hover::after, .elmont-sidebar-resizer:focus-visible::after { background:#197fb5; }
 .login-shell { background:radial-gradient(circle at 82% 12%, #d9eef8 0, transparent 28%), #f8fafc; }
 .login-hero { position:relative; overflow:hidden; background:linear-gradient(145deg,#0b1f4d 0%,#0b527d 48%,#197fb5 100%); }
 .login-hero::before { content:''; position:absolute; width:420px; height:420px; border-radius:50%; right:-160px; top:-130px; border:80px solid rgba(255,255,255,.055); }

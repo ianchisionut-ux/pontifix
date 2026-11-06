@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { User, PanelLeftClose, PanelLeftOpen, SlidersHorizontal, ArrowUp, ArrowDown, RotateCcw, X } from 'lucide-react'
+import { User, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import {
   Calendar,
   MessagesSquare,
@@ -55,9 +55,6 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   'chat-intern': MessagesSquare,
 }
 
-type NavItem = { href: string; label: string; badge?: number; icon?: string }
-type NavPreference = { order: string[]; hidden: string[] }
-
 // amestecă o culoare hex cu alb, la un procent dat — produce o culoare SOLIDĂ (nu transparentă).
 // esențial pentru header-ul mobil, care e fix (sticky) — dacă am folosi transparență, conținutul
 // care defilează dedesubt s-ar vedea prin el, exact bug-ul de suprapunere din poză
@@ -76,7 +73,7 @@ export function ResponsiveShell({
   logoLabel,
   profileName,
   navItems,
-  navigationStorageKey,
+  sidebarStorageKey,
   accentColor,
   accountContent,
   children,
@@ -85,8 +82,8 @@ export function ResponsiveShell({
   logoHref: string
   logoLabel: string
   profileName?: string // numele afacerii/profilului, afișat sus, deasupra ceasului
-  navItems: NavItem[]
-  navigationStorageKey?: string
+  navItems: { href: string; label: string; badge?: number; icon?: string }[]
+  sidebarStorageKey?: string
   accentColor?: string // culoarea aleasă de business în Setări — dacă lipsește, folosim culoarea implicită Elmont
   accountContent: React.ReactNode // blocul de cont/ieșire — separat, ca să nu intre în carusel
   children: React.ReactNode
@@ -95,59 +92,37 @@ export function ResponsiveShell({
   const { tr } = useLanguage()
   const [accountOpen, setAccountOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [menuEditorOpen, setMenuEditorOpen] = useState(false)
-  const [navPreference, setNavPreference] = useState<NavPreference>({ order: [], hidden: [] })
+  const [sidebarWidth, setSidebarWidth] = useState(216)
+  const [isResizing, setIsResizing] = useState(false)
+  const resizeActive = useRef(false)
   const pathname = usePathname()
   const router = useRouter()
   const accent = accentColor || 'var(--accent)'
   const softTint = accentColor ? blendWithWhite(accentColor, 0.15) : 'var(--surface-muted)' // culoare solidă, opacă
-  const preferenceKey = `elmont-sidebar-v1:${navigationStorageKey ?? logoHref}`
+  const widthStorageKey = `elmont-sidebar-width-v1:${sidebarStorageKey ?? logoHref}`
 
   useEffect(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem(preferenceKey) || 'null')
-      setNavPreference({
-        order: Array.isArray(saved?.order) ? saved.order.filter((href: unknown): href is string => typeof href === 'string') : [],
-        hidden: Array.isArray(saved?.hidden) ? saved.hidden.filter((href: unknown): href is string => typeof href === 'string') : [],
-      })
-    } catch {
-      setNavPreference({ order: [], hidden: [] })
-    }
-  }, [preferenceKey])
+      const saved = Number(localStorage.getItem(widthStorageKey))
+      if (Number.isFinite(saved) && saved >= 180 && saved <= 600) setSidebarWidth(saved)
+    } catch { /* browser storage unavailable */ }
+  }, [widthStorageKey])
 
-  useEffect(() => {
-    if (!menuEditorOpen) return
-    const onEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuEditorOpen(false) }
-    window.addEventListener('keydown', onEscape)
-    return () => window.removeEventListener('keydown', onEscape)
-  }, [menuEditorOpen])
-
-  function saveNavPreference(next: NavPreference) {
-    setNavPreference(next)
-    try { localStorage.setItem(preferenceKey, JSON.stringify(next)) } catch { /* browser storage unavailable */ }
+  function clampSidebarWidth(width: number) {
+    return Math.max(180, Math.min(600, window.innerWidth - 440, width))
   }
 
-  const orderedNavItems = [...navItems].sort((a, b) => {
-    const aIndex = navPreference.order.indexOf(a.href)
-    const bIndex = navPreference.order.indexOf(b.href)
-    return (aIndex < 0 ? navItems.indexOf(a) + navPreference.order.length : aIndex) - (bIndex < 0 ? navItems.indexOf(b) + navPreference.order.length : bIndex)
-  })
-
-  function moveNavItem(href: string, direction: -1 | 1) {
-    const order = orderedNavItems.map((item) => item.href)
-    const index = order.indexOf(href)
-    const nextIndex = index + direction
-    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return
-    ;[order[index], order[nextIndex]] = [order[nextIndex], order[index]]
-    saveNavPreference({ ...navPreference, order })
+  function saveSidebarWidth(width: number) {
+    const next = clampSidebarWidth(width)
+    setSidebarWidth(next)
+    try { localStorage.setItem(widthStorageKey, String(next)) } catch { /* browser storage unavailable */ }
   }
 
-  function toggleNavItem(href: string) {
-    const hidden = navPreference.hidden.includes(href)
-      ? navPreference.hidden.filter((item) => item !== href)
-      : [...navPreference.hidden, href]
-    if (hidden.filter((item) => navItems.some((nav) => nav.href === item)).length >= navItems.length) return
-    saveNavPreference({ ...navPreference, hidden })
+  function stopResize() {
+    resizeActive.current = false
+    setIsResizing(false)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
   }
 
   // pornim cu valorile venite din server (randare inițială corectă, fără flash), apoi
@@ -192,10 +167,9 @@ export function ResponsiveShell({
     return () => window.removeEventListener('internal-chat-unread', updateChatBadge)
   }, [])
 
-  const visibleNavItems = orderedNavItems.filter((item) => !navPreference.hidden.includes(item.href))
   const displayNavItems = enableLiveBadges
-    ? visibleNavItems.map((item) => ({ ...item, badge: item.href in liveBadges ? liveBadges[item.href] : item.badge }))
-    : visibleNavItems
+    ? navItems.map((item) => ({ ...item, badge: item.href in liveBadges ? liveBadges[item.href] : item.badge }))
+    : navItems
 
   // când mai multe href-uri se potrivesc (ex: '/superadmin' e prefix pentru
   // '/superadmin/afaceri'), câștigă mereu cel mai specific (cel mai lung) — altfel
@@ -205,7 +179,7 @@ export function ResponsiveShell({
     .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
   return (
-    <div className={`min-h-screen bg-[var(--surface-muted)] lg:grid transition-[grid-template-columns] ${sidebarCollapsed ? 'lg:grid-cols-[76px_1fr]' : 'lg:grid-cols-[216px_1fr]'}`}>
+    <div className={`elmont-shell min-h-screen bg-[var(--surface-muted)] lg:grid ${isResizing ? '' : 'transition-[grid-template-columns]'}`} style={{ '--elmont-sidebar-width': `${sidebarCollapsed ? 76 : sidebarWidth}px` } as React.CSSProperties}>
       {enableLiveBadges && <><InternalChatNotifier/><InternalChatDock/></>}
       {/* header mobil, doar sub lg */}
       <div className="lg:hidden sticky top-0 z-40 border-b border-[var(--border-soft)] screen-only" style={{ background: accentColor ? softTint : 'white' }}>
@@ -266,15 +240,13 @@ export function ResponsiveShell({
                 ✕
               </button>
             </div>
-            <div className="mb-4"><LanguageSwitcher/></div>
-            <button type="button" onClick={() => { setAccountOpen(false); setMenuEditorOpen(true) }} className="mb-3 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-slate-100"><SlidersHorizontal size={16}/> Editează meniul</button>
-            <div onClick={() => setAccountOpen(false)}>{accountContent}</div>
+            <div className="mb-4"><LanguageSwitcher/></div><div onClick={() => setAccountOpen(false)}>{accountContent}</div>
           </aside>
         </div>
       )}
 
       {/* sidebar fix, doar de la lg in sus */}
-      <aside className="elmont-sidebar hidden lg:flex flex-col gap-1 p-3" style={{ background: softTint }}>
+      <aside className="elmont-sidebar relative hidden lg:flex flex-col gap-1 p-3" style={{ background: softTint }}>
         <div className={`flex items-center mb-2 ${sidebarCollapsed ? 'justify-center' : 'justify-between px-1'}`}>
           <Link href={logoHref}><ElmontLogo compact={sidebarCollapsed}/></Link>
           {!sidebarCollapsed && <button onClick={() => setSidebarCollapsed(true)} className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/80" aria-label="Restrânge meniul"><PanelLeftClose size={17}/></button>}
@@ -310,37 +282,45 @@ export function ResponsiveShell({
             </Link>
           )
         })}
-        <button type="button" onClick={() => setMenuEditorOpen(true)} title="Editează meniul" aria-label="Editează meniul" className={`flex items-center rounded-xl py-2.5 text-sm font-medium text-[var(--foreground-muted,#4b5563)] hover:bg-white/80 ${sidebarCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3'}`}>
-          <SlidersHorizontal size={16}/>{!sidebarCollapsed && <span>Editează meniul</span>}
-        </button>
         {!sidebarCollapsed && <div className="mt-auto px-3 pb-2"><LanguageSwitcher/></div>}
         {!sidebarCollapsed && accountContent}
+        {!sidebarCollapsed && <div
+          role="separator"
+          aria-label="Redimensionează meniul lateral"
+          aria-orientation="vertical"
+          aria-valuemin={180}
+          aria-valuemax={600}
+          aria-valuenow={sidebarWidth}
+          tabIndex={0}
+          title="Trage pentru a redimensiona meniul. Dublu clic pentru lățimea inițială."
+          className="elmont-sidebar-resizer screen-only"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return
+            resizeActive.current = true
+            setIsResizing(true)
+            event.currentTarget.setPointerCapture(event.pointerId)
+            document.body.style.cursor = 'col-resize'
+            document.body.style.userSelect = 'none'
+          }}
+          onPointerMove={(event) => {
+            if (resizeActive.current) setSidebarWidth(clampSidebarWidth(event.clientX))
+          }}
+          onPointerUp={(event) => {
+            if (!resizeActive.current) return
+            saveSidebarWidth(event.clientX)
+            stopResize()
+          }}
+          onPointerCancel={stopResize}
+          onLostPointerCapture={stopResize}
+          onDoubleClick={() => saveSidebarWidth(216)}
+          onKeyDown={(event) => {
+            const width = event.key === 'ArrowLeft' ? sidebarWidth - 12 : event.key === 'ArrowRight' ? sidebarWidth + 12 : event.key === 'Home' ? 180 : event.key === 'End' ? 600 : null
+            if (width === null) return
+            event.preventDefault()
+            saveSidebarWidth(width)
+          }}
+        />}
       </aside>
-
-      {menuEditorOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setMenuEditorOpen(false) }}>
-        <section role="dialog" aria-modal="true" aria-labelledby="menu-editor-title" className="flex max-h-[min(90vh,760px)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-          <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
-            <div><h2 id="menu-editor-title" className="text-lg font-bold text-slate-900">Editează meniul</h2><p className="mt-1 text-sm text-slate-500">Schimbă ordinea și alege secțiunile vizibile.</p></div>
-            <button type="button" onClick={() => setMenuEditorOpen(false)} aria-label="Închide" className="rounded-lg p-2 hover:bg-slate-100"><X size={18}/></button>
-          </div>
-          <div className="min-h-0 space-y-1 overflow-y-auto p-4">
-            {orderedNavItems.map((item, index) => {
-              const Icon = item.icon ? NAV_ICONS[item.icon] : null
-              const visible = !navPreference.hidden.includes(item.href)
-              return <div key={item.href} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
-                <input type="checkbox" checked={visible} onChange={() => toggleNavItem(item.href)} aria-label={`Afișează ${item.label}`} className="h-4 w-4 accent-[#197fb5]"/>
-                {Icon && <Icon size={16}/>}<span className={`min-w-0 flex-1 truncate text-sm ${visible ? 'font-medium text-slate-800' : 'text-slate-400'}`}>{tr(item.label)}</span>
-                <button type="button" onClick={() => moveNavItem(item.href, -1)} disabled={index === 0} aria-label={`Mută ${item.label} mai sus`} className="rounded-lg p-1.5 hover:bg-slate-100 disabled:opacity-30"><ArrowUp size={16}/></button>
-                <button type="button" onClick={() => moveNavItem(item.href, 1)} disabled={index === orderedNavItems.length - 1} aria-label={`Mută ${item.label} mai jos`} className="rounded-lg p-1.5 hover:bg-slate-100 disabled:opacity-30"><ArrowDown size={16}/></button>
-              </div>
-            })}
-          </div>
-          <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4">
-            <button type="button" onClick={() => saveNavPreference({ order: [], hidden: [] })} className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-slate-600 hover:bg-slate-100"><RotateCcw size={15}/> Restabilește</button>
-            <button type="button" onClick={() => setMenuEditorOpen(false)} className="rounded-xl bg-[#197fb5] px-5 py-2 text-sm font-semibold text-white">Gata</button>
-          </div>
-        </section>
-      </div>}
 
       <main className="min-w-0">{children}</main>
     </div>
