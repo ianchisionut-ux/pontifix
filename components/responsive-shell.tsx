@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { User, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { User, PanelLeftClose, PanelLeftOpen, SlidersHorizontal, ArrowUp, ArrowDown, RotateCcw, X } from 'lucide-react'
 import {
   Calendar,
   MessagesSquare,
@@ -55,6 +55,9 @@ const NAV_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
   'chat-intern': MessagesSquare,
 }
 
+type NavItem = { href: string; label: string; badge?: number; icon?: string }
+type NavPreference = { order: string[]; hidden: string[] }
+
 // amestecă o culoare hex cu alb, la un procent dat — produce o culoare SOLIDĂ (nu transparentă).
 // esențial pentru header-ul mobil, care e fix (sticky) — dacă am folosi transparență, conținutul
 // care defilează dedesubt s-ar vedea prin el, exact bug-ul de suprapunere din poză
@@ -73,6 +76,7 @@ export function ResponsiveShell({
   logoLabel,
   profileName,
   navItems,
+  navigationStorageKey,
   accentColor,
   accountContent,
   children,
@@ -81,7 +85,8 @@ export function ResponsiveShell({
   logoHref: string
   logoLabel: string
   profileName?: string // numele afacerii/profilului, afișat sus, deasupra ceasului
-  navItems: { href: string; label: string; badge?: number; icon?: string }[]
+  navItems: NavItem[]
+  navigationStorageKey?: string
   accentColor?: string // culoarea aleasă de business în Setări — dacă lipsește, folosim culoarea implicită Elmont
   accountContent: React.ReactNode // blocul de cont/ieșire — separat, ca să nu intre în carusel
   children: React.ReactNode
@@ -90,10 +95,60 @@ export function ResponsiveShell({
   const { tr } = useLanguage()
   const [accountOpen, setAccountOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [menuEditorOpen, setMenuEditorOpen] = useState(false)
+  const [navPreference, setNavPreference] = useState<NavPreference>({ order: [], hidden: [] })
   const pathname = usePathname()
   const router = useRouter()
   const accent = accentColor || 'var(--accent)'
   const softTint = accentColor ? blendWithWhite(accentColor, 0.15) : 'var(--surface-muted)' // culoare solidă, opacă
+  const preferenceKey = `elmont-sidebar-v1:${navigationStorageKey ?? logoHref}`
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(preferenceKey) || 'null')
+      setNavPreference({
+        order: Array.isArray(saved?.order) ? saved.order.filter((href: unknown): href is string => typeof href === 'string') : [],
+        hidden: Array.isArray(saved?.hidden) ? saved.hidden.filter((href: unknown): href is string => typeof href === 'string') : [],
+      })
+    } catch {
+      setNavPreference({ order: [], hidden: [] })
+    }
+  }, [preferenceKey])
+
+  useEffect(() => {
+    if (!menuEditorOpen) return
+    const onEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuEditorOpen(false) }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [menuEditorOpen])
+
+  function saveNavPreference(next: NavPreference) {
+    setNavPreference(next)
+    try { localStorage.setItem(preferenceKey, JSON.stringify(next)) } catch { /* browser storage unavailable */ }
+  }
+
+  const orderedNavItems = [...navItems].sort((a, b) => {
+    const aIndex = navPreference.order.indexOf(a.href)
+    const bIndex = navPreference.order.indexOf(b.href)
+    return (aIndex < 0 ? navItems.indexOf(a) + navPreference.order.length : aIndex) - (bIndex < 0 ? navItems.indexOf(b) + navPreference.order.length : bIndex)
+  })
+
+  function moveNavItem(href: string, direction: -1 | 1) {
+    const order = orderedNavItems.map((item) => item.href)
+    const index = order.indexOf(href)
+    const nextIndex = index + direction
+    if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return
+    ;[order[index], order[nextIndex]] = [order[nextIndex], order[index]]
+    saveNavPreference({ ...navPreference, order })
+  }
+
+  function toggleNavItem(href: string) {
+    const hidden = navPreference.hidden.includes(href)
+      ? navPreference.hidden.filter((item) => item !== href)
+      : [...navPreference.hidden, href]
+    if (hidden.filter((item) => navItems.some((nav) => nav.href === item)).length >= navItems.length) return
+    saveNavPreference({ ...navPreference, hidden })
+  }
 
   // pornim cu valorile venite din server (randare inițială corectă, fără flash), apoi
   // le suprascriem periodic — altfel notificările rămân "înghețate" până la un refresh manual
@@ -137,9 +192,10 @@ export function ResponsiveShell({
     return () => window.removeEventListener('internal-chat-unread', updateChatBadge)
   }, [])
 
+  const visibleNavItems = orderedNavItems.filter((item) => !navPreference.hidden.includes(item.href))
   const displayNavItems = enableLiveBadges
-    ? navItems.map((item) => ({ ...item, badge: item.href in liveBadges ? liveBadges[item.href] : item.badge }))
-    : navItems
+    ? visibleNavItems.map((item) => ({ ...item, badge: item.href in liveBadges ? liveBadges[item.href] : item.badge }))
+    : visibleNavItems
 
   // când mai multe href-uri se potrivesc (ex: '/superadmin' e prefix pentru
   // '/superadmin/afaceri'), câștigă mereu cel mai specific (cel mai lung) — altfel
@@ -210,7 +266,9 @@ export function ResponsiveShell({
                 ✕
               </button>
             </div>
-            <div className="mb-4"><LanguageSwitcher/></div><div onClick={() => setAccountOpen(false)}>{accountContent}</div>
+            <div className="mb-4"><LanguageSwitcher/></div>
+            <button type="button" onClick={() => { setAccountOpen(false); setMenuEditorOpen(true) }} className="mb-3 flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-slate-100"><SlidersHorizontal size={16}/> Editează meniul</button>
+            <div onClick={() => setAccountOpen(false)}>{accountContent}</div>
           </aside>
         </div>
       )}
@@ -252,9 +310,37 @@ export function ResponsiveShell({
             </Link>
           )
         })}
+        <button type="button" onClick={() => setMenuEditorOpen(true)} title="Editează meniul" aria-label="Editează meniul" className={`flex items-center rounded-xl py-2.5 text-sm font-medium text-[var(--foreground-muted,#4b5563)] hover:bg-white/80 ${sidebarCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3'}`}>
+          <SlidersHorizontal size={16}/>{!sidebarCollapsed && <span>Editează meniul</span>}
+        </button>
         {!sidebarCollapsed && <div className="mt-auto px-3 pb-2"><LanguageSwitcher/></div>}
         {!sidebarCollapsed && accountContent}
       </aside>
+
+      {menuEditorOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/45 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setMenuEditorOpen(false) }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="menu-editor-title" className="flex max-h-[min(90vh,760px)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="flex items-start justify-between gap-3 border-b border-slate-200 px-5 py-4">
+            <div><h2 id="menu-editor-title" className="text-lg font-bold text-slate-900">Editează meniul</h2><p className="mt-1 text-sm text-slate-500">Schimbă ordinea și alege secțiunile vizibile.</p></div>
+            <button type="button" onClick={() => setMenuEditorOpen(false)} aria-label="Închide" className="rounded-lg p-2 hover:bg-slate-100"><X size={18}/></button>
+          </div>
+          <div className="min-h-0 space-y-1 overflow-y-auto p-4">
+            {orderedNavItems.map((item, index) => {
+              const Icon = item.icon ? NAV_ICONS[item.icon] : null
+              const visible = !navPreference.hidden.includes(item.href)
+              return <div key={item.href} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                <input type="checkbox" checked={visible} onChange={() => toggleNavItem(item.href)} aria-label={`Afișează ${item.label}`} className="h-4 w-4 accent-[#197fb5]"/>
+                {Icon && <Icon size={16}/>}<span className={`min-w-0 flex-1 truncate text-sm ${visible ? 'font-medium text-slate-800' : 'text-slate-400'}`}>{tr(item.label)}</span>
+                <button type="button" onClick={() => moveNavItem(item.href, -1)} disabled={index === 0} aria-label={`Mută ${item.label} mai sus`} className="rounded-lg p-1.5 hover:bg-slate-100 disabled:opacity-30"><ArrowUp size={16}/></button>
+                <button type="button" onClick={() => moveNavItem(item.href, 1)} disabled={index === orderedNavItems.length - 1} aria-label={`Mută ${item.label} mai jos`} className="rounded-lg p-1.5 hover:bg-slate-100 disabled:opacity-30"><ArrowDown size={16}/></button>
+              </div>
+            })}
+          </div>
+          <div className="flex items-center justify-between gap-3 border-t border-slate-200 px-5 py-4">
+            <button type="button" onClick={() => saveNavPreference({ order: [], hidden: [] })} className="flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-slate-600 hover:bg-slate-100"><RotateCcw size={15}/> Restabilește</button>
+            <button type="button" onClick={() => setMenuEditorOpen(false)} className="rounded-xl bg-[#197fb5] px-5 py-2 text-sm font-semibold text-white">Gata</button>
+          </div>
+        </section>
+      </div>}
 
       <main className="min-w-0">{children}</main>
     </div>

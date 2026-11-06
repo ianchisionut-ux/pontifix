@@ -32,7 +32,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!businessId) redirect('/superadmin')
   const roleItems = canAccessAccounting(session) ? NAV_ITEMS : NAV_ITEMS.filter((item) => item.href !== '/dashboard/contabilitate')
   const navItems = role === 'STAFF' ? roleItems.filter((item) => !['/dashboard/pontaje', '/dashboard/angajati', '/dashboard/salarizare', '/dashboard/concedii', '/dashboard/configurare'].includes(item.href)) : roleItems
-  return <ResponsiveShell logoHref="/dashboard" logoLabel="Elmont" navItems={navItems} accentColor={'#197fb5'} accountContent={<SidebarUserBlock label={session.user?.email ?? 'Cont'} />} enableLiveBadges>
+  return <ResponsiveShell logoHref="/dashboard" logoLabel="Elmont" navItems={navItems} navigationStorageKey={session.user?.id ?? session.user?.email ?? 'default'} accentColor={'#197fb5'} accountContent={<SidebarUserBlock label={session.user?.email ?? 'Cont'} />} enableLiveBadges>
     {children}
   </ResponsiveShell>
 }
