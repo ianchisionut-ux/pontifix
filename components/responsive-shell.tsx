@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { User, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { User } from 'lucide-react'
 import {
   Calendar,
   MessagesSquare,
@@ -91,7 +91,6 @@ export function ResponsiveShell({
 }) {
   const { tr } = useLanguage()
   const [accountOpen, setAccountOpen] = useState(false)
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(216)
   const [isResizing, setIsResizing] = useState(false)
   const resizeActive = useRef(false)
@@ -99,17 +98,18 @@ export function ResponsiveShell({
   const router = useRouter()
   const accent = accentColor || 'var(--accent)'
   const softTint = accentColor ? blendWithWhite(accentColor, 0.15) : 'var(--surface-muted)' // culoare solidă, opacă
+  const sidebarCompact = sidebarWidth <= 160
   const widthStorageKey = `elmont-sidebar-width-v1:${sidebarStorageKey ?? logoHref}`
 
   useEffect(() => {
     try {
       const saved = Number(localStorage.getItem(widthStorageKey))
-      if (Number.isFinite(saved) && saved >= 180 && saved <= 600) setSidebarWidth(saved)
+      if (Number.isFinite(saved) && saved >= 76 && saved <= 600) setSidebarWidth(saved)
     } catch { /* browser storage unavailable */ }
   }, [widthStorageKey])
 
   function clampSidebarWidth(width: number) {
-    return Math.max(180, Math.min(600, window.innerWidth - 440, width))
+    return Math.max(76, Math.min(600, window.innerWidth - 440, width))
   }
 
   function saveSidebarWidth(width: number) {
@@ -179,7 +179,7 @@ export function ResponsiveShell({
     .sort((a, b) => b.href.length - a.href.length)[0]?.href
 
   return (
-    <div className={`elmont-shell min-h-screen bg-[var(--surface-muted)] lg:grid ${isResizing ? '' : 'transition-[grid-template-columns]'}`} style={{ '--elmont-sidebar-width': `${sidebarCollapsed ? 76 : sidebarWidth}px` } as React.CSSProperties}>
+    <div className={`elmont-shell min-h-screen bg-[var(--surface-muted)] lg:grid ${isResizing ? '' : 'transition-[grid-template-columns]'}`} style={{ '--elmont-sidebar-width': `${sidebarWidth}px` } as React.CSSProperties}>
       {enableLiveBadges && <><InternalChatNotifier/><InternalChatDock/></>}
       {/* header mobil, doar sub lg */}
       <div className="lg:hidden sticky top-0 z-40 border-b border-[var(--border-soft)] screen-only" style={{ background: accentColor ? softTint : 'white' }}>
@@ -247,12 +247,10 @@ export function ResponsiveShell({
 
       {/* sidebar fix, doar de la lg in sus */}
       <aside className="elmont-sidebar relative hidden lg:flex flex-col gap-1 p-3" style={{ background: softTint }}>
-        <div className={`flex items-center mb-2 ${sidebarCollapsed ? 'justify-center' : 'justify-between px-1'}`}>
-          <Link href={logoHref}><ElmontLogo compact={sidebarCollapsed}/></Link>
-          {!sidebarCollapsed && <button onClick={() => setSidebarCollapsed(true)} className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-white/80" aria-label="Restrânge meniul"><PanelLeftClose size={17}/></button>}
+        <div className={`flex items-center mb-2 ${sidebarCompact ? 'justify-center' : 'px-1'}`}>
+          <Link href={logoHref}><ElmontLogo compact={sidebarCompact}/></Link>
         </div>
-        {sidebarCollapsed && <button onClick={() => setSidebarCollapsed(false)} className="self-center w-9 h-9 mb-1 rounded-xl flex items-center justify-center hover:bg-white/80" aria-label="Extinde meniul"><PanelLeftOpen size={17}/></button>}
-        {!sidebarCollapsed && <SidebarClock />}
+        {!sidebarCompact && <SidebarClock />}
         {displayNavItems.map((item) => {
           const active = item.href === activeHref
           const Icon = item.icon ? NAV_ICONS[item.icon] : null
@@ -260,10 +258,12 @@ export function ResponsiveShell({
             <Link
               key={item.href}
               href={item.href}
+              title={sidebarCompact ? tr(item.label) : undefined}
+              aria-label={sidebarCompact ? tr(item.label) : undefined}
               prefetch={false}
                 onMouseEnter={() => router.prefetch(item.href)}
               onFocus={() => router.prefetch(item.href)}
-              className={`relative rounded-xl py-2.5 text-sm font-medium transition flex items-center border-l-[3px] ${sidebarCollapsed ? 'justify-center px-2' : 'gap-2.5 px-3'}`}
+              className={`relative rounded-xl py-2.5 text-sm font-medium transition flex items-center border-l-[3px] ${sidebarCompact ? 'justify-center px-2' : 'gap-2.5 px-3'}`}
               style={
                 active
                   ? { background: 'white', boxShadow: 'var(--shadow-card)', borderLeftColor: accent, color: accent }
@@ -271,10 +271,10 @@ export function ResponsiveShell({
               }
             >
               {Icon && <Icon size={16} />}
-              {!sidebarCollapsed && <span className="flex-1">{tr(item.label)}</span>}
+              {!sidebarCompact && <span className="min-w-0 flex-1 truncate">{tr(item.label)}</span>}
               {!!item.badge && (
                 <span
-                  className={`text-xs bg-red-600 text-white rounded-full text-center ${sidebarCollapsed ? 'absolute right-1 top-1 h-2.5 w-2.5 min-w-0 overflow-hidden p-0 text-transparent' : 'min-w-[18px] px-1.5 py-0.5'} ${item.href === '/dashboard/mesaje' || item.href === '/dashboard/programari' || item.href === '/dashboard/oferte' ? 'animate-pulse' : ''}`}
+                  className={`text-xs bg-red-600 text-white rounded-full text-center ${sidebarCompact ? 'absolute right-1 top-1 h-2.5 w-2.5 min-w-0 overflow-hidden p-0 text-transparent' : 'min-w-[18px] px-1.5 py-0.5'} ${item.href === '/dashboard/mesaje' || item.href === '/dashboard/programari' || item.href === '/dashboard/oferte' ? 'animate-pulse' : ''}`}
                 >
                   {item.badge}
                 </span>
@@ -282,13 +282,13 @@ export function ResponsiveShell({
             </Link>
           )
         })}
-        {!sidebarCollapsed && <div className="mt-auto px-3 pb-2"><LanguageSwitcher/></div>}
-        {!sidebarCollapsed && accountContent}
-        {!sidebarCollapsed && <div
+        {!sidebarCompact && <div className="mt-auto px-3 pb-2"><LanguageSwitcher/></div>}
+        {!sidebarCompact && accountContent}
+        <div
           role="separator"
           aria-label="Redimensionează meniul lateral"
           aria-orientation="vertical"
-          aria-valuemin={180}
+          aria-valuemin={76}
           aria-valuemax={600}
           aria-valuenow={sidebarWidth}
           tabIndex={0}
@@ -314,12 +314,12 @@ export function ResponsiveShell({
           onLostPointerCapture={stopResize}
           onDoubleClick={() => saveSidebarWidth(216)}
           onKeyDown={(event) => {
-            const width = event.key === 'ArrowLeft' ? sidebarWidth - 12 : event.key === 'ArrowRight' ? sidebarWidth + 12 : event.key === 'Home' ? 180 : event.key === 'End' ? 600 : null
+            const width = event.key === 'ArrowLeft' ? sidebarWidth - 12 : event.key === 'ArrowRight' ? sidebarWidth + 12 : event.key === 'Home' ? 76 : event.key === 'End' ? 600 : null
             if (width === null) return
             event.preventDefault()
             saveSidebarWidth(width)
           }}
-        />}
+        />
       </aside>
 
       <main className="min-w-0">{children}</main>
