@@ -5,6 +5,9 @@ import { connectionFieldsSchema } from '@/lib/connection-fields'
 import { connectionDocumentName, generateConnectionDocx } from '@/lib/connection-docx'
 import { ensureConnectionStorage } from '@/lib/ensure-connection-storage'
 
+export const runtime = 'nodejs'
+export const maxDuration = 60
+
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const access = await getConnectionAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
@@ -19,6 +22,30 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!parsed.success) return NextResponse.json({ error: 'Datele documentului sunt invalide.' }, { status: 500 })
   const buffer = await generateConnectionDocx(parsed.data, type)
   const filename = connectionDocumentName(parsed.data, type)
+  if (request.nextUrl.searchParams.get('format') === 'pdf') {
+    const serviceUrl = process.env.SOFTJ_INTERNAL_URL
+    if (!serviceUrl) return NextResponse.json({ error: 'Conversia PDF nu este configurată pe server.' }, { status: 503 })
+    try {
+      const response = await fetch(new URL('/convert-docx', serviceUrl), {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ docxBase64: buffer.toString('base64') }),
+        cache: 'no-store', signal: AbortSignal.timeout(55_000),
+      })
+      const converted = await response.json().catch(() => ({}))
+      if (!response.ok || !converted.ok || !converted.pdfBase64) {
+        return NextResponse.json({ error: converted.error || 'Contractul nu a putut fi convertit în PDF.' }, { status: response.status >= 400 ? response.status : 502 })
+      }
+      const pdf = Buffer.from(converted.pdfBase64, 'base64')
+      if (pdf.subarray(0, 5).toString() !== '%PDF-') throw new Error('Serviciul a returnat un PDF invalid.')
+      return new Response(new Uint8Array(pdf), { headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `inline; filename="${filename.replace(/\.docx$/i, '.pdf')}"`,
+        'Cache-Control': 'private, no-store',
+      } })
+    } catch (cause) {
+      return NextResponse.json({ error: cause instanceof Error ? cause.message : 'Conversia PDF a eșuat.' }, { status: 502 })
+    }
+  }
   return new Response(new Uint8Array(buffer), { headers: {
     'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'Content-Disposition': `attachment; filename="${filename}"`,

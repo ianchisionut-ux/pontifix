@@ -9,11 +9,13 @@ import type { FormField, FormSubmissionDto, FormTemplateDto, StampPlacement } fr
 import { CONNECTION_FIELDS, CONNECTION_FIELD_LABELS } from '@/lib/connection-fields'
 import type { IdentityCardRecord } from '@/lib/identity-card-storage'
 import { deerDocumentKindForTemplate, type DeerBorderouDto } from '@/lib/deer-borderou-shared'
+import { BENEFICIARY_SIGNED_KEY, beneficiarySigned, effectiveStampPlacements } from './form-stamps'
 
 export type ConnectionFormOption = { id: string; nib: string; sequenceNumber: number; status: string; deerSubmittedAt: string; createdAt: string; fields: Record<string, string> }
 export type ProjectFormOption = { id: string; name: string; beneficiary: string; beneficiaryPhone: string; address: string; certificateNumber: string; certificateDate: string }
 
 const DEER_STAMPS = [
+  { key: 'beneficiary-signature', label: 'Semnătura beneficiarului' },
   { key: 's1-elmont-stamp', label: 'Ștampilă ELMONT' },
   { key: 's2-signature', label: 'Semnătură 1' },
   { key: 's3-signature', label: 'Semnătură 2' },
@@ -63,6 +65,19 @@ export function loadImage(src: string) {
     image.onload = () => resolve(image)
     image.onerror = () => reject(new Error('Imaginea semnăturii nu a putut fi citită.'))
     image.src = src
+  })
+}
+
+export async function beneficiarySignatureImage(connectionId: string): Promise<string | null> {
+  const response = await fetch(`/api/formulare/beneficiary-signature/${encodeURIComponent(connectionId)}`, { cache: 'no-store' })
+  if (response.status === 404) return null
+  if (!response.ok) throw new Error('Semnătura beneficiarului nu a putut fi încărcată.')
+  const blob = await response.blob()
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result))
+    reader.onerror = () => reject(new Error('Semnătura beneficiarului nu a putut fi citită.'))
+    reader.readAsDataURL(blob)
   })
 }
 
@@ -142,13 +157,14 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   const { tr } = useLanguage()
   const isDeer = template.category === 'DEER'
   const caseDocumentKind = deerDocumentKindForTemplate(template)
+  const connectionDocumentType = template.documentPathname === 'connection-document:contract' ? 'contract' : null
   const defaultConnection = isDeer && defaultConnectionId ? connections.find((item) => item.id === defaultConnectionId) : undefined
   const [pdf, setPdf] = useState<any>(null)
   const [pageCount, setPageCount] = useState(0)
   const [fields, setFields] = useState<FormField[]>(() => initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema)
-  const [placements, setPlacements] = useState<StampPlacement[]>(() => initialSubmission ? initialSubmission.stampSchema : template.stampSchema)
+  const [placements, setPlacements] = useState<StampPlacement[]>(() => effectiveStampPlacements(template.stampSchema, initialSubmission?.stampSchema))
   const [stampImages, setStampImages] = useState<Record<string, string>>({})
-  const [stampKey, setStampKey] = useState<string>('s2-signature')
+  const [stampKey, setStampKey] = useState<string>('beneficiary-signature')
   const [selectedStampId, setSelectedStampId] = useState('')
   const [values, setValues] = useState<Record<string, string>>(() => {
     const saved = initialSubmission?.values || {}
@@ -169,7 +185,9 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   const stampDrag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; item: StampPlacement; box: DOMRect } | null>(null)
   const caseDocument = caseDocumentKind && sourceId.startsWith('connection:')
     ? borderouri.find((item) => item.connectionId === sourceId.slice(11) && item.documentKind === caseDocumentKind) : undefined
-  const documentUrl = caseDocumentKind
+  const documentUrl = connectionDocumentType
+    ? sourceId.startsWith('connection:') ? `/api/bransamente/${encodeURIComponent(sourceId.slice(11))}/document?type=${connectionDocumentType}&format=pdf&v=${documentVersion}` : ''
+    : caseDocumentKind
     ? caseDocument ? `/api/formulare/borderou/${caseDocument.id}/document?v=${documentVersion}` : ''
     : `/api/formulare/${encodeURIComponent(template.id)}/document?v=${documentVersion}`
   const selected = fields.find((field) => field.id === selectedId)
@@ -178,11 +196,20 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   useEffect(() => {
     if (!isDeer) return
     let cancelled = false
-    Promise.all(DEER_STAMPS.map(async (stamp) => [stamp.key, await transparentStamp(stamp.key)] as const))
+    Promise.all(DEER_STAMPS.filter((stamp) => stamp.key !== 'beneficiary-signature').map(async (stamp) => [stamp.key, await transparentStamp(stamp.key)] as const))
       .then((entries) => { if (!cancelled) setStampImages(Object.fromEntries(entries)) })
       .catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Semnăturile nu sunt disponibile.') })
     return () => { cancelled = true }
   }, [isDeer])
+
+  useEffect(() => {
+    if (!isDeer || !sourceId.startsWith('connection:')) return
+    let cancelled = false
+    beneficiarySignatureImage(sourceId.slice(11)).then((source) => {
+      if (!cancelled && source) setStampImages((all) => ({ ...all, 'beneficiary-signature': source }))
+    }).catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Semnătura nu este disponibilă.') })
+    return () => { cancelled = true }
+  }, [isDeer, sourceId])
 
   useEffect(() => {
     setPdf(null); setPageCount(0); setError('')
@@ -282,11 +309,11 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   async function addStamp() {
     if (!isDeer || !pdf) return
     try {
-      const image = await loadImage(stampImages[stampKey] || await transparentStamp(stampKey))
+      const image = stampKey === 'beneficiary-signature' ? null : await loadImage(stampImages[stampKey] || await transparentStamp(stampKey))
       const page = await pdf.getPage(activePage)
       const viewport = page.getViewport({ scale: 1 })
       const width = stampKey.includes('signature') ? .18 : .16
-      const height = Math.min(.3, width * (viewport.width / viewport.height) / (image.naturalWidth / image.naturalHeight))
+      const height = Math.min(.3, width * (viewport.width / viewport.height) / (image ? image.naturalWidth / image.naturalHeight : 3))
       const item: StampPlacement = { id: crypto.randomUUID(), stampKey, page: activePage, x: .5 - width / 2, y: .7 - height / 2, width, height, rotation: 0 }
       setPlacements((all) => [...all, item]); setSelectedStampId(item.id); setError('')
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Semnătura nu a putut fi adăugată.') }
@@ -365,6 +392,12 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
 
   async function generatePdf(onlyPage?: number) {
     if (!pdf) throw new Error('PDF-ul se încarcă încă.')
+    if (isDeer && beneficiarySigned(values) && !placements.some((item) => item.stampKey === 'beneficiary-signature')) {
+      throw new Error('Așază semnătura beneficiarului pe PDF înainte de export.')
+    }
+    if (isDeer && beneficiarySigned(values) && !stampImages['beneficiary-signature']) {
+      throw new Error('Beneficiarul este marcat ca semnatar, dar semnătura lui nu este înregistrată pentru acest branșament.')
+    }
     const { PDFDocument } = await import('pdf-lib')
     const output = await PDFDocument.create()
     const pages = onlyPage ? [onlyPage] : Array.from({ length: pageCount }, (_, index) => index + 1)
@@ -393,7 +426,9 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
         } else context.fillText(value, x, y, maxWidth)
       }
       if (isDeer) for (const item of placements.filter((stamp) => stamp.page === pageNumber)) {
-        const source = stampImages[item.stampKey] || await transparentStamp(item.stampKey)
+        if (item.stampKey === 'beneficiary-signature' && !beneficiarySigned(values)) continue
+        const source = stampImages[item.stampKey] || (item.stampKey === 'beneficiary-signature' ? null : await transparentStamp(item.stampKey))
+        if (!source) continue
         const image = await loadImage(source)
         const width = item.width * canvas.width, height = item.height * canvas.height
         context.save()
@@ -457,7 +492,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
         {!isDeer && <><optgroup label="Cărți de identitate">{identityCards.map((item) => <option key={item.id} value={`identity:${item.id}`}>{item.fullName} - {[item.series, item.number].filter(Boolean).join(' ') || 'fără serie'}</option>)}</optgroup>
         <optgroup label={tr('Proiecte')}>{projects.map((item) => <option key={item.id} value={`project:${item.id}`}>{item.name} - {item.beneficiary || tr('Fără beneficiar')}</option>)}</optgroup></>}
       </select>
-      {canManage && !caseDocumentKind && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
+      {canManage && !caseDocumentKind && !connectionDocumentType && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
       {canManage && <button className={`btn-secondary inline-flex items-center gap-2 !py-2 ${layoutMode ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`} onClick={() => setLayoutMode((value) => !value)}><Settings2 size={16}/> {tr('Poziționare')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addField}><Plus size={16}/> {tr('Câmp')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addTodayField}><Plus size={16}/> Data de azi</button>}
@@ -471,7 +506,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
       </select>
       <button className="btn-primary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf || (isDeer && !sourceId.startsWith('connection:'))} onClick={() => downloadOrPrint(true)}>{busy === 'print' ? <Loader2 className="animate-spin" size={16}/> : <Printer size={16}/>} {tr('Printează')}</button>
     </header>
-    {isDeer && <div className="bg-blue-50 px-5 py-2 text-xs font-medium text-[#0d5d8b]">Alege branșamentul, completează câmpurile și selectează pagina înainte de a adăuga semnătura. Semnătura se poate trage și redimensiona.</div>}
+    {isDeer && <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 px-5 py-2 text-xs font-medium text-[#0d5d8b]"><span>Poziționează semnătura unde trebuie, apoi salvează șablonul. Alegerea de mai jos se păstrează doar pentru acest document și branșament.</span><label className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold"><input type="checkbox" checked={beneficiarySigned(values)} onChange={(event) => setValues((all) => ({ ...all, [BENEFICIARY_SIGNED_KEY]: event.target.checked ? 'yes' : 'no' }))}/> Beneficiarul a semnat acest document</label></div>}
     {saveNotice && <div role="status" className="bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-800">{saveNotice}</div>}
     {error && <div className="bg-red-50 px-5 py-2 text-sm font-semibold text-red-700">{error}</div>}
     <div className="flex min-h-0 flex-1">
@@ -488,7 +523,12 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
                   <input aria-label={field.label} value={values[field.id] || ''} onChange={(e) => setFieldValue(field, e.target.value)} className={`h-full w-full bg-white/65 px-0.5 text-slate-950 outline-none ${layoutMode ? 'border border-dashed border-[#197fb5]' : 'border border-transparent focus:border-[#197fb5]'}`} style={{ fontSize: `${field.fontSize * 1.334}px`, fontWeight: field.bold ? 700 : 400, color: field.color || '#111827' }}/>}
                   {layoutMode && <><button title="Mută" onPointerDown={(e) => startDrag(e, field, 'move')} className="absolute -left-3 -top-3 flex h-6 w-6 cursor-move items-center justify-center rounded-full bg-[#0d5d8b] text-white shadow"><Grip size={12}/></button><button title="Redimensionează" onPointerDown={(e) => startDrag(e, field, 'resize')} className="absolute -bottom-2 -right-2 h-4 w-4 cursor-nwse-resize rounded-sm bg-[#197fb5] shadow"/></>}
                 </div>)}
-                {isDeer && placements.filter((item) => item.page === pageNumber).map((item) => <div key={item.id} onPointerDown={(event) => startStampDrag(event, item)} onClick={() => setSelectedStampId(item.id)} className={`absolute z-30 cursor-move touch-none ${selectedStampId === item.id ? 'ring-2 ring-[#197fb5]' : 'hover:ring-1 hover:ring-[#197fb5]'}`} style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%`, transform: `rotate(${item.rotation}deg)` }}><img src={stampImages[item.stampKey] || `/api/formulare/stamps/${item.stampKey}`} alt={DEER_STAMPS.find((stamp) => stamp.key === item.stampKey)?.label || 'Semnătură'} className="h-full w-full select-none object-contain" draggable={false}/>{canManage && selectedStampId === item.id && <button type="button" title="Redimensionează ștampila" aria-label="Redimensionează ștampila" onPointerDown={(event) => startStampDrag(event, item, 'resize')} className="absolute -bottom-3 -right-3 z-40 flex h-7 w-7 cursor-nwse-resize touch-none items-center justify-center rounded-md border-2 border-white bg-[#197fb5] text-white shadow-lg"><Grip size={14}/></button>}</div>)}
+                {isDeer && placements.filter((item) => item.page === pageNumber).map((item) => <div key={item.id} onPointerDown={(event) => startStampDrag(event, item)} onClick={() => setSelectedStampId(item.id)} className={`absolute z-30 cursor-move touch-none ${selectedStampId === item.id ? 'ring-2 ring-[#197fb5]' : 'hover:ring-1 hover:ring-[#197fb5]'}`} style={{ left: `${item.x * 100}%`, top: `${item.y * 100}%`, width: `${item.width * 100}%`, height: `${item.height * 100}%`, transform: `rotate(${item.rotation}deg)` }}>
+                  {item.stampKey === 'beneficiary-signature' && (!beneficiarySigned(values) || !stampImages[item.stampKey])
+                    ? <div className="flex h-full w-full items-center justify-center border-2 border-dashed border-blue-500 bg-blue-50/50 p-1 text-center text-[10px] font-bold text-blue-700">{beneficiarySigned(values) ? 'Semnătura nu este înregistrată' : 'Poziție semnătură · inactivă'}</div>
+                    : <img src={stampImages[item.stampKey] || `/api/formulare/stamps/${item.stampKey}`} alt={DEER_STAMPS.find((stamp) => stamp.key === item.stampKey)?.label || 'Semnătură'} className="h-full w-full select-none object-contain" draggable={false}/>}
+                  {canManage && selectedStampId === item.id && <button type="button" title="Redimensionează ștampila" aria-label="Redimensionează ștampila" onPointerDown={(event) => startStampDrag(event, item, 'resize')} className="absolute -bottom-3 -right-3 z-40 flex h-7 w-7 cursor-nwse-resize touch-none items-center justify-center rounded-md border-2 border-white bg-[#197fb5] text-white shadow-lg"><Grip size={14}/></button>}
+                </div>)}
               </div>
               <span className="absolute bottom-2 right-2 rounded bg-slate-900/65 px-2 py-1 text-[10px] text-white">Pagina {pageNumber}</span>
             </div>

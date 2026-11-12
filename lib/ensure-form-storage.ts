@@ -111,6 +111,11 @@ export async function ensureFormStorage(businessId: string) {
     WHERE NOT EXISTS (SELECT 1 FROM "FormTemplate" WHERE "businessId"=${businessId} AND "category"='DEER' AND "deerDocumentKind"='INSTIINTARE_BMP')
     ON CONFLICT ("id") DO NOTHING
   `
+  await prisma.$executeRaw`
+    INSERT INTO "FormTemplate" ("id", "businessId", "title", "category", "documentPathname", "documentName", "sortOrder")
+    VALUES (${`${businessId}:deer:connection-contract`}, ${businessId}, 'Contract + notificare + memoriu', 'DEER', 'connection-document:contract', 'PDF generat din dosarul branșamentului', 101)
+    ON CONFLICT ("id") DO NOTHING
+  `
 }
 
 export type FormTemplateDto = {

@@ -12,7 +12,7 @@ const field = z.object({
   binding: z.string().max(150).optional(), defaultValue: z.string().max(4000).optional(),
 })
 const stamp = z.object({
-  id: z.string().min(1).max(100), stampKey: z.enum(['s1-elmont-stamp', 's2-signature', 's3-signature', 's4-elmont-signed', 's5-verificator-stamp']),
+  id: z.string().min(1).max(100), stampKey: z.enum(['s1-elmont-stamp', 's2-signature', 's3-signature', 's4-elmont-signed', 's5-verificator-stamp', 'beneficiary-signature']),
   page: z.number().int().min(1).max(100), x: z.number().min(0).max(1), y: z.number().min(0).max(1),
   width: z.number().min(.01).max(1), height: z.number().min(.01).max(1), rotation: z.number().min(-360).max(360),
 })

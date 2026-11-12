@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -40,9 +41,12 @@ class Handler(BaseHTTPRequestHandler):
             and (VENDOR / "lib" / f"{code}Pdf.jar").is_file()
             for code in ALLOWED_TYPES
         )
-        self.reply(200 if ready else 503, {"ready": ready})
+        self.reply(200 if ready else 503, {"ready": ready, "docxPdfReady": bool(shutil.which("libreoffice"))})
 
     def do_POST(self):
+        if self.path == "/convert-docx":
+            self.convert_docx()
+            return
         if self.path != "/render":
             self.reply(404, {"error": "Not found"})
             return
@@ -94,6 +98,51 @@ class Handler(BaseHTTPRequestHandler):
                     self.reply(422, {"ok": False, "error": output or diagnostic or "Soft J nu a putut valida declarația.", "exitCode": completed.returncode})
         except OSError:
             self.reply(500, {"error": "Serviciul Soft J nu a putut procesa declarația."})
+        finally:
+            JOBS.release()
+
+    def convert_docx(self):
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            length = 0
+        if not 0 < length <= MAX_REQUEST_BYTES:
+            self.reply(413, {"error": "Documentul depășește limita serviciului."})
+            return
+        try:
+            body = json.loads(self.rfile.read(length))
+            encoded = body.get("docxBase64") if isinstance(body, dict) else None
+            if not isinstance(encoded, str):
+                raise ValueError("Missing document")
+            document = base64.b64decode(encoded, validate=True)
+            if len(document) > 2 * 1024 * 1024 or not document.startswith(b"PK\x03\x04"):
+                raise ValueError("Invalid DOCX")
+        except (ValueError, UnicodeDecodeError):
+            self.reply(400, {"error": "Documentul DOCX este invalid."})
+            return
+        if not JOBS.acquire(blocking=False):
+            self.reply(503, {"error": "Serviciul este ocupat. Reîncearcă în câteva secunde."})
+            return
+        try:
+            with tempfile.TemporaryDirectory(prefix="docx-pdf-") as directory:
+                work = Path(directory)
+                source = work / "contract.docx"
+                target = work / "contract.pdf"
+                source.write_bytes(document)
+                command = ["libreoffice", "-env:UserInstallation=" + (work / "profile").as_uri(),
+                           "--headless", "--convert-to", "pdf:writer_pdf_Export", "--outdir", str(work), str(source)]
+                try:
+                    completed = subprocess.run(command, cwd=work, capture_output=True, timeout=45, check=False)
+                except subprocess.TimeoutExpired:
+                    self.reply(504, {"error": "Conversia contractului a depășit timpul permis."})
+                    return
+                pdf = target.read_bytes() if target.is_file() else b""
+                if completed.returncode != 0 or not pdf.startswith(b"%PDF-"):
+                    self.reply(422, {"error": "Contractul nu a putut fi convertit în PDF."})
+                    return
+                self.reply(200, {"ok": True, "pdfBase64": base64.b64encode(pdf).decode("ascii")})
+        except OSError:
+            self.reply(500, {"error": "Conversia contractului nu este disponibilă."})
         finally:
             JOBS.release()
 

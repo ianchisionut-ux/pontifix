@@ -3,8 +3,9 @@
 import { useEffect, useState } from 'react'
 import { Download, Loader2, Printer, X } from 'lucide-react'
 import type { FormField, FormSubmissionDto, FormTemplateDto, StampPlacement } from '@/lib/ensure-form-storage'
-import { boundValue, loadImage, transparentStamp, type ConnectionFormOption } from './pdf-request-editor'
+import { beneficiarySignatureImage, boundValue, loadImage, transparentStamp, type ConnectionFormOption } from './pdf-request-editor'
 import { deerDocumentKindForTemplate, type DeerDocumentKind } from '@/lib/deer-borderou-shared'
+import { beneficiarySigned, effectiveStampPlacements } from './form-stamps'
 
 type PreviewProps = {
   templates: FormTemplateDto[]
@@ -60,13 +61,16 @@ export function DeerBulkPreview({ templates, submissions, connection, caseDocume
         const [pdfjs, { PDFDocument }] = await Promise.all([import('pdfjs-dist'), import('pdf-lib')])
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
         const output = await PDFDocument.create()
+        const beneficiarySignature = await beneficiarySignatureImage(connection.id)
         let pages = 0
         for (const template of templates) {
           if (cancelled) return
           setCurrent(template.title)
           const kind = deerDocumentKindForTemplate(template)
           const caseDocumentId = kind ? caseDocumentIds[kind] : undefined
-          const documentUrl = kind && caseDocumentId
+          const documentUrl = template.documentPathname.startsWith('connection-document:')
+            ? `/api/bransamente/${encodeURIComponent(connection.id)}/document?type=${encodeURIComponent(template.documentPathname.slice('connection-document:'.length))}&format=pdf`
+            : kind && caseDocumentId
             ? `/api/formulare/borderou/${encodeURIComponent(caseDocumentId)}/document`
             : `/api/formulare/${encodeURIComponent(template.id)}/document`
           const response = await fetch(documentUrl, { signal: controller.signal })
@@ -75,11 +79,14 @@ export function DeerBulkPreview({ templates, submissions, connection, caseDocume
           const pdf = await loadingTask.promise
           const submission = submissions.find((item) => item.formTemplateId === template.id && item.sourceId === connection.id)
           const fields = submission?.fieldSchema?.length ? submission.fieldSchema : template.fieldSchema
-          const stamps: StampPlacement[] = submission ? submission.stampSchema : template.stampSchema
+          const stamps: StampPlacement[] = effectiveStampPlacements(template.stampSchema, submission?.stampSchema)
+          const signed = beneficiarySigned(submission?.values)
+          if (signed && !stamps.some((item) => item.stampKey === 'beneficiary-signature')) throw new Error(`Așază semnătura beneficiarului pe „${template.title}”.`)
+          if (signed && !beneficiarySignature) throw new Error(`Semnătura beneficiarului lipsește pentru „${template.title}”.`)
           for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
             if (cancelled) return
             const page = await pdf.getPage(pageNumber)
-            const scale = 2.5
+            const scale = template.documentPathname.startsWith('connection-document:') ? 1.6 : 2.5
             const viewport = page.getViewport({ scale })
             const canvas = document.createElement('canvas')
             canvas.width = Math.round(viewport.width)
@@ -91,7 +98,10 @@ export function DeerBulkPreview({ templates, submissions, connection, caseDocume
               drawField(context, canvas, field, fieldText(field, submission, connection), scale)
             }
             for (const stamp of stamps.filter((item) => item.page === pageNumber)) {
-              const image = await loadImage(await transparentStamp(stamp.stampKey))
+              if (stamp.stampKey === 'beneficiary-signature' && !signed) continue
+              const source = stamp.stampKey === 'beneficiary-signature' ? beneficiarySignature : await transparentStamp(stamp.stampKey)
+              if (!source) continue
+              const image = await loadImage(source)
               const width = stamp.width * canvas.width
               const height = stamp.height * canvas.height
               context.save()
