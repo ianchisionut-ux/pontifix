@@ -1,7 +1,7 @@
-import type { MetadataRoute } from 'next'
+import { NextResponse } from 'next/server'
 
-export default function manifest(): MetadataRoute.Manifest {
-  return {
+export function GET() {
+  return NextResponse.json({
     id: '/',
     name: 'Elmont S.A.',
     short_name: 'Elmont',
@@ -24,5 +24,5 @@ export default function manifest(): MetadataRoute.Manifest {
       { name: 'Proiecte', short_name: 'Proiecte', url: '/dashboard/proiecte', icons: [{ src: '/pwa-icon-v2-192.png', sizes: '192x192' }] },
       { name: 'Branșamente', short_name: 'Branșamente', url: '/dashboard/bransamente', icons: [{ src: '/pwa-icon-v2-192.png', sizes: '192x192' }] },
     ],
-  }
+  }, { headers: { 'Content-Type': 'application/manifest+json' } })
 }
