@@ -2,6 +2,7 @@ import fs from 'fs/promises'
 import path from 'path'
 import PizZip from 'pizzip'
 import { CONNECTION_FIELDS, type ConnectionFields } from '@/lib/connection-fields'
+import { connectionAmountToWordsRO } from '@/lib/connection-amount-words'
 
 function xmlEscape(value: string) {
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;')
@@ -11,9 +12,9 @@ function regexEscape(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function replaceTextInRange(range: string, value: string) {
+function replaceTextInRange(range: string, value: string, pad = true) {
   let used = false
-  const replacement = xmlEscape(` ${value.trim()} `)
+  const replacement = xmlEscape(pad ? ` ${value.trim()} ` : value.trim())
   return range.replace(/<w:t([^>]*)>[\s\S]*?<\/w:t>/g, (_match, attributes: string) => {
     if (used) return `<w:t${attributes}></w:t>`
     used = true
@@ -22,7 +23,7 @@ function replaceTextInRange(range: string, value: string) {
   })
 }
 
-function replaceBookmark(xml: string, field: string, value: string) {
+function replaceBookmark(xml: string, field: string, value: string, pad = true) {
   const escaped = regexEscape(field)
   const startPattern = new RegExp(`<w:bookmarkStart\\b(?=[^>]*w:name="${escaped}")(?=[^>]*w:id="([^"]+)")[^>]*/>`)
   const start = startPattern.exec(xml)
@@ -34,7 +35,17 @@ function replaceBookmark(xml: string, field: string, value: string) {
   if (!end) return xml
   const absoluteEnd = startEnd + end.index
   const range = xml.slice(startEnd, absoluteEnd)
-  return xml.slice(0, startEnd) + replaceTextInRange(range, value) + xml.slice(absoluteEnd)
+  return xml.slice(0, startEnd) + replaceTextInRange(range, value, pad) + xml.slice(absoluteEnd)
+}
+
+function keepContractAndNotification(xml: string) {
+  const endMarker = /<w:bookmarkStart\b(?=[^>]*w:name="SigningEnd")[^>]*\/>/.exec(xml)
+  if (!endMarker) throw new Error('Șablonul contractului nu conține limita de după notificare.')
+  const cutAt = xml.lastIndexOf('<w:p ', endMarker.index)
+  const bodyEnd = xml.lastIndexOf('</w:body>')
+  const finalSection = xml.lastIndexOf('<w:sectPr ', bodyEnd)
+  if (cutAt < 0 || finalSection <= cutAt) throw new Error('Notificarea nu poate fi separată din șablon.')
+  return xml.slice(0, cutAt) + xml.slice(finalSection)
 }
 
 function replaceReferences(xml: string, field: string, value: string) {
@@ -81,10 +92,17 @@ export async function generateConnectionDocx(fields: ConnectionFields, type: 'co
       xml = replaceBookmark(xml, field, documentFields[field] || '')
       xml = replaceReferences(xml, field, documentFields[field] || '')
     }
+    if (type === 'contract') {
+      if (name === 'word/document.xml' && !xml.includes('w:name="SumaFaraTVALitere"')) {
+        throw new Error('Șablonul contractului nu conține câmpul sumei în litere.')
+      }
+      xml = replaceBookmark(xml, 'SumaFaraTVALitere', amount === null ? '' : connectionAmountToWordsRO(amount), false)
+    }
     if (type === 'contract' && amount !== null) {
       xml = replaceFormulaResult(xml, '=SUM\\s*\\(\\s*SumaFaraTVA', money(amount * 1.21))
       xml = replaceFormulaResult(xml, '=PRODUCT\\s*\\(\\s*SumaFaraTVA', money(amount * .21))
     }
+    if (type === 'contract' && name === 'word/document.xml') xml = keepContractAndNotification(xml)
     zip.file(name, xml)
   }
   return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' })
@@ -92,5 +110,5 @@ export async function generateConnectionDocx(fields: ConnectionFields, type: 'co
 
 export function connectionDocumentName(fields: ConnectionFields, type: 'contract' | 'a3') {
   const beneficiary = (fields.Beneficiar || 'beneficiar').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')
-  return type === 'a3' ? `Dosar-A3-${beneficiary}.docx` : `Contract-Notificare-Memoriu-${beneficiary}.docx`
+  return type === 'a3' ? `Dosar-A3-${beneficiary}.docx` : `Contract-Notificare-${beneficiary}.docx`
 }

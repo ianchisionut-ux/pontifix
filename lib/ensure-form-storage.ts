@@ -113,8 +113,12 @@ export async function ensureFormStorage(businessId: string) {
   `
   await prisma.$executeRaw`
     INSERT INTO "FormTemplate" ("id", "businessId", "title", "category", "documentPathname", "documentName", "sortOrder")
-    VALUES (${`${businessId}:deer:connection-contract`}, ${businessId}, 'Contract + notificare + memoriu', 'DEER', 'connection-document:contract', 'PDF generat din dosarul branșamentului', 101)
+    VALUES (${`${businessId}:deer:connection-contract`}, ${businessId}, 'Contract + notificare', 'DEER', 'connection-document:contract', 'PDF generat din dosarul branșamentului', 101)
     ON CONFLICT ("id") DO NOTHING
+  `
+  await prisma.$executeRaw`
+    UPDATE "FormTemplate" SET "title"='Contract + notificare', "updatedAt"=CURRENT_TIMESTAMP
+    WHERE "id"=${`${businessId}:deer:connection-contract`} AND "title"='Contract + notificare + memoriu'
   `
 }
 
