@@ -19,6 +19,6 @@
 .secondary{width:100%;padding:13px;border:1px solid #a5c4d1;background:#f7fbfd;color:#0c5471;border-radius:14px;font-size:13px;font-weight:750;cursor:pointer;touch-action:manipulation}
 .form{display:grid;gap:12px}.form input{height:52px;border:1px solid #b8cbd9;border-radius:14px;padding:0 15px;font:inherit;font-size:16px}.form button{height:54px;border:0;border-radius:14px;background:#0c6b8b;color:#fff;font-weight:800;font-size:16px;cursor:pointer}
 .form button:disabled{opacity:.55}.error{background:#fff4ef;border:1px solid #ffceb9;border-radius:12px;padding:12px;color:#9c3e21;font-size:13px;line-height:1.4;text-align:center;margin:16px 0 0}
-.install{font-size:11px;color:#698197;text-align:center;line-height:1.5;margin:16px 15px 0}.muted{margin:auto;color:#698197;text-align:center}
+.install{font-size:12px;color:#698197;text-align:center;line-height:1.5;margin:16px 15px 0}.install p{margin:10px 0 0}.installButton{border:1px solid #0c6b8b;background:#fff;color:#0c5471;border-radius:14px;padding:12px 18px;font:inherit;font-weight:800;cursor:pointer;touch-action:manipulation}.muted{margin:auto;color:#698197;text-align:center}
 @media (max-height:640px){.shell{padding:15px 0}.card{padding:22px 20px}.callButton{min-height:72px}.card p{margin-bottom:18px}}
 @media (prefers-reduced-motion:reduce){.ringing{animation:none}}

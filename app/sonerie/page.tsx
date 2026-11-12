@@ -5,6 +5,7 @@ import styles from './sonerie.module.css'
 
 type Role = 'director' | 'ionut'
 type Call = { id: string; createdAt: string; acknowledgedAt: string | null; active: boolean } | null
+type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
 
 function decodeVapid(value: string) {
   const base64 = (value + '='.repeat((4 - value.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')
@@ -19,7 +20,10 @@ export default function SoneriePage() {
   const [error, setError] = useState('')
   const [soundOn, setSoundOn] = useState(false)
   const [pushOn, setPushOn] = useState(false)
+  const [canInstall, setCanInstall] = useState(false)
+  const [installed, setInstalled] = useState(false)
   const audioRef = useRef<AudioContext | null>(null)
+  const installPromptRef = useRef<InstallPrompt | null>(null)
   const lastSoundRef = useRef(0)
   const callRef = useRef<Call>(null)
 
@@ -37,6 +41,29 @@ export default function SoneriePage() {
     fetch('/api/sonerie/session', { cache: 'no-store' }).then((response) => response.json())
       .then((data) => setRole(data.role || null)).catch(() => setError('Nu pot verifica accesul.'))
       .finally(() => setReady(true))
+  }, [])
+
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sonerie-sw.js', { scope: '/sonerie' }).catch(() => undefined)
+    }
+    setInstalled(window.matchMedia('(display-mode: standalone)').matches)
+    const onInstallPrompt = (event: Event) => {
+      event.preventDefault()
+      installPromptRef.current = event as InstallPrompt
+      setCanInstall(true)
+    }
+    const onInstalled = () => {
+      installPromptRef.current = null
+      setCanInstall(false)
+      setInstalled(true)
+    }
+    window.addEventListener('beforeinstallprompt', onInstallPrompt)
+    window.addEventListener('appinstalled', onInstalled)
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onInstallPrompt)
+      window.removeEventListener('appinstalled', onInstalled)
+    }
   }, [])
 
   useEffect(() => {
@@ -116,12 +143,21 @@ export default function SoneriePage() {
       if (permission !== 'granted') { setError('Notificările sunt oprite în telefon. Sunetul funcționează cât pagina este deschisă.'); return }
       const config = await fetch('/api/sonerie/push').then((response) => response.json())
       if (!config.publicKey) throw new Error('Notificările push nu sunt configurate.')
-      const worker = await navigator.serviceWorker.ready
+      const worker = await navigator.serviceWorker.register('/sonerie-sw.js', { scope: '/sonerie' })
       const subscription = await worker.pushManager.getSubscription() || await worker.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: decodeVapid(config.publicKey) })
       const response = await fetch('/api/sonerie/push', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(subscription) })
       if (!response.ok) throw new Error('Nu am putut activa notificările pe telefon.')
       setPushOn(true)
     } catch (cause) { setError((cause as Error).message || 'Nu am putut activa notificările.') }
+  }
+
+  async function installApp() {
+    const prompt = installPromptRef.current
+    if (!prompt) return
+    installPromptRef.current = null
+    setCanInstall(false)
+    await prompt.prompt()
+    await prompt.userChoice
   }
 
   const active = Boolean(call?.active)
@@ -149,7 +185,10 @@ export default function SoneriePage() {
         <button className={styles.secondary} onClick={enableAlerts}>{pushOn ? 'Notificări activate ✓' : soundOn ? 'Activează notificările' : 'Activează sunetul și notificările'}</button>
       </section>}
       {error && <p className={styles.error} role="alert">{error}</p>}
-      <p className={styles.install}>Adaugă această pagină pe ecranul principal al telefonului. Pe iPhone: Partajare → Adaugă la ecranul principal.</p>
+      {role && !installed && <div className={styles.install}>
+        {canInstall && <button className={styles.installButton} onClick={installApp}>Instalează Sonerie separat</button>}
+        <p>Pe Android, în Chrome: ⋮ → Instalează aplicația. Va apărea o pictogramă „Sonerie”, separată de Elmont.</p>
+      </div>}
     </div>
   </main>
 }
