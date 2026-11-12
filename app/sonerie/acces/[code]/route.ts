@@ -7,6 +7,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const { code } = await params
   const role = code.length <= 128 ? roleForCode(code) : null
   if (!role) return new NextResponse('Link privat invalid.', { status: 404, headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } })
+  if (process.env.NODE_ENV === 'production' && request.nextUrl.hostname !== 'sonerie.elmont.ro') {
+    const response = NextResponse.redirect(new URL(`/sonerie/acces/${encodeURIComponent(code)}`, 'https://sonerie.elmont.ro'))
+    response.headers.set('Cache-Control', 'no-store')
+    response.headers.set('Referrer-Policy', 'no-referrer')
+    return response
+  }
   await setSonerieSession(role)
   const response = NextResponse.redirect(new URL('/sonerie', request.url))
   response.headers.set('Cache-Control', 'no-store')
