@@ -253,7 +253,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     } finally { setBusy('') }
   }
 
-  function openYahooDtacDraft() {
+  async function openYahooDtacDraft() {
     const item = items.find((entry) => entry.id === messageConnectionId)
     if (!item || !canManage) return
     const fields = selected?.id === item.id ? draft : item.fields
@@ -264,14 +264,12 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       'Bună ziua,',
       '',
       `Vă transmitem atașată documentația DTAC pentru beneficiarul ${beneficiary}, aferentă amplasamentului ${location}.`,
-      '',
       'Beneficiarul se va prezenta pentru achitarea taxei. După achitarea acesteia, vă rugăm să ne transmiteți autorizația scanată la această adresă de e-mail.',
-      '',
       'Vă mulțumim pentru sprijin și colaborare.',
       '',
       'Cu stimă,',
       '',
-      '________________________________________________________________________________',
+      '────────────────────────────────────────────────',
       'S.C. ELMONT S.A. ZALĂU',
       '☎ Tel. fix/fax: 0260 611 192',
       '📍 Adresa: Str. 22 Decembrie 1989 nr. 113, Zalău, jud. Sălaj',
@@ -280,11 +278,39 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       '0730 004 210 - sing. Berar L.',
       '0727 700 062 - tehn. Ianchis I.',
       '=============================================',
-    ].join('\n')
-    const query = new URLSearchParams({ subject, body })
+    ].join('\r\n')
+    const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character] || character)
+    const html = `<div style="font-family:Arial,sans-serif;font-size:16px;line-height:1.48;color:#111">
+      <p style="margin:0 0 2px"><em>Bună ziua,</em></p>
+      <p style="margin:0">Vă transmitem atașată documentația DTAC pentru beneficiarul <strong>${escapeHtml(beneficiary)}</strong>, aferentă amplasamentului <strong>${escapeHtml(location)}</strong>.<br>
+      Beneficiarul se va prezenta pentru achitarea taxei. După achitarea acesteia, vă rugăm să ne transmiteți <strong><em>autorizația scanată</em></strong> la această adresă de e-mail.<br>
+      Vă mulțumim pentru sprijin și colaborare.</p>
+      <p style="margin:24px 0 40px"><em>Cu stimă,</em></p>
+      <div style="border-top:2px solid #172b3d;padding-top:5px;font-size:13px;line-height:1.7">
+        <strong style="font-size:16px">S.C. ELMONT S.A. ZALĂU</strong><br>
+        ☎ Tel. fix/fax: 0260 611 192<br>
+        📍 Adresa: Str. 22 Decembrie 1989 nr. 113, Zalău, jud. Sălaj<br>
+        =============================================<br>
+        🖥 Dep. Proiectare<br>
+        0730 004 210 - sing. Berar L.<br>
+        <strong>0727 700 062 - tehn. Ianchis I.</strong><br>
+        =============================================
+      </div>
+    </div>`
+    const query = new URLSearchParams({ subject })
     if (municipalityEmail.trim()) query.set('to', municipalityEmail.trim())
+    let copy: Promise<void> | null = null
+    try {
+      copy = navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([body], { type: 'text/plain' }) })])
+    } catch { /* Browserul poate bloca accesul la clipboard. */ }
     window.open(`https://compose.mail.yahoo.com/?${query.toString()}`, '_blank', 'noopener,noreferrer')
-    setNotice('Am deschis schița DTAC în Yahoo. Atașează documentația înainte de trimitere.')
+    try {
+      if (!copy) throw new Error('Clipboard indisponibil')
+      await copy
+      setNotice('Schița formatată a fost copiată. În Yahoo, apasă Ctrl+V în mesaj și atașează documentația înainte de trimitere.')
+    } catch {
+      setNotice('Yahoo a fost deschis, dar copierea formatată a fost blocată de browser. Permite accesul la clipboard și încearcă din nou.')
+    }
   }
   async function remove() {
     if (!selected || !canManage || !confirm(`Ștergi definitiv dosarul ${selected.fields.Beneficiar || 'fără nume'}?`)) return

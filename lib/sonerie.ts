@@ -56,25 +56,36 @@ export function ensureSonerieStorage() {
     storageReady = (async () => {
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SonerieCall" (
         "id" TEXT PRIMARY KEY, "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "expiresAt" TIMESTAMP(3) NOT NULL, "acknowledgedAt" TIMESTAMP(3)
+        "expiresAt" TIMESTAMP(3) NOT NULL, "acknowledgedAt" TIMESTAMP(3), "response" TEXT
       )`)
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SonerieCall" ADD COLUMN IF NOT EXISTS "response" TEXT`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SonerieCall_created_idx" ON "SonerieCall" ("createdAt" DESC)`)
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SoneriePushSubscription" (
         "endpoint" TEXT PRIMARY KEY, "recipient" TEXT NOT NULL,
         "subscription" JSONB NOT NULL, "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SoneriePushSubscription_recipient_idx" ON "SoneriePushSubscription" ("recipient")`)
+      await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SoneriePresence" (
+        "person" TEXT PRIMARY KEY, "available" BOOLEAN NOT NULL DEFAULT TRUE,
+        "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`)
     })().catch((error) => { storageReady = null; throw error })
   }
   return storageReady
 }
 
-export type SonerieCall = { id: string; createdAt: Date; expiresAt: Date; acknowledgedAt: Date | null }
+export type SonerieCall = { id: string; createdAt: Date; expiresAt: Date; acknowledgedAt: Date | null; response: string | null }
+
+export async function getIonutAvailability() {
+  await ensureSonerieStorage()
+  const rows = await prisma.$queryRaw<Array<{ available: boolean }>>`SELECT "available" FROM "SoneriePresence" WHERE "person"='ionut'`
+  return rows[0]?.available ?? true
+}
 
 export async function latestCall() {
   await ensureSonerieStorage()
   const rows = await prisma.$queryRaw<SonerieCall[]>`
-    SELECT "id", "createdAt", "expiresAt", "acknowledgedAt" FROM "SonerieCall"
+    SELECT "id", "createdAt", "expiresAt", "acknowledgedAt", "response" FROM "SonerieCall"
     WHERE "createdAt" > CURRENT_TIMESTAMP - INTERVAL '1 day'
     ORDER BY "createdAt" DESC LIMIT 1`
   return rows[0] || null
@@ -86,6 +97,7 @@ export function callView(call: SonerieCall | null) {
     id: call.id,
     createdAt: call.createdAt.toISOString(),
     acknowledgedAt: call.acknowledgedAt?.toISOString() || null,
+    response: call.response === 'unavailable' ? 'unavailable' : call.acknowledgedAt ? 'accepted' : null,
     active: !call.acknowledgedAt && call.expiresAt.getTime() > Date.now(),
   }
 }

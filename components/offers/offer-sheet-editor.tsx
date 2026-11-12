@@ -15,7 +15,7 @@ export function OfferSheetEditor({ offer, onClose, onSaved }: { offer: SheetOffe
   const [busy, setBusy] = useState<'save' | 'email' | 'whatsapp' | null>(null)
   const [notice, setNotice] = useState('')
   const totals = useMemo(() => offerTotals(data), [data])
-  useEffect(() => () => { document.body.classList.remove('offer-printing'); document.getElementById('offer-page-orientation')?.remove() }, [])
+  useEffect(() => () => { document.getElementById('offer-print-frame')?.remove() }, [])
   function update<K extends keyof OfferSheetData>(key: K, value: OfferSheetData[K]) { setData((current) => ({ ...current, [key]: value })) }
   function updateTax(index: number, patch: Partial<OfferSheetData['additionalTaxes'][number]>) {
     setData((current) => ({ ...current, additionalTaxes: current.additionalTaxes.map((tax, position) => position === index ? { ...tax, ...patch } : tax) }))
@@ -47,19 +47,26 @@ export function OfferSheetEditor({ offer, onClose, onSaved }: { offer: SheetOffe
   }
 
   function printOffer() {
-    document.getElementById('offer-page-orientation')?.remove()
-    const style = document.createElement('style')
-    style.id = 'offer-page-orientation'
-    style.textContent = '@page { margin: 0; }'
-    document.head.appendChild(style)
-    document.body.classList.add('offer-printing')
-    const cleanup = () => {
-      document.body.classList.remove('offer-printing')
-      document.getElementById('offer-page-orientation')?.remove()
+    if (!paperRef.current) return
+    document.getElementById('offer-print-frame')?.remove()
+    const frame = document.createElement('iframe')
+    frame.id = 'offer-print-frame'
+    frame.title = 'Tipărire ofertă'
+    frame.style.cssText = 'position:fixed;left:-9999px;top:0;width:210mm;height:297mm;border:0;opacity:0;pointer-events:none'
+    const stylesheets = Array.from(document.querySelectorAll<HTMLLinkElement | HTMLStyleElement>('link[rel="stylesheet"],style')).map((node) => node.outerHTML).join('')
+    frame.srcdoc = `<!doctype html><html><head><base href="${location.origin}/">${stylesheets}<style>@page{size:A4;margin:0}html,body{width:210mm;margin:0;padding:0;background:#fff}.offer-print-sheet{width:210mm!important;max-width:none!important;min-height:297mm!important;margin:0!important;padding:12mm 14mm!important;box-shadow:none!important}</style></head><body>${paperRef.current.outerHTML}</body></html>`
+    frame.onload = async () => {
+      const content = frame.contentDocument
+      if (!content || !frame.contentWindow) return
+      await content.fonts.ready
+      await Promise.all(Array.from(content.images).map((image) => image.decode().catch(() => undefined)))
+      const cleanup = () => frame.remove()
+      frame.contentWindow.addEventListener('afterprint', cleanup, { once: true })
+      frame.contentWindow.focus()
+      frame.contentWindow.print()
+      window.setTimeout(cleanup, 60000)
     }
-    window.addEventListener('afterprint', cleanup, { once: true })
-    window.print()
-    window.setTimeout(cleanup, 3000)
+    document.body.appendChild(frame)
   }
 
   return <div className="offer-editor-overlay" role="dialog" aria-modal="true">
