@@ -14,6 +14,9 @@
       "entrypoint": "Dockerfile"
     }
   },
+  "redirects": [
+    { "source": "/", "has": [{ "type": "host", "value": "chat.elmont.ro" }], "destination": "/chat", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/(.*)", "destination": { "service": "web" } }
   ],
