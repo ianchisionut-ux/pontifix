@@ -14,19 +14,22 @@ const FIELDS: Array<[keyof IdentityCardData, string]> = [
 ]
 type ConnectionOption = { id: string; nib: string; beneficiary: string }
 
-export function IdentityCardScanner({ records, connections, canEdit, connectionId, embeddedValue, onEmbeddedChange, hideSavedRecords = false }: {
+export function IdentityCardScanner({ records, connections, canEdit, connectionId, embeddedValue, onEmbeddedChange, onEmbeddedSave, embeddedSaving = false, hideSavedRecords = false }: {
   records: IdentityCardRecord[]
   connections: ConnectionOption[]
   canEdit: boolean
   connectionId?: string
   embeddedValue?: IdentityCardData
   onEmbeddedChange?: (data: IdentityCardData) => void
+  onEmbeddedSave?: () => void
+  embeddedSaving?: boolean
   hideSavedRecords?: boolean
 }) {
   const router = useRouter()
   const { tr } = useLanguage()
   const embedded = !!onEmbeddedChange
   const [draft, setDraft] = useState<IdentityCardData>(embeddedValue || EMPTY)
+  const visibleDraft = embedded ? (embeddedValue || EMPTY) : draft
   const [selectedConnectionId, setSelectedConnectionId] = useState(connectionId || '')
   const [busy, setBusy] = useState('')
   const [notice, setNotice] = useState('')
@@ -35,8 +38,6 @@ export function IdentityCardScanner({ records, connections, canEdit, connectionI
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const visible = connectionId ? records.filter((record) => record.connectionCaseId === connectionId) : records
-
-  useEffect(() => { if (embeddedValue) setDraft(embeddedValue) }, [embeddedValue])
 
   function update(next: IdentityCardData) { setDraft(next); onEmbeddedChange?.(next) }
 
@@ -104,7 +105,7 @@ export function IdentityCardScanner({ records, connections, canEdit, connectionI
     try {
       const { analyzeIdentityCardInBrowser } = await import('@/lib/browser-identity-card-ocr')
       const data = await analyzeIdentityCardInBrowser(file, setNotice)
-      update(data)
+      update(embedded ? { ...visibleDraft, ...Object.fromEntries(Object.entries(data).filter(([, value]) => value.trim())) } as IdentityCardData : data)
       setNotice(embedded ? 'Date extrase. Verifică-le, apoi apasă Salvează în fișa branșamentului.' : 'Date extrase. Verifică și corectează înainte de salvare. Imaginea nu a fost încărcată și nu este păstrată.')
     } catch (error) { setNotice(error instanceof Error ? error.message : 'CI nu a putut fi citită.') }
     finally { setBusy(''); setDragging(false) }
@@ -141,9 +142,9 @@ export function IdentityCardScanner({ records, connections, canEdit, connectionI
       </label>}
       {notice && <p className={`mt-4 rounded-xl px-3 py-2 text-sm font-semibold ${notice.includes('nu ') || notice.includes('maximum') ? 'bg-amber-50 text-amber-800' : 'bg-blue-50 text-blue-800'}`}>{notice}</p>}
       {busy === 'scan' && <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-2/3 animate-pulse rounded-full bg-[#197fb5]"/></div>}
-      <div className="mt-5 grid gap-3 md:grid-cols-2">{FIELDS.map(([field, label]) => <label key={field} className={`text-xs font-bold text-slate-500 ${field === 'domicile' ? 'md:col-span-2' : ''}`}>{label}<input disabled={!canEdit} value={draft[field]} onChange={(event) => update({ ...draft, [field]: event.target.value })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/></label>)}</div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2">{FIELDS.map(([field, label]) => <label key={field} className={`text-xs font-bold text-slate-500 ${field === 'domicile' ? 'md:col-span-2' : ''}`}>{label}<input disabled={!canEdit} value={visibleDraft[field]} onChange={(event) => update({ ...visibleDraft, [field]: event.target.value })} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/></label>)}</div>
       {!embedded && !connectionId && <label className="mt-4 block text-xs font-bold text-slate-500">Asociază opțional cu branșamentul<select value={selectedConnectionId} onChange={(event) => setSelectedConnectionId(event.target.value)} className="input-field mt-1.5 w-full bg-white"><option value="">Fără branșament</option>{connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.nib} - {connection.beneficiary || 'Beneficiar necompletat'}</option>)}</select></label>}
-      <div className="mt-5 flex items-center justify-between gap-3"><span className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700"><ShieldCheck size={15}/> Nu se păstrează poza sau PDF-ul.</span>{embedded ? <span className="text-xs font-bold text-[#0d5d8b]">{canEdit ? 'Se salvează odată cu branșamentul.' : 'Date salvate în fișa branșamentului.'}</span> : <button onClick={save} disabled={!!busy || !draft.fullName.trim()} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează datele</button>}</div>
+      <div className="mt-5 flex items-center justify-between gap-3"><span className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700"><ShieldCheck size={15}/> Nu se păstrează poza sau PDF-ul.</span>{embedded ? canEdit && onEmbeddedSave ? <button type="button" onClick={onEmbeddedSave} disabled={embeddedSaving || !!busy} className="btn-primary inline-flex items-center gap-2">{embeddedSaving ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează în fișa branșamentului</button> : <span className="text-xs font-bold text-[#0d5d8b]">Date CI din fișa branșamentului.</span> : <button onClick={save} disabled={!!busy || !draft.fullName.trim()} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează datele</button>}</div>
     </section>}
 
     {!hideSavedRecords && <section className="rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm"><div className="mb-4 flex items-center gap-2"><CreditCard size={18} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">Date CI salvate</h2><span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-500">{visible.length}</span></div>

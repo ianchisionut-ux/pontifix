@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { uploadPresigned } from '@vercel/blob/client'
 import { Archive, ClipboardList, CreditCard, Download, Eye, FileText, FileUp, LayoutGrid, List, Loader2, Mail, MessageCircle, Plus, Save, Search, ShieldCheck, Trash2, WandSparkles, X } from 'lucide-react'
-import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, defaultConnectionFields, type ConnectionCaseDto, type ConnectionFields } from '@/lib/connection-fields'
+import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, connectionFieldsSchema, defaultConnectionFields, type ConnectionCaseDto, type ConnectionFields } from '@/lib/connection-fields'
 import { CONNECTION_STATUSES, CONNECTION_STATUS_META, type ConnectionStatus } from '@/lib/connection-status'
 import { AdminConnectionAccordion } from '@/components/connections/admin-connection-accordion'
 import { CONNECTION_WHATSAPP_TEMPLATES, renderConnectionWhatsAppTemplate, type ConnectionWhatsAppTemplateKey } from '@/lib/connection-whatsapp-templates'
@@ -15,6 +15,23 @@ import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
 type MunicipalityEmail = { id: string; label: string; email: string }
 type DtacDraft = { subject: string; to: string; body: string; html: string }
+type SaveProgress = { id: string; status: 'idle' | 'saving' | 'saved' | 'error'; error?: string }
+
+const draftStorageKey = (id: string) => `elmont:bransament-draft:${id}`
+const fieldsEqual = (a: ConnectionFields, b: ConnectionFields) => JSON.stringify(a) === JSON.stringify(b)
+
+function readSessionDraft(id: string): ConnectionFields | null {
+  try {
+    const raw = sessionStorage.getItem(draftStorageKey(id))
+    if (!raw) return null
+    const parsed = connectionFieldsSchema.safeParse(JSON.parse(raw))
+    return parsed.success ? parsed.data : null
+  } catch { return null }
+}
+
+function writeSessionDraft(id: string, fields: ConnectionFields) {
+  try { sessionStorage.setItem(draftStorageKey(id), JSON.stringify(fields)) } catch { /* Private browsing may disable storage. */ }
+}
 
 type DeerActionHistoryEntry = ConnectionCaseDto['deerSubmission']['actionHistory'][number]
 
@@ -31,6 +48,15 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
   const [selectedId, setSelectedId] = useState(initialCases[0]?.id || '')
   const selected = items.find((item) => item.id === selectedId) || null
   const [draft, setDraft] = useState<ConnectionFields>(selected?.fields || defaultConnectionFields())
+  const [saveProgress, setSaveProgress] = useState<SaveProgress | null>(null)
+  const pendingSaveRef = useRef(new Map<string, { id: string; fields: ConnectionFields; manual: boolean }>())
+  const saveRunningRef = useRef(false)
+  const draftRef = useRef(draft)
+  const selectedIdRef = useRef(selectedId)
+  const itemsRef = useRef(items)
+  draftRef.current = draft
+  selectedIdRef.current = selectedId
+  itemsRef.current = items
   const [query, setQuery] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
   const [showRegister, setShowRegister] = useState(false)
@@ -55,11 +81,28 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
   useEffect(() => { setDtacDraft(null); setDtacCopied(false); setDtacSaved(false) }, [messageConnectionId, municipalityEmail])
 
   useEffect(() => {
+    const previous = itemsRef.current.find((item) => item.id === selectedId)
     setItems(initialCases)
     const next = initialCases.find((item) => item.id === selectedId) || initialCases[0]
     setSelectedId(next?.id || '')
-    setDraft(next ? { ...defaultConnectionFields(), ...next.fields } : defaultConnectionFields())
+    setDraft((current) => {
+      if (!next) return defaultConnectionFields()
+      const local = readSessionDraft(next.id)
+      if (local) return local
+      if (previous?.id === next.id && !fieldsEqual(current, previous.fields)) return current
+      return { ...defaultConnectionFields(), ...next.fields }
+    })
   }, [initialCases])
+
+  useEffect(() => {
+    if (!canManage || !selectedId) return
+    const currentCase = items.find((item) => item.id === selectedId)
+    if (!currentCase || fieldsEqual(draft, currentCase.fields)) return
+    writeSessionDraft(selectedId, draft)
+    setSaveProgress((current) => current?.id === selectedId && current.status === 'error' ? current : { id: selectedId, status: 'idle' })
+    const timer = window.setTimeout(() => queueSave(selectedId, draft, false), 1200)
+    return () => window.clearTimeout(timer)
+  }, [draft, selectedId, items, canManage])
 
   useEffect(() => {
     fetch('/api/bransamente/municipality-emails')
@@ -74,8 +117,11 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
   }), [items, query])
 
   function select(item: ConnectionCaseDto) {
+    if (item.id === selectedId) return
+    if (selected && !fieldsEqual(draft, selected.fields)) queueSave(selected.id, draft, false)
     setSelectedId(item.id)
-    setDraft({ ...defaultConnectionFields(), ...item.fields })
+    setDraft(readSessionDraft(item.id) || { ...defaultConnectionFields(), ...item.fields })
+    setSaveProgress(null)
     setNotice('')
     setCiOpen(false)
     setDeerOpen(false)
@@ -144,15 +190,53 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       setNotice('')
     }
   }
-  async function save() {
+  function queueSave(id: string, fields: ConnectionFields, manual: boolean) {
+    if (!canManage) return
+    writeSessionDraft(id, fields)
+    pendingSaveRef.current.set(id, { id, fields: { ...fields }, manual })
+    void flushQueuedSaves()
+  }
+
+  async function flushQueuedSaves() {
+    if (saveRunningRef.current) return
+    saveRunningRef.current = true
+    try {
+      while (pendingSaveRef.current.size) {
+        const job = pendingSaveRef.current.values().next().value!
+        pendingSaveRef.current.delete(job.id)
+        setSaveProgress({ id: job.id, status: 'saving' })
+        try {
+          const response = await fetch(`/api/bransamente/${job.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: job.fields }),
+          })
+          const body = await response.json().catch(() => ({}))
+          if (!response.ok) throw new Error(body.error || 'Datele nu au putut fi salvate.')
+          setItems((current) => current.map((item) => item.id === job.id ? {
+            ...item, fields: job.fields, nib: body.nib || item.nib,
+            sequenceNumber: body.sequenceNumber || item.sequenceNumber, updatedAt: new Date().toISOString(),
+          } : item).sort((a, b) => b.sequenceNumber - a.sequenceNumber))
+          const local = readSessionDraft(job.id)
+          if (local && fieldsEqual(local, job.fields)) {
+            try { sessionStorage.removeItem(draftStorageKey(job.id)) } catch { /* Ignore disabled storage. */ }
+          }
+          if (selectedIdRef.current === job.id) {
+            setSaveProgress({ id: job.id, status: fieldsEqual(draftRef.current, job.fields) ? 'saved' : 'idle' })
+            if (job.manual) setNotice(`Date salvate. Identificare actuală: ${body.nib || ''}.`)
+          }
+        } catch (error) {
+          if (selectedIdRef.current === job.id) {
+            const message = error instanceof Error ? error.message : 'Datele nu au putut fi salvate.'
+            setSaveProgress({ id: job.id, status: 'error', error: message })
+            if (job.manual) setNotice(message)
+          }
+        }
+      }
+    } finally { saveRunningRef.current = false }
+  }
+
+  function save() {
     if (!selected || !canManage) return
-    setBusy('save')
-    const response = await fetch(`/api/bransamente/${selected.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: draft }) })
-    const body = await response.json().catch(() => ({}))
-    setBusy('')
-    if (!response.ok) return alert(body.error || 'Datele nu au putut fi salvate.')
-    setItems((current) => current.map((item) => item.id === selected.id ? { ...item, fields: { ...draft }, nib: body.nib || item.nib, sequenceNumber: body.sequenceNumber || item.sequenceNumber, updatedAt: new Date().toISOString() } : item).sort((a, b) => b.sequenceNumber - a.sequenceNumber))
-    setNotice(`Date salvate. Identificare actuală: ${body.nib || selected.nib}.`)
+    queueSave(selected.id, draft, true)
   }
 
   async function changeStatus(status: ConnectionStatus) {
@@ -411,7 +495,8 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       </aside>
       <section className="min-w-0 p-5 lg:p-7">{selected ? <>
         <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5"><div><div className="flex items-center gap-2"><WandSparkles size={20} className="text-[#197fb5]"/><h2 className="text-xl font-bold text-[#082b4d]">{draft.Beneficiar || 'Fișă branșament'}</h2></div><div className="mt-2 flex flex-wrap items-center gap-2"><strong className="rounded-lg bg-[#edf7fc] px-2.5 py-1 text-xs text-[#0d5d8b]">{selected.nib}</strong><span className="rounded-lg px-2.5 py-1 text-xs font-bold text-white" style={{ backgroundColor: CONNECTION_STATUS_META[selected.status].color }}>{CONNECTION_STATUS_META[selected.status].label} · {CONNECTION_STATUS_META[selected.status].progress}%</span></div><p className="mt-1 text-xs text-slate-500">Creat de {selected.createdByEmail || 'administrator'} · actualizat {new Date(selected.updatedAt).toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' })}</p>{notice && <p className="mt-2 text-sm font-semibold text-emerald-600">{notice}</p>}</div><div className="flex flex-wrap gap-2">{canManage && <select value={selected.status} disabled={busy === 'status'} onChange={(event) => changeStatus(event.target.value as ConnectionStatus)} className="input-field min-w-[210px] bg-white text-sm font-bold">{CONNECTION_STATUSES.map((status) => <option key={status} value={status}>{CONNECTION_STATUS_META[status].label}</option>)}</select>}<button type="button" onClick={()=>setCiOpen((value)=>!value)} className={`btn-secondary inline-flex items-center gap-2 ${ciOpen ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`}><CreditCard size={16}/> CI{(draft.CnpCif || draft.CiSerie || draft.CiNumar) && <span className="h-2 w-2 rounded-full bg-emerald-500"/>}</button><button type="button" onClick={()=>setDeerOpen(true)} className="btn-secondary inline-flex items-center gap-2"><ShieldCheck size={16}/> Depunere DEER<span className="h-2 w-2 rounded-full" style={{backgroundColor:DEER_STATUS_META[selected.deerSubmission.status].color}}/></button>{selected.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${selected.id}/atr`} title={`ATR · ${draft.Beneficiar || selected.nib}`}>ATR</SecurePdfViewerButton>}<a href={`/api/bransamente/${selected.id}/document?type=contract`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Contract + memoriu</a><a href={`/api/bransamente/${selected.id}/document?type=a3`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Dosar A3</a>{canManage && <><button onClick={()=>openWhatsAppCenter('PROGRAMMED')} disabled={!!busy || !draft.Telefon.trim()} className="btn-secondary inline-flex items-center gap-2" title="Mesaje predefinite pentru beneficiar">{busy === 'whatsapp' ? <Loader2 size={16} className="animate-spin"/> : <MessageCircle size={16}/>} Mesaje WhatsApp</button><button onClick={save} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează</button><button onClick={remove} disabled={!!busy} className="round-action text-rose-500" title="Șterge dosarul"><Trash2 size={17}/></button></>}</div></div>
-        {ciOpen && <div className="mb-6"><IdentityCardScanner key={selected.id} records={[]} connections={[]} canEdit={canManage} hideSavedRecords embeddedValue={{ fullName: draft.Beneficiar, cnp: draft.CnpCif, series: draft.CiSerie, number: draft.CiNumar, domicile: draft.CiDomiciliu, issuedBy: draft.CiEmisaDe, validFrom: draft.CiValabilaDeLa, validUntil: draft.CiValabilaPanaLa }} onEmbeddedChange={(data)=>setDraft((current)=>({ ...current, Beneficiar:data.fullName, CnpCif:data.cnp, CiSerie:data.series, CiNumar:data.number, CiDomiciliu:data.domicile, CiEmisaDe:data.issuedBy, CiValabilaDeLa:data.validFrom, CiValabilaPanaLa:data.validUntil, NrSX:[data.series, data.number].filter(Boolean).join(' '), DataSX:data.validFrom, DataExpirareSX:data.validUntil }))}/></div>}
+        {canManage && saveProgress?.id === selected.id && <p role={saveProgress.status === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-xl px-3 py-2 text-sm font-semibold ${saveProgress.status === 'error' ? 'bg-rose-50 text-rose-700' : saveProgress.status === 'saved' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{saveProgress.status === 'error' ? `Salvarea a eșuat: ${saveProgress.error} Modificările sunt păstrate în această sesiune. Apasă Salvează pentru a reîncerca.` : saveProgress.status === 'saving' ? 'Se salvează modificările…' : saveProgress.status === 'saved' ? 'Toate modificările sunt salvate.' : 'Modificări în așteptare; salvare automată în câteva secunde.'}</p>}
+        {ciOpen && <div className="mb-6"><IdentityCardScanner key={selected.id} records={[]} connections={[]} canEdit={canManage} hideSavedRecords onEmbeddedSave={save} embeddedSaving={saveProgress?.id === selected.id && saveProgress.status === 'saving'} embeddedValue={{ fullName: draft.Beneficiar, cnp: draft.CnpCif, series: draft.CiSerie, number: draft.CiNumar, domicile: draft.CiDomiciliu, issuedBy: draft.CiEmisaDe, validFrom: draft.CiValabilaDeLa, validUntil: draft.CiValabilaPanaLa }} onEmbeddedChange={(data)=>setDraft((current)=>({ ...current, Beneficiar:data.fullName, CnpCif:data.cnp, CiSerie:data.series, CiNumar:data.number, CiDomiciliu:data.domicile, CiEmisaDe:data.issuedBy, CiValabilaDeLa:data.validFrom, CiValabilaPanaLa:data.validUntil, NrSX:[data.series, data.number].filter(Boolean).join(' '), DataSX:data.validFrom, DataExpirareSX:data.validUntil }))}/></div>}
         {!canManage && <div className="mb-5 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800"><ShieldCheck size={18}/> Date protejate. Poți consulta și descărca documentele dosarului; modificările rămân rezervate Super Adminului.</div>}
         <div className="space-y-7">{CONNECTION_FIELD_GROUPS.map((group) => <fieldset key={group.title}><div className="mb-3 flex items-center justify-between"><legend className="text-sm font-black uppercase tracking-[.08em] text-[#0d5d8b]">{group.title}</legend>{canManage && <button onClick={() => clearGroup(group.fields)} className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-500"><X size={13}/> Golește secțiunea</button>}</div><div className={`grid gap-3 ${group.title === 'Adresă' || group.title === 'Puteri' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>{group.fields.map((field) => { const large = field === 'Solutia' || field === 'Amplasament' || field === 'AmplasamentA3'; return <label key={field} className={`text-xs font-bold text-slate-500 ${large ? 'md:col-span-full' : ''}`}>{CONNECTION_FIELD_LABELS[field] || field}{large ? <textarea disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 min-h-20 w-full resize-y bg-white disabled:bg-slate-50 disabled:text-slate-700"/> : <input disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/>}</label>})}</div></fieldset>)}</div>
       </> : <div className="flex min-h-[600px] flex-col items-center justify-center text-center"><div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#edf7fc] text-[#197fb5]"><FileText size={30}/></div><h2 className="text-xl font-bold text-[#082b4d]">Niciun dosar selectat</h2><p className="mt-2 max-w-md text-sm text-slate-500">{canManage ? 'Încarcă un ATR sau creează o fișă goală. Datele rămân în istoric și documentele Word se generează oricând.' : 'Nu există încă dosare de branșament disponibile pentru consultare.'}</p></div>}</section>
