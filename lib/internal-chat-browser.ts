@@ -11,14 +11,17 @@ export function playInternalChatSound() {
 
 export async function registerInternalChatWorker(){
   if(!('serviceWorker'in navigator))return null
-  return navigator.serviceWorker.register('/internal-chat-sw.js',{scope:'/'})
+  const worker=window.location.hostname==='chat.elmont.ro'?'/chat-sw.js':'/internal-chat-sw.js'
+  return navigator.serviceWorker.register(worker,{scope:'/'})
 }
 
 export async function showInternalChatNotification(title:string,body:string,tag:string){
   if(typeof Notification==='undefined'||Notification.permission!=='granted')return false
   try{
     const registration=await registerInternalChatWorker()
-    if(registration){await registration.showNotification(title,{body,icon:'/icon.png',badge:'/icon.png',tag,data:{url:'/dashboard/chat-intern'}});return true}
+    const standalone=window.location.hostname==='chat.elmont.ro'
+    const icon=standalone?'/chat-icon-192.png':'/icon.png'
+    if(registration){await registration.showNotification(title,{body,icon,badge:icon,tag,data:{url:standalone?'/chat':'/dashboard/chat-intern'}});return true}
     new Notification(title,{body,icon:'/icon.png',tag});return true
   }catch{
     try{new Notification(title,{body,icon:'/icon.png',tag});return true}catch{return false}

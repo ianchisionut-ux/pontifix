@@ -31,7 +31,7 @@ export default function LoginPage() {
       return
     }
     await fetch('/api/auth/remember-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ remember: rememberMe }) }).catch(() => undefined)
-    router.push('/dashboard')
+    router.push(window.location.hostname === 'chat.elmont.ro' ? '/chat' : '/dashboard')
     router.refresh()
   }
 
@@ -42,7 +42,7 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-r from-white/96 via-white/65 to-[#dff1f9]/10"/>
         <div className="absolute inset-x-0 bottom-0 h-80 bg-gradient-to-t from-white/98 via-[#eaf5fb]/88 to-white/10"/>
         <div className="relative flex h-full min-h-screen flex-col justify-between p-12 xl:p-16">
-          <Link href="/" className="w-fit"><ElmontLogo /></Link>
+          <Link href="https://elmont.ro" className="w-fit"><ElmontLogo /></Link>
           <div className="max-w-xl text-[#082b4d]">
             <span className="inline-flex items-center gap-2 rounded-full border border-[#8bc8e5] bg-white/80 px-4 py-2 text-xs font-extrabold uppercase tracking-[.18em] text-[#0f679b] shadow-sm backdrop-blur"><ShieldCheck size={14}/> Acces securizat</span>
             <h1 className="mt-6 text-5xl font-black leading-[.98] tracking-[-.055em] xl:text-6xl">{tr('Portalul intern')}<br/>Elmont S.A.</h1>
@@ -53,9 +53,9 @@ export default function LoginPage() {
       </section>
 
       <section className="relative flex min-h-screen items-center justify-center px-5 py-20 sm:px-10">
-        <div className="absolute right-8 top-7 hidden items-center gap-3 sm:flex"><LanguageSwitcher/><Link href="/" className="flex items-center gap-2 text-sm font-bold text-slate-500 transition hover:text-[#197fb5]"><ArrowLeft size={16}/> {tr('Înapoi la site')}</Link></div>
+        <div className="absolute right-8 top-7 hidden items-center gap-3 sm:flex"><LanguageSwitcher/><Link href="https://elmont.ro" className="flex items-center gap-2 text-sm font-bold text-slate-500 transition hover:text-[#197fb5]"><ArrowLeft size={16}/> {tr('Înapoi la site')}</Link></div>
         <div className="w-full max-w-[460px]">
-          <Link href="/" className="mb-12 inline-flex lg:hidden"><ElmontLogo /></Link>
+          <Link href="https://elmont.ro" className="mb-12 inline-flex lg:hidden"><ElmontLogo /></Link>
           <span className="text-xs font-black uppercase tracking-[.18em] text-[#197fb5]">{tr('Portal companie')}</span>
           <h2 className="mt-3 text-4xl font-black tracking-[-.05em] text-[#082b4d]">{tr('Autentificare')}</h2>
           <p className="mt-3 text-slate-500">{tr('Introdu datele contului tău Elmont.')}</p>
