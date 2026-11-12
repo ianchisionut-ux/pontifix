@@ -14,6 +14,7 @@ import { DEER_ACTIONS, DEER_STATUS_META } from '@/lib/deer-submission'
 import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
 type MunicipalityEmail = { id: string; label: string; email: string }
+type DtacDraft = { subject: string; to: string; body: string; html: string }
 
 type DeerActionHistoryEntry = ConnectionCaseDto['deerSubmission']['actionHistory'][number]
 
@@ -45,6 +46,13 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
   const [municipalityEmail, setMunicipalityEmail] = useState('')
   const [municipalityLabel, setMunicipalityLabel] = useState('')
   const [municipalityEmails, setMunicipalityEmails] = useState<MunicipalityEmail[]>([])
+  const [dtacDraft, setDtacDraft] = useState<DtacDraft | null>(null)
+  const [dtacCopied, setDtacCopied] = useState(false)
+  const [dtacCopyError, setDtacCopyError] = useState('')
+  const [dtacSaving, setDtacSaving] = useState(false)
+  const [dtacSaved, setDtacSaved] = useState(false)
+
+  useEffect(() => { setDtacDraft(null); setDtacCopied(false); setDtacSaved(false) }, [messageConnectionId, municipalityEmail])
 
   useEffect(() => {
     setItems(initialCases)
@@ -253,7 +261,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     } finally { setBusy('') }
   }
 
-  async function openYahooDtacDraft() {
+  function prepareYahooDtacDraft() {
     const item = items.find((entry) => entry.id === messageConnectionId)
     if (!item || !canManage) return
     const fields = selected?.id === item.id ? draft : item.fields
@@ -297,20 +305,49 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
         =============================================
       </div>
     </div>`
-    const query = new URLSearchParams({ subject })
-    if (municipalityEmail.trim()) query.set('to', municipalityEmail.trim())
-    let copy: Promise<void> | null = null
+    setDtacDraft({ subject, to: municipalityEmail.trim(), body, html })
+    setDtacCopied(false)
+    setDtacCopyError('')
+    setDtacSaved(false)
+  }
+
+  async function saveYahooDtacDraft() {
+    if (!dtacDraft || dtacSaving) return
+    if (!dtacDraft.to) { setDtacCopyError('Completează adresa de e-mail a primăriei.'); return }
+    setDtacSaving(true)
+    setDtacCopyError('')
     try {
-      copy = navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }), 'text/plain': new Blob([body], { type: 'text/plain' }) })])
-    } catch { /* Browserul poate bloca accesul la clipboard. */ }
-    window.open(`https://compose.mail.yahoo.com/?${query.toString()}`, '_blank', 'noopener,noreferrer')
+      const response = await fetch('/api/bransamente/dtac-draft', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dtacDraft),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(result.error || 'Schița nu a putut fi salvată în Yahoo.')
+      setDtacSaved(true)
+    } catch (error) {
+      setDtacCopyError(error instanceof Error ? error.message : 'Schița nu a putut fi salvată în Yahoo.')
+    } finally { setDtacSaving(false) }
+  }
+
+  async function copyYahooDtacDraft() {
+    if (!dtacDraft) return
     try {
-      if (!copy) throw new Error('Clipboard indisponibil')
-      await copy
-      setNotice('Schița formatată a fost copiată. În Yahoo, apasă Ctrl+V în mesaj și atașează documentația înainte de trimitere.')
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([dtacDraft.html], { type: 'text/html' }),
+        'text/plain': new Blob([dtacDraft.body], { type: 'text/plain' }),
+      })])
+      setDtacCopied(true)
+      setDtacCopyError('')
     } catch {
-      setNotice('Yahoo a fost deschis, dar copierea formatată a fost blocată de browser. Permite accesul la clipboard și încearcă din nou.')
+      setDtacCopied(false)
+      setDtacCopyError('Browserul a blocat copierea. Permite accesul la clipboard și apasă din nou.')
     }
+  }
+
+  function openYahooDtacDraft() {
+    if (!dtacDraft || !dtacCopied) return
+    const query = new URLSearchParams({ subject: dtacDraft.subject })
+    if (dtacDraft.to) query.set('to', dtacDraft.to)
+    window.open(`https://compose.mail.yahoo.com/?${query.toString()}`, '_blank', 'noopener,noreferrer')
   }
   async function remove() {
     if (!selected || !canManage || !confirm(`Ștergi definitiv dosarul ${selected.fields.Beneficiar || 'fără nume'}?`)) return
@@ -381,20 +418,28 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     </div>}
     {deerOpen && selected && <ConnectionDeerPanel item={selected} fields={draft} canEdit={canEditDeerDate} onClose={()=>setDeerOpen(false)} onSaved={(deerSubmission, deerSubmittedAt)=>setItems((current)=>current.map((entry)=>entry.id===selected.id?{...entry,deerSubmission,deerSubmittedAt,updatedAt:new Date().toISOString()}:entry))}/>}
     {canManage && whatsAppOpen && <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/45 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-3xl rounded-[26px] bg-white p-5 shadow-2xl lg:p-7">
+      <div className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-[26px] bg-white p-5 shadow-2xl lg:p-7">
         <div className="mb-5 flex items-start justify-between gap-4"><div><span className="text-xs font-black uppercase tracking-[.14em] text-[#197fb5]">Comunicare beneficiar și autorități</span><h2 className="mt-1 text-2xl font-bold text-[#082b4d]">Mesaje și e-mail DTAC</h2><p className="mt-1 text-sm text-slate-500">Trimite mesajul beneficiarului sau deschide în Yahoo schița oficială pentru primărie.</p></div><button onClick={()=>setWhatsAppOpen(false)} className="round-action" aria-label="Închide"><X size={18}/></button></div>
         <div className="grid gap-4 md:grid-cols-2"><label className="text-xs font-bold text-slate-500">Branșament<select value={messageConnectionId} onChange={(event)=>chooseMessageConnection(event.target.value)} className="input-field mt-1.5 w-full bg-white">{items.map((item)=><option key={item.id} value={item.id}>{item.nib} · {item.fields.Beneficiar||'Beneficiar necompletat'}</option>)}</select></label><label className="text-xs font-bold text-slate-500">Tip mesaj<select value={messageTemplate} onChange={(event)=>chooseMessageTemplate(event.target.value as ConnectionWhatsAppTemplateKey)} className="input-field mt-1.5 w-full bg-white">{CONNECTION_WHATSAPP_TEMPLATES.map((template)=><option key={template.key} value={template.key}>{template.label}</option>)}</select></label></div>
         <div className="mt-4 grid gap-2 sm:grid-cols-2">{CONNECTION_WHATSAPP_TEMPLATES.map((template)=><button key={template.key} type="button" onClick={()=>chooseMessageTemplate(template.key)} className={`rounded-2xl border p-3 text-left transition ${messageTemplate===template.key?'border-[#78bfe1] bg-[#edf7fc]':'border-slate-200 hover:bg-slate-50'}`}><strong className="block text-sm text-[#082b4d]">{template.label}</strong><span className="mt-1 block text-xs text-slate-500">{template.description}</span></button>)}</div>
         <label className="mt-4 block text-xs font-bold text-slate-500">Previzualizare mesaj WhatsApp<textarea value={messageText} onChange={(event)=>setMessageText(event.target.value)} maxLength={4000} className="input-field mt-1.5 min-h-[150px] w-full resize-y bg-white text-sm leading-6"/></label>
         <section className="mt-4 rounded-2xl border border-[#b9d8e8] bg-[#f4f9fc] p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3"><div><strong className="flex items-center gap-2 text-sm text-[#082b4d]"><Mail size={16}/> E-mail DTAC către primărie</strong><p className="mt-1 text-xs text-slate-500">Subiect: ⚡DTAC - {items.find((item)=>item.id===messageConnectionId)?.fields.Beneficiar||'BENEFICIAR'}</p></div><button type="button" onClick={openYahooDtacDraft} className="btn-secondary inline-flex items-center gap-2 !border-[#78bfe1] !bg-white"><Mail size={16}/> Deschide schița în Yahoo</button></div>
+          <div className="flex flex-wrap items-start justify-between gap-3"><div><strong className="flex items-center gap-2 text-sm text-[#082b4d]"><Mail size={16}/> E-mail DTAC către primărie</strong><p className="mt-1 text-xs text-slate-500">Subiect: ⚡DTAC - {items.find((item)=>item.id===messageConnectionId)?.fields.Beneficiar||'BENEFICIAR'}</p></div><button type="button" onClick={prepareYahooDtacDraft} className="btn-secondary inline-flex items-center gap-2 !border-[#78bfe1] !bg-white"><Mail size={16}/> Previzualizează schița</button></div>
           <div className="mt-3 grid gap-3 md:grid-cols-2">
             <label className="text-xs font-bold text-slate-500">Adresă salvată<select value={municipalityEmails.some((contact)=>contact.email===municipalityEmail)?municipalityEmail:''} onChange={(event)=>{const contact=municipalityEmails.find((item)=>item.email===event.target.value);setMunicipalityEmail(contact?.email||'');setMunicipalityLabel(contact?.label||items.find((item)=>item.id===messageConnectionId)?.fields.Entitate||'')}} className="input-field mt-1.5 w-full bg-white"><option value="">Adresă nouă / nesalvată</option>{municipalityEmails.map((contact)=><option key={contact.id} value={contact.email}>{contact.label} · {contact.email}</option>)}</select></label>
             <label className="text-xs font-bold text-slate-500">Primăria / instituția<input value={municipalityLabel} onChange={(event)=>setMunicipalityLabel(event.target.value)} placeholder="Primăria Hereclean" className="input-field mt-1.5 w-full bg-white"/></label>
             <label className="text-xs font-bold text-slate-500 md:col-span-2">Adresa e-mail<input type="email" value={municipalityEmail} onChange={(event)=>setMunicipalityEmail(event.target.value)} placeholder="registratura@primarie.ro" className="input-field mt-1.5 w-full bg-white"/></label>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2"><button type="button" onClick={saveMunicipalityEmail} disabled={busy==='municipality-email'} className="btn-secondary inline-flex items-center gap-2 !bg-white"><Save size={15}/> Memorează adresa</button>{municipalityEmails.some((contact)=>contact.email===municipalityEmail)&&<button type="button" onClick={deleteMunicipalityEmail} disabled={busy==='municipality-email'} className="round-action text-rose-500" title="Șterge adresa din agendă"><Trash2 size={15}/></button>}</div>
-          <p className="mt-2 text-[11px] leading-5 text-slate-500">Agenda este salvată pentru Elmont și apare tuturor utilizatorilor autorizați. Yahoo va deschide mesajul completat; documentația DTAC se atașează manual înainte de trimitere.</p>
+          <p className="mt-2 text-[11px] leading-5 text-slate-500">Agenda este salvată pentru Elmont și apare tuturor utilizatorilor autorizați. Verifică textul, apoi salvează schița direct în Ciorne Yahoo. Atașează documentația înainte de trimitere.</p>
+          {dtacDraft && <div className="mt-4 rounded-2xl border border-[#b9d8e8] bg-white p-4">
+            <p className="mb-2 text-xs font-black uppercase tracking-wide text-[#0d5d8b]">Schița e-mailului · {dtacDraft.subject}</p>
+            <div className="max-h-[340px] overflow-y-auto rounded-xl border border-slate-200 p-4 text-left" dangerouslySetInnerHTML={{ __html: dtacDraft.html }}/>
+            <div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={saveYahooDtacDraft} disabled={dtacSaving || dtacSaved || !dtacDraft.to} className="btn-primary inline-flex items-center gap-2">{dtacSaving && <Loader2 size={16} className="animate-spin"/>}{dtacSaved ? 'Salvat în Ciorne Yahoo' : 'Salvează schița în Yahoo'}</button>{dtacSaved && <a href="https://mail.yahoo.com/n/folders/00_3" target="_blank" rel="noopener noreferrer" className="btn-secondary">Deschide Ciorne Yahoo</a>}</div>
+            {dtacSaved && <p className="mt-2 text-sm font-bold text-emerald-700" role="status">Schița cu textul formatat este în Ciorne. Verifică destinatarul și adaugă fișierele DTAC înainte de trimitere.</p>}
+            {dtacCopyError && <p className="mt-2 text-sm font-bold text-rose-700" role="alert">{dtacCopyError}</p>}
+            {!dtacSaved && <div className="mt-3 border-t border-slate-200 pt-3"><p className="text-xs text-slate-500">Dacă salvarea directă nu funcționează, copiază mesajul și lipește-l în Yahoo.</p><div className="mt-2 flex flex-wrap gap-2"><button type="button" onClick={copyYahooDtacDraft} className="btn-secondary">Copiază mesajul</button><button type="button" onClick={openYahooDtacDraft} disabled={!dtacCopied} className="btn-secondary">Deschide Yahoo pentru lipire</button></div></div>}
+          </div>}
         </section>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3"><p className="text-xs text-slate-500">Destinatar: <strong>{items.find((item)=>item.id===messageConnectionId)?.fields.Telefon||'telefon necompletat'}</strong></p><div className="flex gap-2"><button onClick={()=>setWhatsAppOpen(false)} className="btn-secondary">Renunță</button><button onClick={sendWhatsAppMessage} disabled={busy==='whatsapp'||!messageText.trim()} className="btn-primary inline-flex items-center gap-2">{busy==='whatsapp'?<Loader2 size={17} className="animate-spin"/>:<MessageCircle size={17}/>} Trimite pe WhatsApp</button></div></div>
       </div>
