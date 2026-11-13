@@ -10,6 +10,7 @@ import { PdfRequestEditor, type ConnectionFormOption, type ProjectFormOption } f
 import { PdfStampEditor } from './pdf-stamp-editor'
 import { DeerBulkPreview } from './deer-bulk-preview'
 import { BeneficiarySignatureCapture } from './beneficiary-signature-capture'
+import { DeerSigningManager } from './deer-signing-manager'
 import { beneficiarySigned } from './form-stamps'
 import { IdentityCardScanner } from '@/components/identity-cards/identity-card-scanner'
 import type { IdentityCardRecord } from '@/lib/identity-card-storage'
@@ -33,6 +34,7 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
   const [deerConnectionId, setDeerConnectionId] = useState('')
   const [deerBulkOpen, setDeerBulkOpen] = useState(false)
   const [signatureOpen, setSignatureOpen] = useState(false)
+  const [signingLinkOpen, setSigningLinkOpen] = useState(false)
   const [signatureVersion, setSignatureVersion] = useState(0)
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -180,6 +182,7 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
             <select className="input-field !w-full min-w-0 max-w-full bg-white sm:!w-auto sm:min-w-[220px]" value={deerConnectionId} onChange={(event) => setDeerConnectionId(event.target.value)}><option value="">Alege branșamentul</option>{connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.fields.Beneficiar || 'Fără beneficiar'} · {connection.nib}</option>)}</select>
           </label>
           {canEdit && <button type="button" className="btn-secondary inline-flex w-full items-center justify-center gap-2 !py-2 text-sm sm:w-auto" disabled={!selectedDeerConnection} onClick={() => setSignatureOpen(true)}><PenLine size={16}/> Semnătura beneficiarului</button>}
+          {canManage && <button type="button" className="btn-secondary inline-flex w-full items-center justify-center gap-2 !py-2 text-sm sm:w-auto" disabled={!selectedDeerConnection} onClick={() => setSigningLinkOpen(true)}><FileText size={16}/> Link de semnare</button>}
           <button type="button" className="btn-primary inline-flex w-full items-center justify-center gap-2 !py-2 text-sm sm:w-auto" disabled={!selectedDeerConnection || !items.length} onClick={() => setDeerBulkOpen(true)}><FileText size={16}/> Previzualizează toate</button>
         </div>
       </div>}
@@ -202,6 +205,7 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
     {stampEditor && <PdfStampEditor template={stampEditor} canManage={canManage} onClose={() => { setStampEditor(null); router.refresh() }}/>}
     {deerBulkOpen && selectedDeerConnection && <DeerBulkPreview key={`${selectedDeerConnection.id}:${signatureVersion}`} templates={bulkTemplates} submissions={initialSubmissions} connection={selectedDeerConnection} caseDocumentIds={Object.fromEntries(DEER_DOCUMENT_KINDS.map((kind) => [kind, caseDocument(kind)?.id]))} onClose={() => setDeerBulkOpen(false)}/>}
     {signatureOpen && selectedDeerConnection && <BeneficiarySignatureCapture connectionId={selectedDeerConnection.id} beneficiary={selectedDeerConnection.fields.Beneficiar || selectedDeerConnection.nib} onClose={() => setSignatureOpen(false)} onSaved={() => setSignatureVersion((value) => value + 1)}/>}
+    {signingLinkOpen && selectedDeerConnection && <DeerSigningManager connection={selectedDeerConnection} templates={bulkTemplates} submissions={initialSubmissions} caseDocumentIds={Object.fromEntries(DEER_DOCUMENT_KINDS.map((kind) => [kind, caseDocument(kind)?.id]))} onClose={() => setSigningLinkOpen(false)}/>}
     {canEdit&&editor && <PdfRequestEditor template={editor.template} initialSubmission={editor.submission} defaultConnectionId={editor.template.category === 'DEER' ? deerConnectionId : undefined} connections={connections} projects={projects} identityCards={identityCards} borderouri={borderouri} canManage={canManage} onClose={() => { setEditor(null); router.refresh() }}/>}
   </div>
 }

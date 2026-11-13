@@ -1,0 +1,2 @@
+export const SIGNING_DECLARATION = 'Confirm că am avut acces la documentele enumerate, le-am parcurs și sunt de acord cu conținutul lor. Confirm că sunt beneficiarul indicat și că semnătura desenată de mine va fi aplicată în locurile marcate pe documentele care necesită semnătură.'
+export const SIGNING_LEGAL_NOTE = 'Aceasta este o semnătură electronică simplă, desenată pe ecran. Nu este o semnătură electronică calificată și nu înlocuiește o formă de semnare mai strictă cerută pentru un anumit act.'

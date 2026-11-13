@@ -57,6 +57,11 @@ public class MainActivity extends Activity {
         });
         layout.addView(save);
 
+        Button permission = new Button(this);
+        permission.setText("Acordă permisiunea pentru SMS");
+        permission.setOnClickListener(view -> requestSmsPermission());
+        layout.addView(permission);
+
         Button start = new Button(this);
         start.setText("Pornește trimiterea SMS");
         start.setOnClickListener(view -> startGateway());
@@ -85,12 +90,9 @@ public class MainActivity extends Activity {
     }
 
     private void startGateway() {
+        if (!requestSmsPermission()) return;
         if (prefs().getString("token", "").isEmpty()) {
             status.setText("Salvează mai întâi codul de asociere.");
-            return;
-        }
-        if (checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] { Manifest.permission.SEND_SMS }, 101);
             return;
         }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -102,9 +104,21 @@ public class MainActivity extends Activity {
         updateStatus();
     }
 
+    private boolean requestSmsPermission() {
+        if (checkSelfPermission(Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED) {
+            status.setText("Permisiunea SMS este activă. Salvează codul și pornește trimiterea.");
+            return true;
+        }
+        status.setText("Android va cere acum permisiunea de a trimite SMS. Alege «Permite».");
+        requestPermissions(new String[] { Manifest.permission.SEND_SMS }, 101);
+        return false;
+    }
+
     @Override public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(requestCode, permissions, results);
-        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startGateway();
+        if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+            status.setText(requestCode == 101 ? "Permisiunea SMS a fost acordată. Salvează codul și apasă «Pornește trimiterea SMS»." : "Notificările sunt permise. Apasă «Pornește trimiterea SMS».");
+        }
         else if (requestCode == 101) status.setText("Permisiunea SEND_SMS este necesară pentru a trimite prin SIM.");
         else status.setText("Activează notificările pentru serviciul SMS.");
     }
