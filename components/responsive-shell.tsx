@@ -143,6 +143,7 @@ export function ResponsiveShell({
           '/dashboard/programari': data.unseenConfirmationsCount > 0 ? data.unseenConfirmationsCount : undefined,
           '/dashboard/oferte': data.newOffersCount > 0 ? data.newOffersCount : undefined,
           '/dashboard/chat-intern': data.internalChatCount > 0 ? data.internalChatCount : undefined,
+          '/dashboard/formulare': data.deerDocumentsCount > 0 ? data.deerDocumentsCount : undefined,
         })
       } catch {
         // eșec silențios — reîncercăm la următorul interval

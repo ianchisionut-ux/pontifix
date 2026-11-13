@@ -1,9 +1,10 @@
 export const DEER_DOCUMENT_KINDS = ['BORDEROU', 'PV_PREDARE_PRIMIRE', 'INSTIINTARE_BMP'] as const
-export type DeerDocumentKind = typeof DEER_DOCUMENT_KINDS[number]
+export type DeerDocumentKind = typeof DEER_DOCUMENT_KINDS[number] | 'OTHER'
 export const DEER_DOCUMENT_LABELS: Record<DeerDocumentKind, string> = {
   BORDEROU: 'Borderou DEER',
   PV_PREDARE_PRIMIRE: 'PV predare-primire',
   INSTIINTARE_BMP: 'Înștiințare montare BMP',
+  OTHER: 'Alt document DEER',
 }
 
 export function deerDocumentKindFromName(name: string): DeerDocumentKind | null {
@@ -29,4 +30,5 @@ export type DeerBorderouDto = {
   dossierNumber: string | null
   beneficiary: string | null
   receivedAt: string
+  notificationStatus: string
 }

@@ -22,7 +22,10 @@ export async function syncDeerBorderouri(businessId: string) {
     connectionTimeout: 15000, greetingTimeout: 15000, socketTimeout: 30000,
   })
   await ensureDeerBorderouStorage()
-  const result = { scanned: 0, imported: 0, matched: 0, pending: 0, corrected: 0 }
+  const result: {
+    scanned: number; imported: number; matched: number; pending: number; corrected: number
+    newDocuments: Array<{ id: string; documentName: string; documentKind: string; beneficiary: string; dossierNumber: string; connectionId: string | null }>
+  } = { scanned: 0, imported: 0, matched: 0, pending: 0, corrected: 0, newDocuments: [] }
   try {
     await client.connect()
     await client.mailboxOpen('INBOX', { readOnly: true })
@@ -44,8 +47,7 @@ export async function syncDeerBorderouri(businessId: string) {
       for (const attachment of mail.attachments) {
         const filename = attachment.filename || ''
         if (!/\.pdf$/i.test(filename)) continue
-        const documentKind = deerDocumentKindFromName(filename)
-        if (!documentKind) continue
+        const documentKind = deerDocumentKindFromName(filename) || 'OTHER'
         const content = attachment.content
         if (!content || content.length < 100 || content.length > MAX_PDF_BYTES || content.subarray(0, 5).toString() !== '%PDF-') continue
         const sourceKey = emailAttachmentKey(mail.messageId || String(uid), filename, content)
@@ -55,19 +57,20 @@ export async function syncDeerBorderouri(businessId: string) {
         if (exists.length) {
           if (connectionId && (exists[0].connectionId !== connectionId || exists[0].documentKind !== documentKind)) {
             await prisma.$executeRaw`
-              UPDATE "DeerBorderou" SET "connectionId"=${connectionId}, "documentKind"=${documentKind}, "dossierNumber"=${dossierNumber}, "beneficiary"=${beneficiary}
+              UPDATE "DeerBorderou" SET "connectionId"=${connectionId}, "documentKind"=${documentKind}, "dossierNumber"=${dossierNumber}, "beneficiary"=${beneficiary}, "notificationStatus"='PENDING'
               WHERE "id"=${exists[0].id} AND "businessId"=${businessId} AND "source"='EMAIL'
             `
             result.corrected++
           }
           continue
         }
-        await saveDeerBorderou({
+        const id = await saveDeerBorderou({
           businessId, connectionId, documentKind, documentPathname: `db:${sourceKey}`, documentData: content, documentName: filename,
           source: 'EMAIL', sourceKey, sender, subject, dossierNumber, beneficiary,
           receivedAt: mail.date || (message.internalDate ? new Date(message.internalDate) : new Date()),
         })
         result.imported++
+        result.newDocuments.push({ id, documentName: filename, documentKind, beneficiary, dossierNumber, connectionId })
         if (connectionId) result.matched++
         else result.pending++
       }

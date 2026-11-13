@@ -17,6 +17,7 @@ export type DeerBorderou = {
   dossierNumber: string | null
   beneficiary: string | null
   receivedAt: Date
+  notificationStatus: string
 }
 
 let ready: Promise<void> | null = null
@@ -37,10 +38,12 @@ export function ensureDeerBorderouStorage() {
     "beneficiary" TEXT,
     "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "notificationStatus" TEXT NOT NULL DEFAULT 'READ',
     CONSTRAINT "DeerBorderou_business_source_unique" UNIQUE ("businessId", "sourceKey")
   )`).then(async () => {
     await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "documentData" BYTEA`)
     await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "documentKind" TEXT NOT NULL DEFAULT 'BORDEROU'`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "notificationStatus" TEXT NOT NULL DEFAULT 'READ'`)
   }).catch((error) => { ready = null; throw error })
   return ready
 }
@@ -85,7 +88,7 @@ export async function findDeerCase(businessId: string, dossierNumber: string, be
 export async function listDeerBorderouri(businessId: string) {
   await ensureDeerBorderouStorage()
   return prisma.$queryRaw<DeerBorderou[]>`
-    SELECT "id", "connectionId", "documentKind", "documentPathname", "documentName", "source", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt"
+    SELECT "id", "connectionId", "documentKind", "documentPathname", "documentName", "source", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt", "notificationStatus"
     FROM "DeerBorderou" WHERE "businessId"=${businessId} ORDER BY "receivedAt" DESC, "createdAt" DESC
   `
 }
@@ -102,8 +105,8 @@ export async function saveDeerBorderou(input: {
   const sourceKey = input.sourceKey || `upload:${id}`
   const receivedAt = input.receivedAt || new Date()
   await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO "DeerBorderou" ("id", "businessId", "connectionId", "documentKind", "documentPathname", "documentData", "documentName", "source", "sourceKey", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt")
-    VALUES (${id}, ${input.businessId}, ${input.connectionId}, ${input.documentKind}, ${input.documentPathname}, ${input.documentData || null}, ${input.documentName}, ${input.source}, ${sourceKey}, ${input.sender || null}, ${input.subject || null}, ${input.dossierNumber || null}, ${input.beneficiary || null}, ${receivedAt})
+    INSERT INTO "DeerBorderou" ("id", "businessId", "connectionId", "documentKind", "documentPathname", "documentData", "documentName", "source", "sourceKey", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt", "notificationStatus")
+    VALUES (${id}, ${input.businessId}, ${input.connectionId}, ${input.documentKind}, ${input.documentPathname}, ${input.documentData || null}, ${input.documentName}, ${input.source}, ${sourceKey}, ${input.sender || null}, ${input.subject || null}, ${input.dossierNumber || null}, ${input.beneficiary || null}, ${receivedAt}, ${input.source === 'EMAIL' ? 'PENDING' : 'READ'})
     ON CONFLICT ("businessId", "sourceKey") DO NOTHING
   `)
   return id

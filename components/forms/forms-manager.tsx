@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { uploadPresigned } from '@vercel/blob/client'
 import { useRouter } from 'next/navigation'
 import { Edit3, FilePlus2, FileText, History, Loader2, PenLine, Plus, Printer, RefreshCw, Stamp, Trash2, X } from 'lucide-react'
@@ -32,6 +32,13 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
   const router = useRouter()
   const [category, setCategory] = useState<Category>('FORMULAR')
   const [deerConnectionId, setDeerConnectionId] = useState('')
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('tab') !== 'DEER') return
+    setCategory('DEER')
+    const caseId = params.get('case')
+    if (caseId && connections.some((connection) => connection.id === caseId)) setDeerConnectionId(caseId)
+  }, [connections])
   const [deerBulkOpen, setDeerBulkOpen] = useState(false)
   const [signatureOpen, setSignatureOpen] = useState(false)
   const [signingLinkOpen, setSigningLinkOpen] = useState(false)
@@ -52,6 +59,7 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
   const selectedDeerConnection = connections.find((connection) => connection.id === deerConnectionId)
   const caseDocument = (kind: DeerDocumentKind) => borderouri.find((document) => document.connectionId === deerConnectionId && document.documentKind === kind)
   const pendingBorderouri = borderouri.filter((document) => !document.connectionId)
+  const newDeerDocuments = borderouri.filter((document) => document.source === 'EMAIL' && document.notificationStatus !== 'READ')
   const bulkTemplates = items.filter((item) => { const kind = deerDocumentKindForTemplate(item); return !kind || !!caseDocument(kind) })
   const submissionFor = (templateId: string) => selectedDeerConnection
     ? initialSubmissions.find((saved) => saved.formTemplateId === templateId && saved.sourceId === selectedDeerConnection.id)
@@ -124,9 +132,23 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
       const response = await fetch('/api/formulare/borderou/sync', { method: 'POST' })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'E-mailul DEER nu poate fi verificat.')
-      alert(`Verificate ${body.scanned || 0} e-mailuri DEER. Documente noi: ${body.imported || 0}; asociate: ${body.matched || 0}; corectate: ${body.corrected || 0}; de verificat: ${body.pending || 0}.`)
+      const details = (body.newDocuments || []).map((document: { documentKind: DeerDocumentKind; documentName: string; beneficiary: string; dossierNumber: string; connectionId: string | null }) => {
+        const connection = connections.find((item) => item.id === document.connectionId)
+        return `${DEER_DOCUMENT_LABELS[document.documentKind]} — ${document.documentName}\n  ${connection ? `${connection.fields.Beneficiar || document.beneficiary} · ${connection.nib}` : `${document.beneficiary || document.dossierNumber || 'Dosar neidentificat'} · necesită asociere manuală`}`
+      }).join('\n')
+      alert(`Verificate ${body.scanned || 0} e-mailuri DEER. Documente noi: ${body.imported || 0}; asociate: ${body.matched || 0}; corectate: ${body.corrected || 0}; de verificat: ${body.pending || 0}.${details ? `\n\n${details}` : ''}`)
       router.refresh()
     } catch (error) { alert(error instanceof Error ? error.message : 'E-mailul DEER nu poate fi verificat.') }
+    finally { setBusy('') }
+  }
+
+  async function markDeerSeen(id: string) {
+    setBusy(`seen:${id}`)
+    try {
+      const response = await fetch('/api/formulare/borderou/notifications', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      if (!response.ok) throw new Error('Documentul nu a putut fi marcat ca văzut.')
+      router.refresh()
+    } catch (error) { alert(error instanceof Error ? error.message : 'Actualizarea a eșuat.') }
     finally { setBusy('') }
   }
 
@@ -188,7 +210,9 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
       </div>}
       {category === 'DEER' && <div className="rounded-2xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3"><div><b className="text-[#082b4d]">Documentele branșamentului</b><p className="text-slate-500">{selectedDeerConnection ? `${selectedDeerConnection.fields.Beneficiar || 'Beneficiar'} · ${selectedDeerConnection.nib}` : 'Alege un branșament pentru a vedea documentele lui.'}</p></div>{canManage && <button type="button" className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy} onClick={syncBorderouri}>{busy === 'borderou-sync' ? <Loader2 size={15} className="animate-spin"/> : <RefreshCw size={15}/>} Verifică e-mailul DEER</button>}</div>
+        {canManage && newDeerDocuments.length > 0 && <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3"><b className="text-[#082b4d]">Documente DEER noi ({newDeerDocuments.length})</b><p className="mt-1 text-xs text-slate-600">Verifică documentul și dosarul asociat. Cele fără potrivire așteaptă asociere manuală mai jos.</p><div className="mt-3 space-y-2">{newDeerDocuments.map((document) => { const connection = connections.find((item) => item.id === document.connectionId); return <div key={document.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-white p-3"><span className="min-w-[200px] flex-1"><b className="block text-[#082b4d]">{DEER_DOCUMENT_LABELS[document.documentKind]} · {document.documentName}</b><span className="block text-xs text-slate-600">{connection ? `${connection.fields.Beneficiar || document.beneficiary || 'Beneficiar'} · ${connection.nib}` : `${document.beneficiary || 'Beneficiar neidentificat'} · ${document.dossierNumber || 'fără număr dosar'} · necesită asociere manuală`} · {new Date(document.receivedAt).toLocaleString('ro-RO')}</span></span><a className="btn-secondary !px-3 !py-1 text-xs" href={`/api/formulare/borderou/${document.id}/document`} target="_blank" rel="noopener noreferrer">Vezi PDF</a>{connection && <button type="button" className="btn-secondary !px-3 !py-1 text-xs" onClick={() => setDeerConnectionId(connection.id)}>Deschide dosarul</button>}<button type="button" className="btn-secondary !px-3 !py-1 text-xs" disabled={!!busy} onClick={() => markDeerSeen(document.id)}>Am văzut</button></div> })}</div></div>}
         {selectedDeerConnection && <div className="mt-3 space-y-2"><div className="flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3"><FileText size={18} className="text-[#197fb5]"/><span className="min-w-0 flex-1"><b className="block text-[#082b4d]">Contract + notificare</b><small className="text-slate-500">PDF generat din dosarul acestui branșament</small></span><a className="btn-secondary !px-3 !py-2 text-xs" href={`/api/bransamente/${encodeURIComponent(selectedDeerConnection.id)}/document?type=contract&format=pdf`} target="_blank" rel="noopener noreferrer">Vezi PDF</a></div>{DEER_DOCUMENT_KINDS.map((kind) => { const document = caseDocument(kind); return <div key={kind} className="flex flex-wrap items-center gap-3 rounded-xl bg-slate-50 p-3"><FileText size={18} className="text-[#197fb5]"/><span className="min-w-0 flex-1"><b className="block text-[#082b4d]">{DEER_DOCUMENT_LABELS[kind]}</b><small className="text-slate-500">{document ? `${document.documentName} · ${new Date(document.receivedAt).toLocaleString('ro-RO')}` : 'Nu există document asociat acestui branșament.'}</small></span>{document && <a className="btn-secondary !px-3 !py-2 text-xs" href={`/api/formulare/borderou/${document.id}/document`} target="_blank" rel="noopener noreferrer">Vezi PDF</a>}{canManage && <label className="btn-secondary cursor-pointer !px-3 !py-2 text-xs">{busy === `upload:${kind}` ? 'Se încarcă…' : document ? 'Înlocuiește pentru acest branșament' : 'Încarcă PDF'}<input className="hidden" type="file" accept="application/pdf,.pdf" disabled={!!busy} onChange={(event) => { uploadBorderou(kind, event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}</div> })}</div>}
+        {selectedDeerConnection && borderouri.some((document) => document.connectionId === deerConnectionId && document.documentKind === 'OTHER') && <div className="mt-3"><b className="text-[#082b4d]">Alte documente primite de la DEER</b><div className="mt-2 space-y-2">{borderouri.filter((document) => document.connectionId === deerConnectionId && document.documentKind === 'OTHER').map((document) => <div key={document.id} className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-50 p-3"><span className="min-w-0 flex-1 text-xs"><b className="block">{document.documentName}</b><span className="text-slate-500">{new Date(document.receivedAt).toLocaleString('ro-RO')}</span></span><a className="btn-secondary !px-3 !py-1 text-xs" href={`/api/formulare/borderou/${document.id}/document`} target="_blank" rel="noopener noreferrer">Vezi PDF</a></div>)}</div></div>}
         {canManage && pendingBorderouri.length > 0 && <div className="mt-3"><b className="text-amber-800">Documente DEER care necesită asociere ({pendingBorderouri.length})</b><div className="mt-2 space-y-2">{pendingBorderouri.map((document) => <div key={document.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2"><span className="min-w-0 flex-1 text-xs"><b className="block">{DEER_DOCUMENT_LABELS[document.documentKind]} · {document.beneficiary || document.documentName} · {document.dossierNumber || 'Număr dosar neidentificat'}</b><span className="block text-slate-600">{document.subject || 'Fără subiect'} · {new Date(document.receivedAt).toLocaleString('ro-RO')}</span></span><a className="btn-secondary !px-3 !py-1 text-xs" href={`/api/formulare/borderou/${document.id}/document`} target="_blank">Vezi PDF</a><select aria-label={`Asociază ${document.documentName}`} className="input-field !w-auto !py-1 text-xs" defaultValue="" disabled={!!busy} onChange={(event) => assignBorderou(document.id, event.target.value)}><option value="">Alege branșamentul</option>{connections.map((connection) => <option key={connection.id} value={connection.id}>{connection.fields.Beneficiar || 'Fără beneficiar'} · {connection.nib}</option>)}</select></div>)}</div></div>}
       </div>}
       <section><div className="mb-3 flex items-center gap-2"><FilePlus2 size={18} className="text-[#197fb5]"/><h2 className="font-bold text-[#082b4d]">{category === 'DEER' ? 'Șabloane DEER' : tr('Modele de cereri')}</h2></div><div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3">{editableTemplates.map((item) => { const kind = deerDocumentKindForTemplate(item); const document = kind ? caseDocument(kind) : undefined; return <article key={item.id} className="flex min-h-[150px] flex-col rounded-[20px] border border-slate-200 bg-white p-5 shadow-sm">
