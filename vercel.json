@@ -15,7 +15,8 @@
     }
   },
   "redirects": [
-    { "source": "/", "has": [{ "type": "host", "value": "chat.elmont.ro" }], "destination": "/chat", "permanent": false }
+    { "source": "/", "has": [{ "type": "host", "value": "chat.elmont.ro" }], "destination": "/chat", "permanent": false },
+    { "source": "/", "has": [{ "type": "host", "value": "sms.elmont.ro" }], "destination": "/sms", "permanent": false }
   ],
   "rewrites": [
     { "source": "/(.*)", "destination": { "service": "web" } }

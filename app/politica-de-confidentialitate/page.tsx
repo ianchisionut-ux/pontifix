@@ -22,13 +22,14 @@ export default function PrivacyPage() {
       </> },
       { title: 'Scopurile prelucrării', content: <>
         <p>Datele din cererile de ofertă sunt folosite pentru analiza solicitării, pregătirea ofertei și contactarea solicitantului. Datele din mesajele trimise prin chatul public sunt folosite pentru a răspunde solicitării. Datele din portal sunt utilizate pentru administrarea conturilor și a drepturilor de acces, evidența timpului de lucru, întocmirea foilor de prezență, gestionarea concediilor, realizarea rapoartelor și administrarea proiectelor și documentelor.</p>
+        <p>Când un utilizator autorizat alege trimiterea unui SMS din dosarul de branșament, folosim numărul de telefon al beneficiarului, textul mesajului și datele de identificare a dosarului pentru comunicarea stadiului lucrării și evidența trimiterii.</p>
         <p>Dacă integrarea WhatsApp este activată, datele de contact sunt utilizate numai la inițiativa unui utilizator autorizat pentru transmiterea unei actualizări despre proiectul beneficiarului.</p>
       </> },
       { title: 'Temeiurile prelucrării', content: <>
         <p>Prelucrarea poate avea la bază executarea contractului sau a raportului de muncă, îndeplinirea obligațiilor legale ale angajatorului, interesul legitim privind organizarea și securitatea activității și, când este necesar, consimțământul persoanei vizate.</p>
       </> },
       { title: 'Destinatari și furnizori', content: <>
-        <p>Datele sunt accesibile numai utilizatorilor autorizați, conform rolurilor atribuite. Pentru funcționarea platformei putem utiliza furnizori de infrastructură și servicii precum Vercel pentru găzduire și stocare, Neon pentru baza de date, furnizori de email și Meta Platforms pentru WhatsApp Business Platform.</p>
+        <p>Datele sunt accesibile numai utilizatorilor autorizați, conform rolurilor atribuite. Pentru funcționarea platformei putem utiliza furnizori de infrastructură și servicii precum Vercel pentru găzduire și stocare, Neon pentru baza de date, furnizori de email și Meta Platforms pentru WhatsApp Business Platform. Dacă este activat gateway-ul SMS, numărul destinatarului și textul mesajului sunt transmise serviciului cloud SMS Gateway for Android, care le direcționează către telefonul Elmont pentru expediere prin SIM.</p>
         <p>Acești furnizori prelucrează date numai în măsura necesară serviciilor oferite și potrivit propriilor obligații contractuale și legale.</p>
       </> },
       { title: 'Transferuri internaționale', content: <>

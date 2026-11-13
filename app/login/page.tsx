@@ -31,7 +31,7 @@ export default function LoginPage() {
       return
     }
     await fetch('/api/auth/remember-session', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ remember: rememberMe }) }).catch(() => undefined)
-    router.push(window.location.hostname === 'chat.elmont.ro' ? '/chat' : '/dashboard')
+    router.push(window.location.hostname === 'chat.elmont.ro' ? '/chat' : window.location.hostname === 'sms.elmont.ro' ? '/sms' : '/dashboard')
     router.refresh()
   }
 
