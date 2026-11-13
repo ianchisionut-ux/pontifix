@@ -4,6 +4,7 @@ import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 import { rateLimit } from './rate-limit'
 import { ACCOUNTING_USER_EMAIL } from './accounting/permissions'
+import { getUserAccess } from './user-administration'
 
 // Nu folosim PrismaAdapter — cu Credentials + strategie JWT nu e nevoie de el,
 // iar adapter-ul ar căuta tabele (Account, Session, VerificationToken) care
@@ -49,7 +50,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             })
           }
         }
-        if (user && email === 'berar_liviu@yahoo.com' && user.role !== 'STAFF') user = await prisma.user.update({ where: { id: user.id }, data: { role: 'STAFF' } })
         if (!user && email === ACCOUNTING_USER_EMAIL) {
           const bootstrapHash = '$2a$12$voToMG047zLWev44LBICA.3gcsi9Gzlotv80KtQ3eT5gZ6U2CUZyu'
           const allowed = await bcrypt.compare(credentials?.password as string, bootstrapHash)
@@ -62,8 +62,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             })
           }
         }
-        if (user && email === ACCOUNTING_USER_EMAIL && user.role !== 'OWNER') user = await prisma.user.update({ where: { id: user.id }, data: { role: 'OWNER' } })
+        if (user && email === 'ianchisionut@gmail.com' && (user.role !== 'SUPER_ADMIN' || !user.businessId)) {
+          const elmont = user.businessId ? null : await prisma.user.findUnique({ where: { email: 'elmont_zalau@yahoo.com' }, select: { businessId: true } })
+          const businessId = user.businessId || elmont?.businessId || (await prisma.business.findFirst({ where: { name: { contains: 'Elmont', mode: 'insensitive' } }, select: { id: true } }))?.id || null
+          user = await prisma.user.update({ where: { id: user.id }, data: { role: 'SUPER_ADMIN', businessId } })
+        }
         if (!user) return null
+        const access = await getUserAccess(user.id)
+        if (!access || access.disabledAt) return null
         const valid = await bcrypt.compare(credentials?.password as string, user.password)
         if (!valid) return null
         return { id: user.id, email: user.email, businessId: user.businessId, role: user.role } as any
@@ -72,12 +78,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user }) {
-      if (token.email === 'berar_liviu@yahoo.com') token.role = 'STAFF'
-      if (token.email === ACCOUNTING_USER_EMAIL) token.role = 'OWNER'
       if (user) {
         token.id = (user as any).id
         token.businessId = (user as any).businessId
         token.role = (user as any).role
+      }
+      if (typeof token.id === 'string') {
+        let access = await getUserAccess(token.id)
+        if (!access || access.disabledAt) return null
+        if (access.email === 'ianchisionut@gmail.com' && (access.role !== 'SUPER_ADMIN' || !access.businessId)) {
+          const elmont = access.businessId ? null : await prisma.user.findUnique({ where: { email: 'elmont_zalau@yahoo.com' }, select: { businessId: true } })
+          const businessId = access.businessId || elmont?.businessId || (await prisma.business.findFirst({ where: { name: { contains: 'Elmont', mode: 'insensitive' } }, select: { id: true } }))?.id || null
+          await prisma.user.update({ where: { id: access.id }, data: { role: 'SUPER_ADMIN', businessId } })
+          access = await getUserAccess(access.id)
+          if (!access) return null
+        }
+        token.email = access.email
+        token.businessId = access.businessId
+        token.role = access.role
       }
       return token
     },

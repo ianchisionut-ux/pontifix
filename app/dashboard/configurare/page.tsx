@@ -6,6 +6,7 @@ import { WhatsAppSettingsForm } from '@/components/whatsapp-settings-form'
 import { ensureWhatsAppStorage } from '@/lib/ensure-whatsapp-storage'
 import { EmailSettingsForm } from '@/components/email-settings-form'
 import { getStoredEmailSettings } from '@/lib/email-settings'
+import { UserAdministration } from '@/components/user-administration'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,5 +60,6 @@ export default async function SettingsPage() {
       configured={!!whatsapp?.accessToken}
       enabled={whatsapp?.enabledByOwner ?? false}
     />}
+    {isSuperAdmin && <UserAdministration />}
   </div>
 }

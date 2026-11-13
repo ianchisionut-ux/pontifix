@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ensureInternalChatStorage } from '@/lib/ensure-internal-chat-storage'
+import { ensureUserAdministrationStorage } from '@/lib/user-administration'
 import type { InternalChatMessage, InternalChatPayload, InternalChatUser } from '@/components/internal-chat/internal-chat-manager'
 
 export async function loadInternalChatPageData(): Promise<InternalChatPayload | null> {
@@ -9,8 +10,8 @@ export async function loadInternalChatPageData(): Promise<InternalChatPayload | 
   const userId = (session as { userId?: string } | null)?.userId
   if (!businessId || !userId) return null
 
-  await ensureInternalChatStorage()
-  const users = await prisma.$queryRaw<InternalChatUser[]>`SELECT u."id",u."email",u."role"::text AS "role",COALESCE(p."displayName",split_part(u."email",'@',1)) AS "displayName" FROM "User" u LEFT JOIN "InternalChatProfile" p ON p."userId"=u."id" WHERE u."businessId"=${businessId} ORDER BY COALESCE(p."displayName",u."email") ASC`
+  await Promise.all([ensureInternalChatStorage(), ensureUserAdministrationStorage()])
+  const users = await prisma.$queryRaw<InternalChatUser[]>`SELECT u."id",u."email",u."role"::text AS "role",COALESCE(p."displayName",split_part(u."email",'@',1)) AS "displayName" FROM "User" u LEFT JOIN "InternalChatProfile" p ON p."userId"=u."id" LEFT JOIN "UserAccessStatus" a ON a."userId"=u."id" WHERE u."businessId"=${businessId} AND a."disabledAt" IS NULL ORDER BY COALESCE(p."displayName",u."email") ASC`
   const messages = await prisma.$queryRaw<Array<Omit<InternalChatMessage, 'createdAt'> & { createdAt: Date }>>`
     SELECT q.*,(r."readAt" IS NULL AND r."userId" IS NOT NULL) AS "isUnread" FROM (
       SELECT m."id",m."senderId",s."email" AS "senderEmail",COALESCE(sp."displayName",split_part(s."email",'@',1)) AS "senderName",m."recipientId",u."email" AS "recipientEmail",COALESCE(up."displayName",split_part(u."email",'@',1)) AS "recipientName",m."text",m."createdAt"

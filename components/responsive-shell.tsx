@@ -321,7 +321,7 @@ export function ResponsiveShell({
         />
       </aside>
 
-      <main className="min-w-0">{children}</main>
+      <main className="elmont-dashboard-main min-w-0">{children}</main>
     </div>
   )
 }

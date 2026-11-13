@@ -377,3 +377,12 @@ body {
 
 .round-action { width:36px; height:36px; border-radius:999px; background:#f1f5f9; display:inline-flex; align-items:center; justify-content:center; transition:background .15s,color .15s; }
 .round-action:hover { background:#d9eef8; color:#0f679b; }
+
+/* Dashboard pages use the available viewport width, with a 12 px edge inset. */
+.elmont-dashboard-main > :not(.accounting-root) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: 12px;
+}

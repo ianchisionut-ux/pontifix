@@ -4,6 +4,7 @@ import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ensureInternalChatStorage } from '@/lib/ensure-internal-chat-storage'
+import { ensureUserAdministrationStorage } from '@/lib/user-administration'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,11 +18,12 @@ async function getAccess() {
 export async function GET() {
   const access = await getAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
-  await ensureInternalChatStorage()
+  await Promise.all([ensureInternalChatStorage(), ensureUserAdministrationStorage()])
   const users = await prisma.$queryRaw<Array<{ id:string; email:string; role:string; displayName:string }>>`
     SELECT u."id",u."email",u."role"::text AS "role",COALESCE(p."displayName",split_part(u."email",'@',1)) AS "displayName"
     FROM "User" u LEFT JOIN "InternalChatProfile" p ON p."userId"=u."id"
-    WHERE u."businessId"=${access.businessId} ORDER BY COALESCE(p."displayName",u."email") ASC
+    LEFT JOIN "UserAccessStatus" s ON s."userId"=u."id"
+    WHERE u."businessId"=${access.businessId} AND s."disabledAt" IS NULL ORDER BY COALESCE(p."displayName",u."email") ASC
   `
   const messages = await prisma.$queryRaw<Array<{ id:string; senderId:string; senderEmail:string; senderName:string; recipientId:string|null; recipientEmail:string|null; recipientName:string|null; text:string; createdAt:Date; isUnread:boolean }>>`
     SELECT q.*, (r."readAt" IS NULL AND r."userId" IS NOT NULL) AS "isUnread" FROM (
