@@ -20,8 +20,8 @@ android {
         // Android 15 limits dataSync foreground services to six hours for target 35+.
         // This sideloaded gateway needs to stay available for appointment reminders.
         targetSdk 34
-        versionCode 2
-        versionName '1.0.1'
+        versionCode 3
+        versionName '1.0.2'
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

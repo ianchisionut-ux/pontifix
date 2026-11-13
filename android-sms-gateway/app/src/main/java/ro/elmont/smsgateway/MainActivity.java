@@ -7,6 +7,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.net.Uri;
+import android.provider.Settings;
 import android.text.InputType;
 import android.view.View;
 import android.widget.Button;
@@ -61,6 +63,14 @@ public class MainActivity extends Activity {
         permission.setText("Acordă permisiunea pentru SMS");
         permission.setOnClickListener(view -> requestSmsPermission());
         layout.addView(permission);
+
+        Button permissionSettings = new Button(this);
+        permissionSettings.setText("Deschide setările permisiunilor");
+        permissionSettings.setOnClickListener(view -> {
+            Intent settings = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()));
+            startActivity(settings);
+        });
+        layout.addView(permissionSettings);
 
         Button start = new Button(this);
         start.setText("Pornește trimiterea SMS");
@@ -119,7 +129,7 @@ public class MainActivity extends Activity {
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
             status.setText(requestCode == 101 ? "Permisiunea SMS a fost acordată. Salvează codul și apasă «Pornește trimiterea SMS»." : "Notificările sunt permise. Apasă «Pornește trimiterea SMS».");
         }
-        else if (requestCode == 101) status.setText("Permisiunea SEND_SMS este necesară pentru a trimite prin SIM.");
+        else if (requestCode == 101) status.setText("Permisiunea SMS nu este activă. Apasă din nou «Acordă permisiunea» sau deschide setările aplicației și activează SMS.");
         else status.setText("Activează notificările pentru serviciul SMS.");
     }
 
