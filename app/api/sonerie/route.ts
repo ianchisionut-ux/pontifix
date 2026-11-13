@@ -22,9 +22,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ call: callView(previous), repeated: true })
   }
   const id = crypto.randomUUID()
-  await prisma.$executeRaw`INSERT INTO "SonerieCall" ("id", "expiresAt") VALUES (${id}, ${new Date(Date.now() + 3 * 60_000)})`
+  const expiresAt = new Date(Date.now() + 3 * 60_000)
+  await prisma.$executeRaw`INSERT INTO "SonerieCall" ("id", "expiresAt") VALUES (${id}, ${expiresAt})`
   // PWA-ul deschis interoghează periodic; Web Push trezește telefonul când este închis.
-  await notifyIonut(id).catch(() => undefined)
+  const push = await notifyIonut(id, expiresAt).catch((error) => {
+    console.warn('sonerie_push_failed', { callId: id, reason: error instanceof Error ? error.name : 'unknown' })
+    return { status: 'failed', queued: false }
+  })
+  await prisma.$executeRaw`UPDATE "SonerieCall" SET "pushStatus"=${push.status}, "pushQueuedAt"=${push.queued ? new Date() : null} WHERE "id"=${id}`
+    .catch((error) => console.warn('sonerie_push_status_failed', { callId: id, reason: error instanceof Error ? error.name : 'unknown' }))
   return NextResponse.json({ call: callView(await latestCall()) }, { status: 201, headers: { 'Cache-Control': 'no-store' } })
 }
 

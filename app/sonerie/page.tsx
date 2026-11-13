@@ -5,7 +5,7 @@ import { BellRing, Check, CheckCheck, Download, Volume2, X } from 'lucide-react'
 import styles from './sonerie.module.css'
 
 type Role = 'director' | 'ionut'
-type Call = { id: string; createdAt: string; acknowledgedAt: string | null; response: 'accepted' | 'unavailable' | null; active: boolean } | null
+type Call = { id: string; createdAt: string; acknowledgedAt: string | null; response: 'accepted' | 'unavailable' | null; active: boolean; pushStatus: string | null; pushQueuedAt: string | null; pushReceivedAt: string | null } | null
 type InstallPrompt = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
 
 function decodeVapid(value: string) {
@@ -215,6 +215,14 @@ export default function SoneriePage() {
   const unavailable = call?.response === 'unavailable'
   const accepted = call?.response === 'accepted'
   const lastCallExpired = Boolean(call && !active && !call.acknowledgedAt)
+  const pushDelaySeconds = call?.pushReceivedAt ? Math.max(0, Math.round((new Date(call.pushReceivedAt).getTime() - new Date(call.createdAt).getTime()) / 1000)) : null
+  const pushWaitingSeconds = call ? Math.max(0, Math.round((Date.now() - new Date(call.createdAt).getTime()) / 1000)) : 0
+  const pushMessage = pushDelaySeconds !== null ? `Telefonul lui Ionuț a preluat semnalul după ${pushDelaySeconds} secunde.`
+    : call?.pushStatus === 'queued' || call?.pushStatus === 'partial'
+      ? pushWaitingSeconds >= 15 ? 'Telefonul nu a confirmat încă semnalul. Pentru o chemare urgentă, contactează-l direct.' : 'Semnalul push a fost acceptat pentru livrare. Aștept confirmarea telefonului.'
+      : call?.pushStatus === 'no-subscription' ? 'Telefonul lui Ionuț nu este abonat la notificări push. Chemarea apare doar cu aplicația deschisă.'
+        : call?.pushStatus === 'failed' ? 'Trimiterea notificării push a eșuat. Chemarea apare doar cu aplicația deschisă.'
+          : 'Nu am încă confirmarea trimiterii push.'
   return <main onPointerDown={unlockSound} className={`${styles.page} ${role === 'ionut' && active ? styles.alertPage : ''}`}>
     <div className={styles.shell}>
       <header className={styles.header}><span className={styles.brandIcon}><BellRing size={27}/></span><span className={styles.brandText}><strong>Sonerie</strong><small>Elmont · chemare la birou</small></span><span className={styles.headerDot}/></header>
@@ -232,6 +240,7 @@ export default function SoneriePage() {
           <span className={styles.statusIcon}>{active ? <span className={styles.statusPulse}/> : unavailable ? <X size={22}/> : accepted ? <CheckCheck size={23}/> : <Check size={22}/>}</span>
           <span>{active ? 'Chemare trimisă · aștept răspunsul' : unavailable ? 'Ionuț a răspuns: nu este disponibil' : accepted ? 'Ionuț a confirmat: vine la birou' : lastCallExpired ? 'Chemarea a expirat fără răspuns' : 'Gata pentru o chemare nouă'}</span>
         </div>
+        {call && <p className={styles.muted}>{pushMessage}</p>}
       </section> : <section className={`${styles.card} ${active ? styles.ringing : ''}`}>
         <span className={styles.eyebrow}>PENTRU IONUȚ</span>
         <div className={styles.availabilityControl}><span><strong>{available ? 'Sunt disponibil' : 'Nu sunt disponibil'}</strong><small>{available ? 'Directorul te poate chema' : 'Directorul vede că nu ești disponibil'}</small></span><button type="button" role="switch" aria-checked={available} aria-label="Sunt disponibil" disabled={availabilityBusy} onClick={() => setAvailability(!available)} className={`${styles.switch} ${available ? styles.switchOn : ''}`}><span/></button></div>

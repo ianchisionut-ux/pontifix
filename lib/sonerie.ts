@@ -59,6 +59,9 @@ export function ensureSonerieStorage() {
         "expiresAt" TIMESTAMP(3) NOT NULL, "acknowledgedAt" TIMESTAMP(3), "response" TEXT
       )`)
       await prisma.$executeRawUnsafe(`ALTER TABLE "SonerieCall" ADD COLUMN IF NOT EXISTS "response" TEXT`)
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SonerieCall" ADD COLUMN IF NOT EXISTS "pushStatus" TEXT`)
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SonerieCall" ADD COLUMN IF NOT EXISTS "pushQueuedAt" TIMESTAMP(3)`)
+      await prisma.$executeRawUnsafe(`ALTER TABLE "SonerieCall" ADD COLUMN IF NOT EXISTS "pushReceivedAt" TIMESTAMP(3)`)
       await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SonerieCall_created_idx" ON "SonerieCall" ("createdAt" DESC)`)
       await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SoneriePushSubscription" (
         "endpoint" TEXT PRIMARY KEY, "recipient" TEXT NOT NULL,
@@ -74,7 +77,7 @@ export function ensureSonerieStorage() {
   return storageReady
 }
 
-export type SonerieCall = { id: string; createdAt: Date; expiresAt: Date; acknowledgedAt: Date | null; response: string | null }
+export type SonerieCall = { id: string; createdAt: Date; expiresAt: Date; acknowledgedAt: Date | null; response: string | null; pushStatus: string | null; pushQueuedAt: Date | null; pushReceivedAt: Date | null }
 
 export async function getIonutAvailability() {
   await ensureSonerieStorage()
@@ -85,7 +88,7 @@ export async function getIonutAvailability() {
 export async function latestCall() {
   await ensureSonerieStorage()
   const rows = await prisma.$queryRaw<SonerieCall[]>`
-    SELECT "id", "createdAt", "expiresAt", "acknowledgedAt", "response" FROM "SonerieCall"
+    SELECT "id", "createdAt", "expiresAt", "acknowledgedAt", "response", "pushStatus", "pushQueuedAt", "pushReceivedAt" FROM "SonerieCall"
     WHERE "createdAt" > CURRENT_TIMESTAMP - INTERVAL '1 day'
     ORDER BY "createdAt" DESC LIMIT 1`
   return rows[0] || null
@@ -99,5 +102,8 @@ export function callView(call: SonerieCall | null) {
     acknowledgedAt: call.acknowledgedAt?.toISOString() || null,
     response: call.response === 'unavailable' ? 'unavailable' : call.acknowledgedAt ? 'accepted' : null,
     active: !call.acknowledgedAt && call.expiresAt.getTime() > Date.now(),
+    pushStatus: call.pushStatus,
+    pushQueuedAt: call.pushQueuedAt?.toISOString() || null,
+    pushReceivedAt: call.pushReceivedAt?.toISOString() || null,
   }
 }
