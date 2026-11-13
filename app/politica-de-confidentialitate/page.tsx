@@ -10,10 +10,11 @@ export default function PrivacyPage() {
   return <LegalPage
     title="Politica de confidențialitate"
     description="Această politică explică ce date sunt prelucrate prin Elmont, de ce sunt necesare și ce drepturi au persoanele vizate."
-    updatedAt="28 octombrie 2026"
+    updatedAt="13 noiembrie 2026"
     sections={[
-      { title: 'Cine prelucrează datele', content: <>
-        <p>Elmont S.A. administrează utilizarea Elmont și stabilește scopurile prelucrării datelor introduse în platformă. Pentru întrebări privind confidențialitatea ne puteți contacta la <a className="font-semibold text-blue-600 hover:underline" href="mailto:elmont_zalau@yahoo.com">elmont_zalau@yahoo.com</a>.</p>
+      { title: 'Operatorul datelor și date de contact', content: <>
+        <p>Operatorul datelor este ELMONT S.A., societate pe acțiuni cu sediul în Str. 22 Decembrie 1989 nr. 113, 450031 Zalău, județul Sălaj, România. Societatea are CUI 9710508 și numărul de înmatriculare la Registrul Comerțului J1997000155315.</p>
+        <p>ELMONT S.A. stabilește scopurile prelucrării datelor introduse în platformă. Pentru întrebări privind confidențialitatea sau pentru exercitarea drepturilor privind datele personale, ne puteți scrie la <a className="font-semibold text-blue-600 hover:underline" href="mailto:elmont_zalau@yahoo.com">elmont_zalau@yahoo.com</a>, suna la <a className="font-semibold text-blue-600 hover:underline" href="tel:+40260611192">0260 611 192</a> sau trimite o cerere la adresa sediului de mai sus.</p>
       </> },
       { title: 'Datele prelucrate', content: <>
         <p>În funcție de funcțiile utilizate, putem prelucra: nume și prenume, adresă de email, număr de telefon, funcție, departament, categorie profesională, program de lucru, pontaje, absențe și concedii.</p>

@@ -10,10 +10,10 @@ export default function TermsPage() {
   return <LegalPage
     title="Termeni și condiții"
     description="Acești termeni reglementează accesul și utilizarea platformei Elmont, aplicație pentru pontaj, administrarea angajaților și gestiunea proiectelor."
-    updatedAt="13 august 2026"
+    updatedAt="13 noiembrie 2026"
     sections={[
       { title: 'Operatorul și acceptarea termenilor', content: <>
-        <p>Elmont este platforma utilizată de Elmont S.A. pentru organizarea activităților interne. Prin accesarea sau utilizarea platformei confirmați că ați citit și acceptați acești termeni.</p>
+        <p>Elmont este platforma utilizată de ELMONT S.A., cu sediul în Str. 22 Decembrie 1989 nr. 113, 450031 Zalău, județul Sălaj, CUI 9710508, înmatriculată la Registrul Comerțului sub nr. J1997000155315. Prin accesarea sau utilizarea platformei confirmați că ați citit și acceptați acești termeni.</p>
         <p>Dacă utilizați Elmont în numele unei organizații, confirmați că aveți dreptul de a folosi contul și funcțiile puse la dispoziție de aceasta.</p>
       </> },
       { title: 'Scopul platformei', content: <>
@@ -47,7 +47,7 @@ export default function TermsPage() {
         <p>Termenii pot fi actualizați pentru a reflecta schimbări ale platformei sau ale cerințelor legale. Versiunea aplicabilă și data actualizării sunt publicate pe această pagină.</p>
       </> },
       { title: 'Contact', content: <>
-        <p>Pentru întrebări privind acești termeni sau utilizarea Elmont ne puteți contacta la <a className="font-semibold text-blue-600 hover:underline" href="mailto:elmont_zalau@yahoo.com">elmont_zalau@yahoo.com</a>.</p>
+        <p>Pentru întrebări privind acești termeni sau utilizarea Elmont ne puteți contacta la <a className="font-semibold text-blue-600 hover:underline" href="mailto:elmont_zalau@yahoo.com">elmont_zalau@yahoo.com</a>, la <a className="font-semibold text-blue-600 hover:underline" href="tel:+40260611192">0260 611 192</a> sau la adresa sediului indicată mai sus.</p>
       </> },
     ]}
   />

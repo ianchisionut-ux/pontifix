@@ -144,7 +144,7 @@ async function ensureSchema(pool: Pool) {
 
   await pool.query(
     `INSERT INTO company (id, name, "regCom", cif, address, phone, email)
-     VALUES (1, 'ELMONT S.A.', '', '9710508', 'Str. 22 Decembrie 1989, Nr. 113', '0260-611133', 'elmont_zalau@yahoo.com')
+     VALUES (1, 'ELMONT S.A.', 'J1997000155315', '9710508', 'Str. 22 Decembrie 1989 nr. 113, 450031 Zalău, Sălaj', '0260 611 192', 'elmont_zalau@yahoo.com')
      ON CONFLICT (id) DO NOTHING;`
   );
 
