@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { getConnectionAccess } from '@/lib/connection-access'
 import { connectionFieldsSchema } from '@/lib/connection-fields'
 import { ensureConnectionStorage } from '@/lib/ensure-connection-storage'
-import { getSmsGatewayConfig, normalizeRomanianMobile, queueSms } from '@/lib/sms-gateway'
+import { getSmsGatewayConfig, normalizeRomanianMobile } from '@/lib/sms-gateway'
 import { prisma } from '@/lib/prisma'
 
 const schema = z.object({ message: z.string().trim().min(1).max(1200) })
@@ -15,7 +15,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const parsed = schema.safeParse(await request.json().catch(() => ({})))
   if (!parsed.success) return NextResponse.json({ error: 'Mesajul SMS trebuie să aibă între 1 și 1200 de caractere.' }, { status: 400 })
   const config = await getSmsGatewayConfig(access.businessId)
-  if (!config?.enabled || !config.deviceId) return NextResponse.json({ error: 'Gateway-ul SMS nu este activ. Configurează telefonul pe sms.elmont.ro.' }, { status: 409 })
+  if (!config?.enabled) return NextResponse.json({ error: 'Telefonul SMS nu este asociat. Configurează-l pe sms.elmont.ro.' }, { status: 409 })
+  if (!config.lastSeenAt || Date.now() - new Date(config.lastSeenAt).getTime() > 90_000) return NextResponse.json({ error: 'Telefonul SMS este offline. Pornește aplicația Elmont SMS și verifică internetul.' }, { status: 409 })
   await ensureConnectionStorage()
   const { id } = await params
   const rows = await prisma.$queryRaw<Array<{ nib: string; fields: unknown }>>`
@@ -27,22 +28,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   if (!recipient) return NextResponse.json({ error: 'Numărul beneficiarului trebuie să fie un număr mobil românesc valid.' }, { status: 400 })
   const smsId = crypto.randomUUID()
   await prisma.$executeRaw`
-    INSERT INTO "SmsOutbound" ("id", "businessId", "connectionId", "nib", "beneficiary", "recipient", "message", "state", "createdByEmail")
-    VALUES (${smsId}, ${access.businessId}, ${id}, ${rows[0].nib}, ${fields.Beneficiar}, ${recipient}, ${parsed.data.message}, 'Submitting', ${(access.session as any)?.user?.email || null})
+    INSERT INTO "SmsOutbound" ("id", "businessId", "connectionId", "nib", "beneficiary", "recipient", "message", "state", "transport", "createdByEmail")
+    VALUES (${smsId}, ${access.businessId}, ${id}, ${rows[0].nib}, ${fields.Beneficiar}, ${recipient}, ${parsed.data.message}, 'Pending', 'native', ${(access.session as any)?.user?.email || null})
   `
-  try {
-    const queued = await queueSms(config, smsId, recipient, parsed.data.message)
-    try {
-      await prisma.$executeRaw`UPDATE "SmsOutbound" SET "gatewayId"=${queued.id}, "state"=${queued.state}, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${smsId}`
-    } catch (error) {
-      console.error('SMS accepted by gateway but local status update failed', { smsId, error })
-    }
-    return NextResponse.json({ queued: true, id: smsId, state: queued.state })
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : 'Gateway-ul nu a răspuns.'
-    const uncertain = !detail.startsWith('Gateway SMS:')
-    const state = uncertain ? 'Unknown' : 'Failed'
-    await prisma.$executeRaw`UPDATE "SmsOutbound" SET "state"=${state}, "error"=${detail.slice(0, 400)}, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${smsId}`
-    return NextResponse.json({ error: uncertain ? 'Starea trimiterii este necunoscută. Verifică istoricul gateway-ului înainte de a reîncerca.' : detail }, { status: 502 })
-  }
+  return NextResponse.json({ queued: true, id: smsId, state: 'Pending' })
 }

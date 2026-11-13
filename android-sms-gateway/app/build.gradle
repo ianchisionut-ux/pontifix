@@ -1,0 +1,36 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'ro.elmont.smsgateway'
+    compileSdk 35
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv('ELMONT_SMS_KEYSTORE')
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword System.getenv('ELMONT_SMS_KEY_PASSWORD')
+                keyAlias 'elmont-sms'
+                keyPassword System.getenv('ELMONT_SMS_KEY_PASSWORD')
+            }
+        }
+    }
+    defaultConfig {
+        applicationId 'ro.elmont.smsgateway'
+        minSdk 26
+        // Android 15 limits dataSync foreground services to six hours for target 35+.
+        // This sideloaded gateway needs to stay available for appointment reminders.
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
+    }
+}

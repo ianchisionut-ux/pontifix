@@ -1,31 +1,24 @@
+import crypto from 'node:crypto'
 import { prisma } from '@/lib/prisma'
-import { decrypt } from '@/lib/crypto'
 
 export const SMS_SENDER_NUMBER = '+40727700062'
-const SMS_API = 'https://api.sms-gate.app/3rdparty/v1'
 
 export type SmsGatewayConfig = {
   businessId: string
-  username: string
-  password: string
-  deviceId: string
-  simNumber: number
+  tokenHash: string
   enabled: boolean
+  lastSeenAt: Date | null
 }
-
-export type SmsDevice = { id: string; name?: string; lastSeen?: string; state?: string }
 
 let storageReady: Promise<void> | null = null
 
 export function ensureSmsStorage() {
   if (!storageReady) storageReady = (async () => {
-    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SmsGatewayConfig" (
+    await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SmsNativeDevice" (
       "businessId" TEXT PRIMARY KEY,
-      "username" TEXT NOT NULL,
-      "password" TEXT NOT NULL,
-      "deviceId" TEXT NOT NULL DEFAULT '',
-      "simNumber" INTEGER NOT NULL DEFAULT 1,
-      "enabled" BOOLEAN NOT NULL DEFAULT false,
+      "tokenHash" TEXT NOT NULL,
+      "enabled" BOOLEAN NOT NULL DEFAULT true,
+      "lastSeenAt" TIMESTAMP(3),
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`)
     await prisma.$executeRawUnsafe(`CREATE TABLE IF NOT EXISTS "SmsOutbound" (
@@ -43,6 +36,7 @@ export function ensureSmsStorage() {
       "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     )`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "SmsOutbound" ADD COLUMN IF NOT EXISTS "transport" TEXT NOT NULL DEFAULT 'cloud'`)
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "SmsOutbound_businessId_createdAt_idx" ON "SmsOutbound" ("businessId", "createdAt" DESC)`)
   })().catch((error) => { storageReady = null; throw error })
   return storageReady
@@ -51,8 +45,8 @@ export function ensureSmsStorage() {
 export async function getSmsGatewayConfig(businessId: string) {
   await ensureSmsStorage()
   const rows = await prisma.$queryRaw<SmsGatewayConfig[]>`
-    SELECT "businessId", "username", "password", "deviceId", "simNumber", "enabled"
-    FROM "SmsGatewayConfig" WHERE "businessId"=${businessId} LIMIT 1
+    SELECT "businessId", "tokenHash", "enabled", "lastSeenAt"
+    FROM "SmsNativeDevice" WHERE "businessId"=${businessId} LIMIT 1
   `
   return rows[0] || null
 }
@@ -63,47 +57,19 @@ export function normalizeRomanianMobile(value: string) {
   return /^\+407\d{8}$/.test(international) ? international : null
 }
 
-async function gatewayRequest(config: Pick<SmsGatewayConfig, 'username' | 'password'>, path: string, init?: RequestInit) {
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 15000)
-  try {
-    const response = await fetch(`${SMS_API}${path}`, {
-      ...init,
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${config.username}:${decrypt(config.password)}`).toString('base64')}`,
-        Accept: 'application/json',
-        ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
-      },
-      signal: controller.signal,
-      cache: 'no-store',
-    })
-    const body = await response.json().catch(() => ({}))
-    if (!response.ok) throw new Error(`Gateway SMS: ${response.status}${body?.message ? ` · ${String(body.message).slice(0, 160)}` : ''}`)
-    return body
-  } finally { clearTimeout(timer) }
+export function createSmsDeviceToken(businessId: string) {
+  const token = `${businessId}.${crypto.randomBytes(32).toString('base64url')}`
+  return { token, hash: crypto.createHash('sha256').update(token).digest('hex') }
 }
 
-export async function listSmsDevices(config: Pick<SmsGatewayConfig, 'username' | 'password'>): Promise<SmsDevice[]> {
-  const body = await gatewayRequest(config, '/devices')
-  return Array.isArray(body) ? body.filter((device) => typeof device?.id === 'string').map((device) => ({
-    id: device.id,
-    name: typeof device.name === 'string' ? device.name : undefined,
-    lastSeen: typeof device.lastSeen === 'string' ? device.lastSeen : undefined,
-    state: typeof device.state === 'string' ? device.state : undefined,
-  })) : []
-}
-
-export async function queueSms(config: SmsGatewayConfig, id: string, recipient: string, message: string): Promise<{ id: string; state: string }> {
-  const body = await gatewayRequest(config, '/messages', {
-    method: 'POST',
-    body: JSON.stringify({ id, deviceId: config.deviceId, simNumber: config.simNumber, phoneNumbers: [recipient], textMessage: { text: message }, ttl: 3600 }),
-  })
-  if (typeof body?.id !== 'string') throw new Error('Gateway-ul nu a returnat un ID de mesaj. Verifică istoricul înainte de a reîncerca.')
-  return { id: body.id, state: typeof body.state === 'string' ? body.state : 'Pending' }
-}
-
-export async function getSmsState(config: SmsGatewayConfig, gatewayId: string): Promise<string> {
-  const body = await gatewayRequest(config, `/messages/${encodeURIComponent(gatewayId)}`)
-  if (typeof body?.state !== 'string') throw new Error('Starea SMS nu este disponibilă.')
-  return body.state
+export async function authenticateSmsDevice(authorization: string | null) {
+  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
+  const dot = token.indexOf('.')
+  if (dot < 1 || token.length > 200) return null
+  const businessId = token.slice(0, dot)
+  const config = await getSmsGatewayConfig(businessId)
+  if (!config?.enabled || !/^[0-9a-f]{64}$/.test(config.tokenHash)) return null
+  const candidate = crypto.createHash('sha256').update(token).digest()
+  const expected = Buffer.from(config.tokenHash, 'hex')
+  return crypto.timingSafeEqual(candidate, expected) ? config : null
 }

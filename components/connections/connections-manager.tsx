@@ -332,7 +332,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       const response = await fetch(`/api/bransamente/${item.id}/send-sms`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: messageText }) })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'SMS-ul nu a putut fi pus în coadă.')
-      setNotice('SMS-ul a fost pus în coadă. Verifică starea Trimis sau Livrat pe sms.elmont.ro.')
+      setNotice('SMS-ul a fost pus în coadă. Verifică starea Trimis pe sms.elmont.ro.')
       setWhatsAppOpen(false)
     } catch (error) {
       alert(error instanceof Error ? error.message : 'SMS-ul nu a putut fi trimis.')

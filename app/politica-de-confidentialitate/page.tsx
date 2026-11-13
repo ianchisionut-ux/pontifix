@@ -29,7 +29,7 @@ export default function PrivacyPage() {
         <p>Prelucrarea poate avea la bază executarea contractului sau a raportului de muncă, îndeplinirea obligațiilor legale ale angajatorului, interesul legitim privind organizarea și securitatea activității și, când este necesar, consimțământul persoanei vizate.</p>
       </> },
       { title: 'Destinatari și furnizori', content: <>
-        <p>Datele sunt accesibile numai utilizatorilor autorizați, conform rolurilor atribuite. Pentru funcționarea platformei putem utiliza furnizori de infrastructură și servicii precum Vercel pentru găzduire și stocare, Neon pentru baza de date, furnizori de email și Meta Platforms pentru WhatsApp Business Platform. Dacă este activat gateway-ul SMS, numărul destinatarului și textul mesajului sunt transmise serviciului cloud SMS Gateway for Android, care le direcționează către telefonul Elmont pentru expediere prin SIM.</p>
+        <p>Datele sunt accesibile numai utilizatorilor autorizați, conform rolurilor atribuite. Pentru funcționarea platformei putem utiliza furnizori de infrastructură și servicii precum Vercel pentru găzduire și stocare, Neon pentru baza de date, furnizori de email și Meta Platforms pentru WhatsApp Business Platform. Dacă este activat gateway-ul SMS, numărul destinatarului și textul mesajului sunt preluate direct de aplicația Elmont SMS de pe telefonul firmei, prin serverul Elmont, pentru expediere prin SIM.</p>
         <p>Acești furnizori prelucrează date numai în măsura necesară serviciilor oferite și potrivit propriilor obligații contractuale și legale.</p>
       </> },
       { title: 'Transferuri internaționale', content: <>
