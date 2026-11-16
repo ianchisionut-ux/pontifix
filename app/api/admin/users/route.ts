@@ -27,7 +27,7 @@ export async function GET() {
     WHERE u."businessId" = ${admin.businessId}
     ORDER BY s."disabledAt" NULLS FIRST, u."email" ASC
   `
-  return NextResponse.json({ users: users.map((user) => ({ ...user, disabledAt: user.disabledAt?.toISOString() ?? null })), currentUserId: admin.userId })
+  return NextResponse.json({ users: users.map((user) => ({ ...user, disabledAt: user.disabledAt?.toISOString() ?? null })), currentUserId: admin.userId, currentUserEmail: admin.email })
 }
 
 export async function POST(request: NextRequest) {

@@ -17,10 +17,11 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function LoginLayout({ children }: { children: React.ReactNode }) {
+  const host = (await headers()).get('host')?.split(':')[0]
   const session = await auth()
   if (session) {
-    const host = (await headers()).get('host')?.split(':')[0]
     redirect(host === 'chat.elmont.ro' ? '/chat' : host === 'sms.elmont.ro' ? '/sms' : '/dashboard')
   }
+  if (host === 'chat.elmont.ro') redirect('/chat/login')
   return children
 }

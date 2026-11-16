@@ -8,6 +8,6 @@ export const dynamic = 'force-dynamic'
 
 export default async function ChatPage() {
   const initialData = await loadInternalChatPageData()
-  if (!initialData) redirect('/login')
+  if (!initialData) redirect('/chat/login')
   return <main className="flex h-dvh min-h-0 flex-col overflow-hidden bg-[#f3f8fc]"><ChatAppToolbar/><div className="min-h-0 flex-1"><InternalChatManager initialData={initialData} embedded/></div><InternalChatNotifier/></main>
 }

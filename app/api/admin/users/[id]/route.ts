@@ -9,6 +9,7 @@ import { requireUserAdministrator } from '@/lib/user-administration'
 const updateSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('edit'), email: z.string().trim().email().max(254), displayName: z.string().trim().min(2).max(60), role: z.enum(['STAFF', 'OWNER', 'SUPER_ADMIN']) }),
   z.object({ action: z.literal('resetPassword') }),
+  z.object({ action: z.literal('setPassword'), password: z.string().min(8).max(128) }),
   z.object({ action: z.literal('restore') }),
 ])
 
@@ -24,6 +25,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!user) return NextResponse.json({ error: 'Contul nu există.' }, { status: 404 })
   const parsed = updateSchema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ error: 'Datele contului nu sunt valide.' }, { status: 400 })
+  if (parsed.data.action === 'setPassword') {
+    if (admin.email.toLowerCase() !== 'ianchisionut@gmail.com') return NextResponse.json({ error: 'Doar superadminul principal poate alege parolele administratorilor.' }, { status: 403 })
+    if (user.role !== 'OWNER' && user.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Poți seta aici parola doar pentru administratori.' }, { status: 400 })
+    if (id === admin.userId || user.email === 'ianchisionut@gmail.com') return NextResponse.json({ error: 'Folosește schimbarea parolei proprii pentru contul de superadmin.' }, { status: 400 })
+    await prisma.$transaction([
+      prisma.user.update({ where: { id }, data: { password: await bcrypt.hash(parsed.data.password, 12) } }),
+      prisma.passwordResetToken.deleteMany({ where: { userId: id } }),
+    ])
+    return NextResponse.json({ success: true })
+  }
   if (parsed.data.action === 'resetPassword') {
     const password = randomBytes(18).toString('base64url')
     await prisma.user.update({ where: { id }, data: { password: await bcrypt.hash(password, 12) } })

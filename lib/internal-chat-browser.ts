@@ -12,7 +12,7 @@ export function playInternalChatSound() {
 export async function registerInternalChatWorker(){
   if(!('serviceWorker'in navigator))return null
   const worker=window.location.hostname==='chat.elmont.ro'?'/chat-sw.js':'/internal-chat-sw.js'
-  return navigator.serviceWorker.register(worker,{scope:'/'})
+  return navigator.serviceWorker.register(worker,{scope:window.location.hostname==='chat.elmont.ro'?'/chat':'/'})
 }
 
 export async function showInternalChatNotification(title:string,body:string,tag:string){
