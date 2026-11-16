@@ -3,8 +3,6 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { getClientIp, rateLimit } from '@/lib/rate-limit'
-import { getEmailTransport } from '@/lib/email-settings'
-import { quoteNotificationEmail } from '@/lib/quote-notification-email'
 
 const atrOcrSchema = z.object({
   customerName: z.string().trim().max(160), customerPhone: z.string().trim().max(40),
@@ -40,17 +38,5 @@ export async function POST(request: NextRequest) {
     VALUES (${id}, ${data.name}, ${data.email.toLowerCase()}, ${data.phone}, ${data.serviceType}, ${data.location || null}, ${data.message || null}, ${data.atrPathname || null}, ${data.atrName || null}, ${elmontBusiness?.id || null}, CAST(${atrOcrJson} AS JSONB))
   `
 
-  const emailTransport = await getEmailTransport(elmontBusiness?.id)
-  if (emailTransport?.notificationEmail) {
-    const notification = quoteNotificationEmail({ id, ...data })
-    emailTransport.transporter.sendMail({
-      from: emailTransport.from,
-      to: emailTransport.notificationEmail,
-      replyTo: data.email || undefined,
-      subject: `[ELMONT] Cerere nouă — ${data.serviceType} — ${data.name}`,
-      html: notification.html,
-      text: notification.text,
-    }).catch((error) => console.error('Yahoo notification failed:', error))
-  }
   return NextResponse.json({ success: true, id }, { status: 201 })
 }

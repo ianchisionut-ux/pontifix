@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { extractDeerDossierNumber } from '@/lib/deer-submission'
 import { ensureConnectionStorage } from '@/lib/ensure-connection-storage'
-import type { DeerDocumentKind } from '@/lib/deer-borderou-shared'
+import { DATR_EMAIL_FILENAME_PATTERN, type DeerDocumentKind } from '@/lib/deer-borderou-shared'
 
 export type DeerBorderou = {
   id: string
@@ -89,7 +89,9 @@ export async function listDeerBorderouri(businessId: string) {
   await ensureDeerBorderouStorage()
   return prisma.$queryRaw<DeerBorderou[]>`
     SELECT "id", "connectionId", "documentKind", "documentPathname", "documentName", "source", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt", "notificationStatus"
-    FROM "DeerBorderou" WHERE "businessId"=${businessId} ORDER BY "receivedAt" DESC, "createdAt" DESC
+    FROM "DeerBorderou" WHERE "businessId"=${businessId}
+      AND ("source"<>'EMAIL' OR "documentName" !~* ${DATR_EMAIL_FILENAME_PATTERN})
+    ORDER BY "receivedAt" DESC, "createdAt" DESC
   `
 }
 

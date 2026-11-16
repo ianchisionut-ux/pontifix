@@ -5,6 +5,7 @@ import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { ensureMessageStorage } from '@/lib/ensure-message-storage'
 import { ensureInternalChatStorage } from '@/lib/ensure-internal-chat-storage'
 import { ensureDeerBorderouStorage } from '@/lib/deer-borderou'
+import { DATR_EMAIL_FILENAME_PATTERN } from '@/lib/deer-borderou-shared'
 
 export const dynamic = 'force-dynamic'
 
@@ -21,7 +22,8 @@ export async function GET() {
         (SELECT COUNT(*) FROM "CustomerMessage" WHERE "status"='NEW' AND ("businessId"=${businessId} OR "businessId" IS NULL))::bigint AS "messages",
         (SELECT COUNT(*) FROM "InternalChatReceipt" r JOIN "InternalChatMessage" m ON m."id"=r."messageId"
           WHERE r."userId"=${userId} AND r."readAt" IS NULL AND m."businessId"=${businessId})::bigint AS "internal",
-        (SELECT COUNT(*) FROM "DeerBorderou" WHERE "businessId"=${businessId} AND "source"='EMAIL' AND "notificationStatus"<>'READ')::bigint AS "deer"
+        (SELECT COUNT(*) FROM "DeerBorderou" WHERE "businessId"=${businessId} AND "source"='EMAIL' AND "notificationStatus"<>'READ'
+          AND "documentName" !~* ${DATR_EMAIL_FILENAME_PATTERN})::bigint AS "deer"
     `
   }
 

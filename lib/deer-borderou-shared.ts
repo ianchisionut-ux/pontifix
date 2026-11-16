@@ -1,5 +1,10 @@
 export const DEER_DOCUMENT_KINDS = ['BORDEROU', 'PV_PREDARE_PRIMIRE', 'INSTIINTARE_BMP'] as const
 export type DeerDocumentKind = typeof DEER_DOCUMENT_KINDS[number] | 'OTHER'
+// DATR files are technical connection notices, not incoming documents for the DEER forms inbox.
+export const DATR_EMAIL_FILENAME_PATTERN = '(^|[^[:alnum:]])DATR([[:digit:]]+|[^[:alnum:]]|$)'
+export function isDatrEmailAttachment(name: string) {
+  return /(^|[^a-z0-9])datr(\d+|[^a-z0-9]|$)/i.test(name)
+}
 export const DEER_DOCUMENT_LABELS: Record<DeerDocumentKind, string> = {
   BORDEROU: 'Borderou DEER',
   PV_PREDARE_PRIMIRE: 'PV predare-primire',

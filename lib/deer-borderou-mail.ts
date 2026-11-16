@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/crypto'
 import { getStoredEmailSettings } from '@/lib/email-settings'
 import { emailAttachmentKey, ensureDeerBorderouStorage, extractDeerEmailIdentity, findDeerCase, saveDeerBorderou } from '@/lib/deer-borderou'
-import { deerDocumentKindFromName } from '@/lib/deer-borderou-shared'
+import { deerDocumentKindFromName, isDatrEmailAttachment } from '@/lib/deer-borderou-shared'
 
 const DEER_SENDERS = [
   'noreply_energieelectrica_mn@distributie-energie.ro',
@@ -46,7 +46,7 @@ export async function syncDeerBorderouri(businessId: string) {
       const connectionId = await findDeerCase(businessId, dossierNumber, beneficiary)
       for (const attachment of mail.attachments) {
         const filename = attachment.filename || ''
-        if (!/\.pdf$/i.test(filename)) continue
+        if (!/\.pdf$/i.test(filename) || isDatrEmailAttachment(filename)) continue
         const documentKind = deerDocumentKindFromName(filename) || 'OTHER'
         const content = attachment.content
         if (!content || content.length < 100 || content.length > MAX_PDF_BYTES || content.subarray(0, 5).toString() !== '%PDF-') continue
