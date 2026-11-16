@@ -15,6 +15,7 @@ export function UserAdministration() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState({ displayName: '', email: '', role: 'STAFF' as Role })
   const [passwords, setPasswords] = useState<Record<string, string>>({})
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({})
   const [passwordEditorId, setPasswordEditorId] = useState<string | null>(null)
   const [chosenPassword, setChosenPassword] = useState('')
   const [confirmedPassword, setConfirmedPassword] = useState('')
@@ -42,7 +43,11 @@ export function UserAdministration() {
       const response = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: data ? JSON.stringify(data) : undefined })
       const body = await response.json()
       if (!response.ok) throw new Error(body.error || 'Operația a eșuat.')
-      if (body.temporaryPassword) setPasswords((current) => ({ ...current, [body.user?.id || url.split('/').pop() || '']: body.temporaryPassword }))
+      if (body.temporaryPassword) {
+        const userId = body.user?.id || url.split('/').pop() || ''
+        setPasswords((current) => ({ ...current, [userId]: body.temporaryPassword }))
+        setVisiblePasswords((current) => ({ ...current, [userId]: false }))
+      }
       await reload()
       return true
     } catch (cause) {
@@ -64,11 +69,12 @@ export function UserAdministration() {
     event.preventDefault()
     if (chosenPassword !== confirmedPassword) return setError('Parolele introduse nu coincid.')
     if (await request(`/api/admin/users/${id}`, 'PATCH', { action: 'setPassword', password: chosenPassword })) {
-      setPasswords((current) => { const next = { ...current }; delete next[id]; return next })
+      setPasswords((current) => ({ ...current, [id]: chosenPassword }))
+      setVisiblePasswords((current) => ({ ...current, [id]: false }))
       setChosenPassword('')
       setConfirmedPassword('')
       setPasswordEditorId(null)
-      setNotice('Parola administratorului a fost schimbată.')
+      setNotice('Parola administratorului a fost schimbată. O poți vedea cu butonul „ochi” până închizi această pagină.')
     }
   }
 
@@ -94,7 +100,7 @@ export function UserAdministration() {
 
   return <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-6">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="text-xl font-bold text-[#082b4d]">Utilizatori și acces</h2><p className="mt-1 text-sm text-slate-600">Creează conturi, modifică roluri și setează parolele administratorilor. Parolele existente sunt criptate și nu pot fi afișate.</p></div>
+      <div><h2 className="text-xl font-bold text-[#082b4d]">Utilizatori și acces</h2><p className="mt-1 text-sm text-slate-600">Creează conturi, modifică roluri și setează parolele administratorilor. Parolele existente sunt stocate ca hash și nu pot fi recuperate.</p></div>
       <button type="button" onClick={downloadList} disabled={!users.length} className="btn-secondary">Descarcă utilizatori .txt</button>
     </div>
     {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}
@@ -105,7 +111,7 @@ export function UserAdministration() {
       <label className="text-sm font-semibold">Rol<select className="input-field mt-1 w-full" value={newUser.role} onChange={(event) => setNewUser({ ...newUser, role: event.target.value as Role })}>{Object.entries(roleLabel).map(([role, label]) => <option key={role} value={role}>{label}</option>)}</select></label>
       <button className="btn-primary min-h-[44px]" disabled={busy}>Adaugă utilizator</button>
     </form>
-    <p className="mt-3 text-xs text-slate-500">La creare și la resetare se generează o parolă nouă. Ea este afișată doar în această sesiune; descarcă fișierul înainte de a închide pagina.</p>
+    <p className="mt-3 text-xs text-slate-500">Parolele noi, alese sau generate, pot fi afișate cu „ochiul” doar în această sesiune. Descarcă fișierul înainte de a închide pagina dacă vrei să le păstrezi.</p>
     <div className="mt-4 space-y-3">{users.map((user) => <div key={user.id} className="rounded-xl border border-slate-200 p-4">
       {editingId === user.id ? <div className="grid gap-2 sm:grid-cols-[1fr_1.4fr_160px_auto] sm:items-end">
         <label className="text-xs font-semibold">Nume<input className="input-field mt-1 w-full" value={draft.displayName} onChange={(event) => setDraft({ ...draft, displayName: event.target.value })} /></label>
@@ -115,7 +121,7 @@ export function UserAdministration() {
       </div> : <div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><strong className="block text-[#082b4d]">{user.displayName} {user.id === currentUserId && <span className="text-xs font-normal text-slate-500">(contul tău)</span>}</strong><span className="break-all text-sm text-slate-600">{user.email}</span><span className="ml-2 text-xs text-slate-500">{roleLabel[user.role]} · {user.disabledAt ? 'acces șters' : 'activ'}</span></div><div className="flex flex-wrap gap-2"><button type="button" className="btn-secondary" onClick={() => { setEditingId(user.id); setDraft({ displayName: user.displayName, email: user.email, role: user.role }) }}>Editează</button>{currentUserEmail.toLowerCase() === 'ianchisionut@gmail.com' && (user.role === 'OWNER' || user.role === 'SUPER_ADMIN') && user.id !== currentUserId && user.email !== 'ianchisionut@gmail.com' && <button type="button" className="btn-secondary" onClick={() => { setPasswordEditorId(passwordEditorId === user.id ? null : user.id); setChosenPassword(''); setConfirmedPassword(''); setNotice('') }}>Setează parola</button>}<button type="button" className="btn-secondary" disabled={busy} onClick={() => request(`/api/admin/users/${user.id}`, 'PATCH', { action: 'resetPassword' })}>Resetează parola</button>{user.disabledAt ? <button type="button" className="btn-secondary" disabled={busy} onClick={() => request(`/api/admin/users/${user.id}`, 'PATCH', { action: 'restore' })}>Reactivează</button> : user.id !== currentUserId && <button type="button" className="btn-secondary text-red-700" disabled={busy} onClick={() => remove(user)}>Șterge accesul</button>}</div></div>}
       {editingId === user.id && <button type="button" className="mt-2 text-sm text-slate-500 underline" onClick={() => setEditingId(null)}>Renunță</button>}
       {passwordEditorId === user.id && <form onSubmit={(event) => setPassword(event, user.id)} className="mt-3 flex flex-wrap items-end gap-3 rounded-xl bg-blue-50 p-3"><p className="w-full text-xs text-slate-600">Parola actuală nu poate fi afișată. Poți alege una nouă și o poți verifica înainte de salvare.</p><label className="min-w-[180px] flex-1 text-sm font-semibold">Parolă nouă<span className="relative mt-1 block"><input type={showChosenPassword ? 'text' : 'password'} autoComplete="new-password" minLength={8} maxLength={128} required value={chosenPassword} onChange={(event) => setChosenPassword(event.target.value)} className="input-field w-full bg-white pr-11" /><button type="button" onClick={() => setShowChosenPassword((shown) => !shown)} aria-label={showChosenPassword ? 'Ascunde parolele noi' : 'Arată parolele noi'} aria-pressed={showChosenPassword} className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 text-slate-500 hover:bg-slate-100">{showChosenPassword ? <EyeOff size={18}/> : <Eye size={18}/>}</button></span></label><label className="min-w-[180px] flex-1 text-sm font-semibold">Confirmă parola<input type={showChosenPassword ? 'text' : 'password'} autoComplete="new-password" minLength={8} maxLength={128} required value={confirmedPassword} onChange={(event) => setConfirmedPassword(event.target.value)} className="input-field mt-1 w-full bg-white" /></label><button type="submit" className="btn-primary min-h-[42px]" disabled={busy}>Salvează parola</button></form>}
-      {passwords[user.id] && <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm"><strong>Parolă nouă generată:</strong> <code className="break-all select-all font-bold">{passwords[user.id]}</code><p className="mt-1 text-xs text-amber-900">Notează parola acum; nu va mai putea fi recuperată.</p></div>}
+      {passwords[user.id] && <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm"><div className="flex flex-wrap items-center gap-2"><strong>Parola setată în această sesiune:</strong><code className="break-all select-all font-bold">{visiblePasswords[user.id] ? passwords[user.id] : '••••••••••••'}</code><button type="button" onClick={() => setVisiblePasswords((current) => ({ ...current, [user.id]: !current[user.id] }))} aria-label={visiblePasswords[user.id] ? 'Ascunde parola setată' : 'Arată parola setată'} aria-pressed={!!visiblePasswords[user.id]} className="rounded-lg p-2 text-amber-900 hover:bg-amber-100">{visiblePasswords[user.id] ? <EyeOff size={18}/> : <Eye size={18}/>}</button></div><p className="mt-1 text-xs text-amber-900">Disponibilă doar până închizi sau reîncarci pagina. Dacă este uitată ulterior, resetează parola.</p></div>}
     </div>)}</div>
   </section>
 }
