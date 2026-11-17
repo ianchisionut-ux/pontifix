@@ -4,13 +4,7 @@ self.addEventListener('fetch', () => {})
 self.addEventListener('push', (event) => {
   let payload = {}
   try { payload = event.data ? event.data.json() : {} } catch {}
-  if (payload.type !== 'internal-chat') return
-  event.waitUntil(self.registration.showNotification(payload.title || 'Mesaj nou în Chat Elmont', {
-    body: payload.body || 'Ai primit un mesaj nou.',
-    icon: '/chat-icon-192.png', badge: '/chat-icon-192.png',
-    tag: `internal-chat-${payload.id || 'nou'}`, requireInteraction: true,
-    data: { url: '/chat' },
-  }))
+  if (payload.type === 'internal-chat') return
 })
 self.addEventListener('notificationclick', (event) => {
   event.notification.close()
