@@ -8,6 +8,15 @@ self.addEventListener('fetch',()=>{})
 self.addEventListener('push',(event)=>{
   let payload={}
   try{payload=event.data?event.data.json():{}}catch{}
+  if(payload.type==='internal-chat'){
+    event.waitUntil(self.registration.showNotification(payload.title||'Mesaj nou în Chat Elmont',{
+      body:payload.body||'Ai primit un mesaj nou.',
+      icon:'/chat-icon-192.png',badge:'/chat-icon-192.png',
+      tag:`internal-chat-${payload.id||'nou'}`,requireInteraction:true,
+      data:{url:'/dashboard/chat-intern'}
+    }))
+    return
+  }
   if(payload.type!=='sonerie')return
   event.waitUntil(self.registration.showNotification(payload.title||'Directorul te cheamă',{
     body:payload.body||'Te rog să vii la birou.',

@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { after, NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { ensureInternalChatStorage } from '@/lib/ensure-internal-chat-storage'
 import { ensureUserAdministrationStorage } from '@/lib/user-administration'
+import { notifyInternalChat } from '@/lib/internal-chat-push'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,9 +41,10 @@ const createSchema=z.object({text:z.string().trim().min(1).max(4000),recipientId
 export async function POST(request:NextRequest){
   const access=await getAccess();if(!access)return NextResponse.json({error:'Neautorizat.'},{status:401})
   const parsed=createSchema.safeParse(await request.json());if(!parsed.success)return NextResponse.json({error:'Mesaj invalid.'},{status:400})
-  await ensureInternalChatStorage();const recipientId=parsed.data.recipientId||null
+  await Promise.all([ensureInternalChatStorage(), ensureUserAdministrationStorage()]);const recipientId=parsed.data.recipientId||null
   if(recipientId){const user=await prisma.user.findFirst({where:{id:recipientId,businessId:access.businessId},select:{id:true}});if(!user)return NextResponse.json({error:'Destinatar invalid.'},{status:400})}
   const id=crypto.randomUUID();await prisma.$transaction(async(tx)=>{await tx.$executeRaw`INSERT INTO "InternalChatMessage" ("id","businessId","senderId","recipientId","text") VALUES (${id},${access.businessId},${access.userId},${recipientId},${parsed.data.text})`;if(recipientId&&recipientId!==access.userId)await tx.$executeRaw`INSERT INTO "InternalChatReceipt" ("messageId","userId") VALUES (${id},${recipientId}) ON CONFLICT DO NOTHING`;else if(!recipientId)await tx.$executeRaw`INSERT INTO "InternalChatReceipt" ("messageId","userId") SELECT ${id},"id" FROM "User" WHERE "businessId"=${access.businessId} AND "id"<>${access.userId} ON CONFLICT DO NOTHING`})
+  after(async () => { await notifyInternalChat(id, access.businessId, access.userId, parsed.data.text).catch((error) => console.warn('internal_chat_push_failed', { messageId: id, reason: error instanceof Error ? error.name : 'unknown' })) })
   return NextResponse.json({success:true,id})
 }
 

@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import { Bell, BellRing, Check, Loader2, MessageCircle, Save, Send, Users, X } from 'lucide-react'
-import { playInternalChatSound, registerInternalChatWorker, showInternalChatNotification } from '@/lib/internal-chat-browser'
+import { playInternalChatSound, registerInternalChatPush, showInternalChatNotification } from '@/lib/internal-chat-browser'
 import { InternalChatFileTransfer } from '@/components/internal-chat/internal-chat-file-transfer'
 
 export type InternalChatUser={id:string;email:string;role:string;displayName:string}
@@ -35,9 +35,21 @@ export function InternalChatManager({initialData,embedded=false}:{initialData:In
     setData((current)=>({...current,messages:current.messages.filter((message)=>message.id!==id)}))
   }
   async function saveName(){const value=displayName.trim();if(value.length<2)return alert('Introdu un nume de minimum 2 caractere.');setSavingName(true);const response=await fetch('/api/internal-chat/profile',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({displayName:value})});setSavingName(false);if(!response.ok){const body=await response.json().catch(()=>({}));return alert(body.error||'Numele nu a putut fi salvat.')}setData((current)=>({...current,users:current.users.map((user)=>user.id===current.currentUserId?{...user,displayName:value}:user),messages:current.messages.map((message)=>({...message,senderName:message.senderId===current.currentUserId?value:message.senderName,recipientName:message.recipientId===current.currentUserId?value:message.recipientName}))}))}
-  async function enableNotifications(){if(typeof Notification==='undefined')return alert('Browserul nu permite notificări desktop.');const permission=await Notification.requestPermission();setNotificationPermission(permission);if(permission==='granted'){localStorage.setItem('elmont-internal-chat-notifications','enabled');await registerInternalChatWorker();playInternalChatSound();await showInternalChatNotification('Chat intern Elmont','Notificările Windows și sunetul sunt activate.','internal-chat-test')}else alert('Notificările sunt blocate. Permite-le din lacătul de lângă adresa site-ului, apoi reîncarcă pagina.')}
+  async function enableNotifications(){
+    if(typeof Notification==='undefined')return alert('Browserul nu permite notificări desktop.')
+    const permission=await Notification.requestPermission()
+    setNotificationPermission(permission)
+    if(permission!=='granted')return alert('Notificările sunt blocate. Permite-le din lacătul de lângă adresa site-ului, apoi reîncarcă pagina.')
+    try{
+      if(!await registerInternalChatPush())throw new Error('Acest browser nu permite notificări push.')
+      localStorage.setItem('elmont-internal-chat-notifications','enabled')
+      playInternalChatSound()
+      await showInternalChatNotification('Chat intern Elmont','Mesajele noi vor apărea ca notificări Windows, inclusiv când chatul este închis.','internal-chat-test')
+    }catch(error){alert(error instanceof Error?error.message:'Nu am putut activa notificările push.')}
+  }
 
   return <div className={embedded?'flex h-full min-h-0 flex-col':'block'}>
+    {embedded&&<div className="mx-3 mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-[#082b4d]"><span>Primește mesajele și când chatul este închis.</span><button type="button" onClick={enableNotifications} className="btn-secondary inline-flex items-center gap-2"><Bell size={15}/>{notificationPermission==='granted'?'Testează notificarea Windows':'Activează notificările Windows'}</button></div>}
     {!embedded&&<header className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><span className="text-xs font-black uppercase tracking-[.16em] text-[#197fb5]">Comunicare echipă</span><h1 className="mt-1 text-3xl font-bold text-[#082b4d]">Chat intern</h1><p className="mt-1 text-sm text-slate-500">Mesaje pentru toată echipa sau conversații directe între utilizatori.</p></div><button onClick={enableNotifications} className={notificationPermission==='granted'?'btn-secondary inline-flex items-center gap-2 text-emerald-700':'btn-primary inline-flex items-center gap-2'}>{notificationPermission==='granted'?<BellRing size={17}/>:<Bell size={17}/>} {notificationPermission==='granted'?'Testează notificarea Windows':'Activează notificările Windows'}</button></header>}
     <details className={`group mb-2 shrink-0 rounded-2xl border border-blue-100 bg-blue-50/70 ${embedded?'mx-3 mt-3':''}`}><summary className="cursor-pointer px-3 py-2 text-sm font-bold text-[#082b4d]">Profil și notificări · {currentUser?.displayName||'Utilizator'}</summary><div className="flex flex-wrap items-end gap-2 border-t border-blue-100 p-3"><label className="min-w-0 flex-1 basis-full text-xs font-bold text-slate-600 sm:basis-[220px]">Numele tău în chat<input value={displayName} onChange={(event)=>setDisplayName(event.target.value)} maxLength={60} placeholder="Exemplu: Ionuț" className="input-field mt-1 w-full bg-white"/></label><button onClick={saveName} disabled={savingName||displayName.trim()===currentUser?.displayName} className="btn-secondary inline-flex min-h-[42px] items-center gap-2">{savingName?<Loader2 size={15} className="animate-spin"/>:displayName.trim()===currentUser?.displayName?<Check size={15}/>:<Save size={15}/>} Salvează numele</button>{embedded&&<button onClick={enableNotifications} className="btn-secondary inline-flex min-h-[42px] items-center gap-2">{notificationPermission==='granted'?<BellRing size={16}/>:<Bell size={16}/>} {notificationPermission==='granted'?'Testează notificarea':'Activează notificările'}</button>}</div></details>
     <div className={`grid min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)] overflow-hidden border border-slate-200 bg-white shadow-sm lg:grid-cols-[250px_minmax(0,1fr)] lg:grid-rows-1 ${embedded?'rounded-none border-x-0 border-b-0':'min-h-[680px] rounded-[24px]'}`}>

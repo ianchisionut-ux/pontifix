@@ -2,18 +2,23 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { MessageCircle, X } from 'lucide-react'
-import { playInternalChatSound, registerInternalChatWorker, showInternalChatNotification } from '@/lib/internal-chat-browser'
+import { playInternalChatSound, registerInternalChatPush, showInternalChatNotification } from '@/lib/internal-chat-browser'
 
 type Incoming = { id: string; senderName: string; text: string }
 
 export function InternalChatNotifier() {
   const since = useRef(new Date().toISOString())
   const polling = useRef(false)
+  const pushActive = useRef(false)
   const [incoming, setIncoming] = useState<Incoming | null>(null)
   const [count, setCount] = useState(0)
 
   useEffect(() => {
-    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') registerInternalChatWorker().catch(() => undefined)
+    const onPushEnabled = () => { pushActive.current = true }
+    window.addEventListener('internal-chat-push-enabled', onPushEnabled)
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      registerInternalChatPush().then((active) => { pushActive.current = active }).catch(() => undefined)
+    }
     let cancelled = false
     async function poll() {
       if (polling.current) return
@@ -26,20 +31,22 @@ export function InternalChatNotifier() {
         since.current = data.serverTime
         window.dispatchEvent(new CustomEvent('internal-chat-unread', { detail: data.unreadCount }))
         if (!data.items.length) return
-        setIncoming(data.items[data.items.length - 1])
-        setCount(data.items.length)
+        if (pushActive.current) return
         playInternalChatSound()
-        if (document.hidden) {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           for (const item of data.items) {
             await showInternalChatNotification(`Mesaj nou de la ${item.senderName}`, item.text.length > 140 ? `${item.text.slice(0, 137)}…` : item.text, `internal-chat-${item.id}`)
           }
+        } else if (!document.hidden) {
+          setIncoming(data.items[data.items.length - 1])
+          setCount(data.items.length)
         }
       } catch { /* următoarea verificare reîncearcă */ }
       finally { polling.current = false }
     }
     const firstPoll = setTimeout(poll, 1200)
     const timer = setInterval(poll, 4000)
-    return () => { cancelled = true; clearTimeout(firstPoll); clearInterval(timer) }
+    return () => { cancelled = true; clearTimeout(firstPoll); clearInterval(timer); window.removeEventListener('internal-chat-push-enabled', onPushEnabled) }
   }, [])
 
   if (!incoming) return null
