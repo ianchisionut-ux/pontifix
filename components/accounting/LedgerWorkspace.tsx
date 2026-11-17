@@ -3,6 +3,7 @@ import { AccountPicker } from "@/components/accounting/AccountPicker";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarClock, FileUp, Landmark, ListTree, Plus, Scale } from "lucide-react";
+import { bucharestDate } from "@/lib/accounting/date";
 
 type Tab = "journal" | "balance" | "account" | "accounts" | "periods";
 type Account = { code: string; name: string; nature: string; allowPosting: number; active: number; system: number; used: boolean };
@@ -14,10 +15,17 @@ type Period = { month: number; status: "OPEN" | "CLOSED"; closedAt: string | nul
 type DraftLine = { accountCode: string; debit: string; credit: string; explanation: string };
 type SagaPreview = { total:number; duplicates:number; errors:string[]; entries:Array<{date:string;documentNumber:string;description:string;lines:Array<{accountCode:string;debit:number;credit:number}>}> };
 
-const today = new Date().toISOString().slice(0, 10);
+const today = bucharestDate();
 const yearStart = `${today.slice(0, 4)}-01-01`;
 const money = (value: number | string) => Number(value || 0).toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const monthNames = ["Ianuarie", "Februarie", "Martie", "Aprilie", "Mai", "Iunie", "Iulie", "August", "Septembrie", "Octombrie", "Noiembrie", "Decembrie"];
+
+async function loadJson(url: string) {
+  const response = await fetch(url);
+  const data = await response.json().catch(() => null);
+  if (!response.ok || data === null) throw new Error("Datele contabile nu au putut fi încărcate.");
+  return data;
+}
 
 export function LedgerWorkspace({ stats }: { stats: { accounts: number; entries: number; monthDebit: number; closedPeriods: number } }) {
   const [tab, setTab] = useState<Tab>("journal");
@@ -46,29 +54,28 @@ export function LedgerWorkspace({ stats }: { stats: { accounts: number; entries:
 
   const postableAccounts = useMemo(() => allAccounts.filter((account) => account.allowPosting && account.active), [allAccounts]);
   const loadAllAccounts = useCallback(async () => {
-    const response = await fetch("/api/accounting/ledger/accounts");
-    setAllAccounts(await response.json());
+    try { const data = await loadJson("/api/accounting/ledger/accounts"); if (!Array.isArray(data)) throw new Error(); setAllAccounts(data); }
+    catch { setError("Planul de conturi nu a putut fi încărcat."); }
   }, []);
   const loadAccounts = useCallback(async () => {
-    const response = await fetch(`/api/accounting/ledger/accounts?q=${encodeURIComponent(search)}`);
-    setAccounts(await response.json());
+    try { const data = await loadJson(`/api/accounting/ledger/accounts?q=${encodeURIComponent(search)}`); if (!Array.isArray(data)) throw new Error(); setAccounts(data); }
+    catch { setError("Planul de conturi nu a putut fi încărcat."); }
   }, [search]);
   const loadJournal = useCallback(async () => {
-    const response = await fetch(`/api/accounting/ledger/journal?from=${from}&to=${to}`);
-    setJournal(await response.json());
+    try { const data = await loadJson(`/api/accounting/ledger/journal?from=${from}&to=${to}`); if (!Array.isArray(data)) throw new Error(); setJournal(data); }
+    catch { setError("Registrul jurnal nu a putut fi încărcat."); }
   }, [from, to]);
   const loadBalance = useCallback(async () => {
-    const response = await fetch(`/api/accounting/ledger/trial-balance?from=${from}&to=${to}`);
-    setBalance(await response.json());
+    try { const data = await loadJson(`/api/accounting/ledger/trial-balance?from=${from}&to=${to}`); if (!Array.isArray(data)) throw new Error(); setBalance(data); }
+    catch { setError("Balanța nu a putut fi încărcată."); }
   }, [from, to]);
   const loadLedger = useCallback(async () => {
-    const response = await fetch(`/api/accounting/ledger/account?code=${encodeURIComponent(accountCode)}&from=${from}&to=${to}`);
-    const data = await response.json();
-    if (!response.ok) setError(data.error || "Fișa contului nu a putut fi încărcată."); else setLedger(data);
+    try { const data = await loadJson(`/api/accounting/ledger/account?code=${encodeURIComponent(accountCode)}&from=${from}&to=${to}`); setLedger(data); }
+    catch { setError("Fișa contului nu a putut fi încărcată."); }
   }, [accountCode, from, to]);
   const loadPeriods = useCallback(async () => {
-    const response = await fetch(`/api/accounting/ledger/periods?year=${periodYear}`);
-    setPeriods(await response.json());
+    try { const data = await loadJson(`/api/accounting/ledger/periods?year=${periodYear}`); if (!Array.isArray(data)) throw new Error(); setPeriods(data); }
+    catch { setError("Perioadele contabile nu au putut fi încărcate."); }
   }, [periodYear]);
 
   useEffect(() => { void loadAccounts(); }, [loadAccounts]);

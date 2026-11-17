@@ -21,6 +21,7 @@ type FullInvoice = {
     subtotal: number;
     vatTotal: number;
     paidAmount: number;
+    currency: string;
     invoiceType: "STANDARD" | "STORNO";
     originalInvoiceId: number | null;
     stornoReason: string;
@@ -125,7 +126,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
   const receiptedAmount = receipts.reduce((sum, receipt) => sum + Number(receipt.amount), 0);
   const receiptAvailable = Math.max(0, Math.round((cashPaid - receiptedAmount) * 100) / 100);
   const paymentDisabledReason = rest <= 0 ? "Factura este achitată integral." : payAmount <= 0 ? "Introdu o sumă mai mare decât 0." : "";
-  const receiptDisabledReason = receiptAvailable <= 0 ? "Nu există o plată în numerar fără chitanță." : "";
+  const receiptDisabledReason = invoice.currency !== "RON" ? "Chitanța poate fi emisă numai pentru facturi în RON." : receiptAvailable <= 0 ? "Nu există o plată în numerar fără chitanță." : "";
   const financialLocked = invoice.invoiceType === "STORNO" || ["storno", "stornoed", "canceled"].includes(invoice.status);
   const canStorno = invoice.invoiceType !== "STORNO" && !financialLocked;
   const anafLocked = Boolean(data.eFacturaSubmission && (data.eFacturaSubmission.uploadId || ["UPLOADING", "PROCESSING", "VALIDATED", "REJECTED"].includes(data.eFacturaSubmission.status)));
@@ -198,11 +199,11 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
         <div style={{ width: 260 }} className="text-sm space-y-1">
           <div className="flex justify-between" style={{ color: "var(--text-dim)" }}>
             <span>Subtotal</span>
-            <span className="num">{fmt(invoice.subtotal)} RON</span>
+            <span className="num">{fmt(invoice.subtotal)} {invoice.currency}</span>
           </div>
           <div className="flex justify-between" style={{ color: "var(--text-dim)" }}>
             <span>TVA</span>
-            <span className="num">{fmt(invoice.vatTotal)} RON</span>
+            <span className="num">{fmt(invoice.vatTotal)} {invoice.currency}</span>
           </div>
           <div
             className="flex justify-between font-bold pt-2"
@@ -210,16 +211,16 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           >
             <span>Total</span>
             <span className="num" style={{ color: "var(--cyan-strong)" }}>
-              {fmt(invoice.total)} RON
+              {fmt(invoice.total)} {invoice.currency}
             </span>
           </div>
           <div className="flex justify-between" style={{ color: "var(--text-dim)" }}>
             <span>Incasat</span>
-            <span className="num">{fmt(invoice.paidAmount)} RON</span>
+            <span className="num">{fmt(invoice.paidAmount)} {invoice.currency}</span>
           </div>
           <div className="flex justify-between font-semibold" style={{ color: "var(--amber)" }}>
             <span>Rest de plata</span>
-            <span className="num">{financialLocked ? "—" : `${fmt(Math.max(0, rest))} RON`}</span>
+            <span className="num">{financialLocked ? "—" : `${fmt(Math.max(0, rest))} ${invoice.currency}`}</span>
           </div>
         </div>
       </div>
@@ -231,7 +232,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
           <div className="section-label">Inregistreaza o plata</div>
           <div className="space-y-2">
             <div>
-              <label className="field-label">Suma</label>
+              <label className="field-label">Suma ({invoice.currency})</label>
               <input type="number" min="0.01" max={Math.max(0, rest)} step="0.01" className="input" value={payAmount} onChange={(e) => setPayAmount(Number(e.target.value))} />
             </div>
             <div>
@@ -262,7 +263,7 @@ export default function InvoiceDetailPage({ params }: { params: Promise<{ id: st
                   <span>
                     {new Date(p.date).toLocaleDateString("ro-RO")} &middot; {p.method}
                   </span>
-                  <span className="num">{fmt(p.amount)} RON</span>
+                  <span className="num">{fmt(p.amount)} {invoice.currency}</span>
                 </div>
               ))}
             </div>

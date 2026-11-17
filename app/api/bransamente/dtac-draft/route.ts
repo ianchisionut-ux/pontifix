@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ImapFlow } from 'imapflow'
-import nodemailer from 'nodemailer'
+import nodemailer from 'secure-nodemailer'
 import { z } from 'zod'
 import { getConnectionAccess } from '@/lib/connection-access'
 import { getStoredEmailSettings } from '@/lib/email-settings'

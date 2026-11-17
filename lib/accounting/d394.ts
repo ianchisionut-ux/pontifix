@@ -76,7 +76,7 @@ export async function getD394Export(year:number,month:number,confirmed=false){
     pool.query(`SELECT p.*,s.name AS "partnerName",s.cif AS "partnerCif",s."countryCode" AS country,s."vatPayer",
       COALESCE((SELECT json_agg(ii) FROM purchase_invoice_items ii WHERE ii."purchaseInvoiceId"=p.id),'[]') AS items
       FROM purchase_invoices p JOIN suppliers s ON s.id=p."supplierId" WHERE p."issueDate">=$1::date AND p."issueDate"<$2::date`,[start,end]),
-    pool.query(`SELECT id FROM ref_transactions WHERE date>=$1::date AND date<$2::date AND source<>'AUTO_PAYMENT'`,[start,end]),
+    pool.query(`SELECT id FROM ref_transactions WHERE date>=$1::date AND date<$2::date AND source='MANUAL' AND "supplierPaymentId" IS NULL`,[start,end]),
   ]);
   const blockers=[...report.d394.blockers],lines:D394Line[]=[];
   if(manual.rows.length)blockers.push("Există poziții manuale în registrul fiscal. Clasifică/reconciliază separat documentele înainte de XML D394; nu sunt omise automat.");

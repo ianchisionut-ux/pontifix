@@ -9,7 +9,7 @@ import { bucharestDate } from "@/lib/accounting/date";
 
 type InvoiceRow = {
   id: number; series: string; number: number; clientName: string; issueDate: string;
-  total: number; paidAmount: number; status: string; invoiceType: "STANDARD" | "STORNO";
+  total: number; paidAmount: number; currency: string; status: string; invoiceType: "STANDARD" | "STORNO";
 };
 
 function fmt(n: number) {
@@ -27,12 +27,13 @@ export default function StornoInvoicePage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetch("/api/accounting/invoices").then((r) => r.json()).then((rows: InvoiceRow[]) => {
+    fetch("/api/accounting/invoices").then((r) => r.ok ? r.json() : []).then((value) => {
+      const rows: InvoiceRow[] = Array.isArray(value) ? value : [];
       const eligible = rows.filter((invoice) => invoice.invoiceType !== "STORNO" && !["storno", "stornoed", "canceled"].includes(invoice.status));
       setInvoices(eligible);
       const queryId = new URLSearchParams(window.location.search).get("invoice");
       if (queryId && eligible.some((invoice) => String(invoice.id) === queryId)) setInvoiceId(queryId);
-    });
+    }).catch(() => setInvoices([]));
   }, []);
 
   const selected = useMemo(() => invoices.find((invoice) => String(invoice.id) === invoiceId), [invoices, invoiceId]);
@@ -68,7 +69,7 @@ export default function StornoInvoicePage() {
           <label className="field-label">Factura de stornat</label>
           <select className="input" value={invoiceId} onChange={(e) => setInvoiceId(e.target.value)}>
             <option value="">— selectează factura —</option>
-            {invoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.series} {String(invoice.number).padStart(4, "0")} · {invoice.clientName} · {fmt(invoice.total)} RON</option>)}
+            {invoices.map((invoice) => <option key={invoice.id} value={invoice.id}>{invoice.series} {String(invoice.number).padStart(4, "0")} · {invoice.clientName} · {fmt(invoice.total)} {invoice.currency}</option>)}
           </select>
         </div>
         <div><label className="field-label">Serie storno</label><input className="input" value={series} onChange={(e) => setSeries(e.target.value.toUpperCase())}/></div>
@@ -79,8 +80,8 @@ export default function StornoInvoicePage() {
     </div>
 
     {selected && <div className="card mb-5" style={{ maxWidth: 860, background: "#fff7f7" }}>
-      <div className="flex items-center justify-between"><div><div className="font-bold">{selected.series} {String(selected.number).padStart(4, "0")} · {selected.clientName}</div><div className="text-sm text-slate-500 mt-1">Emisă la {new Date(selected.issueDate).toLocaleDateString("ro-RO")} · total {fmt(selected.total)} RON</div></div><StatusBadge status={selected.status}/></div>
-      <p className="text-xs text-slate-500 mt-3">Noua factură va avea totalul de -{fmt(Math.abs(selected.total))} RON și va fi legată de documentul inițial.</p>
+      <div className="flex items-center justify-between"><div><div className="font-bold">{selected.series} {String(selected.number).padStart(4, "0")} · {selected.clientName}</div><div className="text-sm text-slate-500 mt-1">Emisă la {new Date(selected.issueDate).toLocaleDateString("ro-RO")} · total {fmt(selected.total)} {selected.currency}</div></div><StatusBadge status={selected.status}/></div>
+      <p className="text-xs text-slate-500 mt-3">Noua factură va avea totalul de -{fmt(Math.abs(selected.total))} {selected.currency} și va fi legată de documentul inițial.</p>
     </div>}
 
     {dialog}

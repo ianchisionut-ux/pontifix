@@ -1,7 +1,7 @@
 import { Pool } from "pg";
 import chartOfAccounts from "./chart-of-accounts.ro.json";
 
-const ACCOUNTING_SCHEMA_VERSION = 20;
+const ACCOUNTING_SCHEMA_VERSION = 21;
 
 declare global {
   // eslint-disable-next-line no-var
@@ -561,6 +561,34 @@ async function ensureSchema(pool: Pool) {
     );
     ALTER TABLE journal_lines ADD COLUMN IF NOT EXISTS "supplierId" INTEGER REFERENCES suppliers(id) ON DELETE SET NULL;
   `);
+  await pool.query(`ALTER TABLE ref_transactions ADD COLUMN IF NOT EXISTS "supplierPaymentId" INTEGER REFERENCES supplier_payments(id) ON DELETE CASCADE;`);
+  await pool.query(`
+    WITH legacy_links AS (
+      SELECT sp.id AS "supplierPaymentId", MIN(r.id) AS "refId"
+        FROM supplier_payments sp
+        JOIN ref_transactions r
+          ON r.source='AUTO_SUPPLIER_PAYMENT'
+         AND (r.notes='[supplier-payment:' || sp.id::text || ']'
+              OR r.notes='Plată furnizor #' || sp.id::text)
+       WHERE r."supplierPaymentId" IS NULL
+       GROUP BY sp.id
+    )
+    UPDATE ref_transactions r
+       SET "supplierPaymentId"=l."supplierPaymentId",
+           notes='[supplier-payment:' || l."supplierPaymentId"::text || ']'
+      FROM legacy_links l
+     WHERE r.id=l."refId";
+    UPDATE ref_transactions
+       SET source='AUTO_SUPPLIER_PAYMENT',
+           notes=CASE
+             WHEN trim(notes)='' OR notes LIKE 'Plată furnizor #%'
+               THEN '[supplier-payment:' || "supplierPaymentId"::text || ']'
+             WHEN position(('[supplier-payment:' || "supplierPaymentId"::text || ']') in notes)>0 THEN notes
+             ELSE '[supplier-payment:' || "supplierPaymentId"::text || ']' || E'\n[notă anterioară] ' || notes
+           END
+     WHERE "supplierPaymentId" IS NOT NULL;
+  `);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ref_transactions_supplierPaymentId_key" ON ref_transactions ("supplierPaymentId") WHERE "supplierPaymentId" IS NOT NULL;`);
   await pool.query(`ALTER TABLE purchase_invoice_items ADD COLUMN IF NOT EXISTS "vatCategoryCode" TEXT NOT NULL DEFAULT '';`);
   await pool.query(`CREATE TABLE IF NOT EXISTS efactura_imports (
     environment TEXT NOT NULL, "messageId" TEXT NOT NULL,

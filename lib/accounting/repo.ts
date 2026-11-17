@@ -2,6 +2,7 @@ import { ready } from "./db";
 import { createRefIncomeForPayment } from "./ref";
 import type { PoolClient } from "pg";
 import { bucharestDate } from "./date";
+import { isVatRateAllowedForDate } from "./vat-regime";
 import {
   postInvoiceToLedger,
   postPaymentToLedger,
@@ -686,6 +687,8 @@ async function createInvoiceInTransaction(
       throw new Error(`Poziția ${line}: prețul unei facturi normale nu poate fi negativ.`);
     if (!Number.isFinite(item.vatRate) || item.vatRate < 0 || item.vatRate > 100)
       throw new Error(`Poziția ${line}: cota TVA nu este validă.`);
+    if (invoiceType === "STANDARD" && item.vatRate > 0 && !isVatRateAllowedForDate(item.vatRate, input.issueDate))
+      throw new Error(`Poziția ${line}: cota TVA nu este valabilă la data facturii.`);
     const category = String(item.vatCategoryCode || (item.vatRate === 0 ? "Z" : "S")).toUpperCase();
     if (!/^[A-Z]{1,3}$/.test(category))
       throw new Error(`Poziția ${line}: categoria TVA nu este validă.`);
@@ -908,6 +911,8 @@ export async function createStornoInvoice(input: {
       [input.originalInvoiceId],
     )).rows[0] as Invoice | undefined;
     if (!invoice) throw new Error("Factura selectată nu există.");
+    if (!isIsoDate(input.issueDate) || input.issueDate < String(invoice.issueDate).slice(0, 10))
+      throw new Error("Data facturii storno nu poate fi anterioară facturii originale.");
     if (
       invoice.invoiceType === "STORNO" ||
       ["storno", "stornoed", "canceled"].includes(invoice.status)
@@ -1395,7 +1400,8 @@ export async function getReceipt(id: number) {
 // ---------- Dashboard stats ----------
 export async function getDashboardStats() {
   const pool = await ready();
-  const thisMonth = new Date().toISOString().slice(0, 7);
+  const today = bucharestDate();
+  const thisMonth = today.slice(0, 7);
   const environment = process.env.ANAF_ENVIRONMENT === "production" ? "production" : "test";
   const { rows } = await pool.query(
     `WITH latest_efactura AS (
@@ -1406,16 +1412,17 @@ export async function getDashboardStats() {
      )
      SELECT
        COUNT(*)::int AS "totalInvoices",
-       COALESCE(SUM(total - "paidAmount") FILTER (WHERE status IN ('issued','partial')),0) AS "totalOutstanding",
-       COALESCE(SUM("paidAmount"),0) AS "totalCollected",
-       COALESCE(SUM(total) FILTER (WHERE substring("issueDate",1,7)=$1),0) AS "monthRevenue",
-       COALESCE(SUM("vatTotal") FILTER (WHERE substring("issueDate",1,7)=$1),0) AS "monthVat",
-       COUNT(*) FILTER (WHERE "dueDate"=CURRENT_DATE::text AND status IN ('issued','partial'))::int AS "dueToday",
-       COUNT(*) FILTER (WHERE "dueDate"<CURRENT_DATE::text AND status IN ('issued','partial'))::int AS "overdueInvoices",
+       COALESCE(SUM((total - "paidAmount") * "exchangeRate") FILTER (WHERE status IN ('issued','partial')),0) AS "totalOutstanding",
+       COALESCE(SUM("paidAmount" * "exchangeRate") FILTER (WHERE status<>'canceled'),0) AS "totalCollected",
+       COALESCE(SUM(total * "exchangeRate") FILTER (WHERE substring("issueDate",1,7)=$1 AND status<>'canceled'),0) AS "monthRevenue",
+       COALESCE(SUM("vatTotal" * "exchangeRate") FILTER (WHERE substring("issueDate",1,7)=$1 AND status<>'canceled'),0) AS "monthVat",
+       COUNT(*) FILTER (WHERE "dueDate"=$3 AND status IN ('issued','partial'))::int AS "dueToday",
+       COUNT(*) FILTER (WHERE "dueDate"<$3 AND status IN ('issued','partial'))::int AS "overdueInvoices",
        (SELECT COUNT(*)::int FROM clients) AS "totalClients",
-       (SELECT COUNT(*)::int FROM latest_efactura WHERE status IN ('REJECTED','ERROR')) AS "anafProblems"
+       (SELECT COUNT(*)::int FROM latest_efactura le JOIN invoices ai ON ai.id=le."invoiceId"
+         WHERE le.status IN ('REJECTED','ERROR') AND ai.status NOT IN ('canceled','stornoed')) AS "anafProblems"
      FROM invoices`,
-    [thisMonth, environment],
+    [thisMonth, environment, today],
   );
   const row = rows[0];
   return {

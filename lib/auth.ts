@@ -3,7 +3,6 @@ import Credentials from 'next-auth/providers/credentials'
 import { prisma } from './prisma'
 import bcrypt from 'bcryptjs'
 import { rateLimit } from './rate-limit'
-import { ACCOUNTING_USER_EMAIL } from './accounting/permissions'
 import { getUserAccess } from './user-administration'
 
 // Nu folosim PrismaAdapter — cu Credentials + strategie JWT nu e nevoie de el,
@@ -37,36 +36,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new Error('Prea multe încercări. Așteaptă 15 minute și încearcă din nou.')
         }
 
-        let user = await prisma.user.findUnique({ where: { email } })
-        if (!user && email === 'berar_liviu@yahoo.com') {
-          const bootstrapHash = '$2a$12$voToMG047zLWev44LBICA.3gcsi9Gzlotv80KtQ3eT5gZ6U2CUZyu'
-          const allowed = await bcrypt.compare(credentials?.password as string, bootstrapHash)
-          if (allowed) {
-            const elmontAdmin = await prisma.user.findUnique({ where: { email: 'elmont_zalau@yahoo.com' }, select: { businessId: true } })
-            if (elmontAdmin?.businessId) user = await prisma.user.upsert({
-              where: { email },
-              update: { role: 'STAFF', businessId: elmontAdmin.businessId },
-              create: { email, password: bootstrapHash, role: 'STAFF', businessId: elmontAdmin.businessId },
-            })
-          }
-        }
-        if (!user && email === ACCOUNTING_USER_EMAIL) {
-          const bootstrapHash = '$2a$12$voToMG047zLWev44LBICA.3gcsi9Gzlotv80KtQ3eT5gZ6U2CUZyu'
-          const allowed = await bcrypt.compare(credentials?.password as string, bootstrapHash)
-          if (allowed) {
-            const elmontAdmin = await prisma.user.findUnique({ where: { email: 'elmont_zalau@yahoo.com' }, select: { businessId: true } })
-            if (elmontAdmin?.businessId) user = await prisma.user.upsert({
-              where: { email },
-              update: { role: 'OWNER', businessId: elmontAdmin.businessId, password: bootstrapHash },
-              create: { email, password: bootstrapHash, role: 'OWNER', businessId: elmontAdmin.businessId },
-            })
-          }
-        }
-        if (user && email === 'ianchisionut@gmail.com' && (user.role !== 'SUPER_ADMIN' || !user.businessId)) {
-          const elmont = user.businessId ? null : await prisma.user.findUnique({ where: { email: 'elmont_zalau@yahoo.com' }, select: { businessId: true } })
-          const businessId = user.businessId || elmont?.businessId || (await prisma.business.findFirst({ where: { name: { contains: 'Elmont', mode: 'insensitive' } }, select: { id: true } }))?.id || null
-          user = await prisma.user.update({ where: { id: user.id }, data: { role: 'SUPER_ADMIN', businessId } })
-        }
+        const user = await prisma.user.findUnique({ where: { email } })
         if (!user) return null
         const access = await getUserAccess(user.id)
         if (!access || access.disabledAt) return null
@@ -84,15 +54,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = (user as any).role
       }
       if (typeof token.id === 'string') {
-        let access = await getUserAccess(token.id)
+        const access = await getUserAccess(token.id)
         if (!access || access.disabledAt) return null
-        if (access.email === 'ianchisionut@gmail.com' && (access.role !== 'SUPER_ADMIN' || !access.businessId)) {
-          const elmont = access.businessId ? null : await prisma.user.findUnique({ where: { email: 'elmont_zalau@yahoo.com' }, select: { businessId: true } })
-          const businessId = access.businessId || elmont?.businessId || (await prisma.business.findFirst({ where: { name: { contains: 'Elmont', mode: 'insensitive' } }, select: { id: true } }))?.id || null
-          await prisma.user.update({ where: { id: access.id }, data: { role: 'SUPER_ADMIN', businessId } })
-          access = await getUserAccess(access.id)
-          if (!access) return null
-        }
+        const accessVersion = access.accessUpdatedAt?.toISOString() ?? null
+        // The access-status timestamp is also the password/session epoch. Old
+        // JWTs are rejected after a password reset (and pre-deployment tokens
+        // without an epoch are intentionally signed out once).
+        if (!user && token.accessVersion !== accessVersion) return null
+        token.accessVersion = accessVersion
         token.email = access.email
         token.businessId = access.businessId
         token.role = access.role

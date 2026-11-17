@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { CURRENT_USER_KEY } from "@/components/accounting/CurrentUserBox";
 import { Plus, X, Cable, RefreshCw, FileText } from "lucide-react";
 import { bucharestDate } from "@/lib/accounting/date";
+import { vatRatesForDate } from "@/lib/accounting/vat-regime";
 
 type Client = { id: number; name: string; clientType: "PF" | "PJ"; cif: string; cnp: string; address: string; judet: string; city: string; countryCode: string; postalCode: string; phone: string; sourceNib: string };
 type ConnectionBeneficiary = { id: string; nib: string; beneficiary: string; identifier: string; address: string; phone: string };
@@ -40,8 +41,8 @@ type Item = {
 };
 
 let keySeq = 1;
-function newItem(): Item {
-  return { key: keySeq++, productId: null, description: "", um: "buc", qty: 1, unitPrice: 0, vatRate: 21, unitCode: "H87", vatCategoryCode: "S", taxExemptionReasonCode: "", taxExemptionReason: "", revenueAccount: "704" };
+function newItem(vatRate = 21): Item {
+  return { key: keySeq++, productId: null, description: "", um: "buc", qty: 1, unitPrice: 0, vatRate, unitCode: "H87", vatCategoryCode: "S", taxExemptionReasonCode: "", taxExemptionReason: "", revenueAccount: "704" };
 }
 
 function fmt(n: number) {
@@ -70,7 +71,7 @@ export default function NewInvoicePage() {
   const [discountPercent, setDiscountPercent] = useState(0);
   const [currency, setCurrency] = useState("RON");
   const [exchangeRate, setExchangeRate] = useState(1);
-  const [items, setItems] = useState<Item[]>([newItem()]);
+  const [items, setItems] = useState<Item[]>([newItem(vatRatesForDate(issueDate)[0])]);
   const [delegateName, setDelegateName] = useState("");
   const [delegateCI, setDelegateCI] = useState("");
   const [delegateCNP, setDelegateCNP] = useState("");
@@ -89,12 +90,13 @@ export default function NewInvoicePage() {
   const [companyVatPayer, setCompanyVatPayer] = useState(true);
 
   useEffect(() => {
-    fetch("/api/accounting/clients").then((r) => r.json()).then(setClients);
-    fetch("/api/accounting/connection-beneficiaries").then((r) => r.json()).then(setConnections);
-    fetch("/api/accounting/offer-invoice-data").then((r) => r.json()).then(setOffers);
-    fetch("/api/accounting/products").then((r) => r.json()).then(setProducts);
-    fetch("/api/accounting/ledger/accounts").then((r) => r.json()).then(setAccounts);
-    fetch("/api/accounting/company").then((r) => r.json()).then((company: Company) => {
+    fetch("/api/accounting/clients").then((r) => r.ok ? r.json() : []).then((rows) => setClients(Array.isArray(rows) ? rows : [])).catch(() => setClients([]));
+    fetch("/api/accounting/connection-beneficiaries").then((r) => r.ok ? r.json() : []).then((rows) => setConnections(Array.isArray(rows) ? rows : [])).catch(() => setConnections([]));
+    fetch("/api/accounting/offer-invoice-data").then((r) => r.ok ? r.json() : []).then((rows) => setOffers(Array.isArray(rows) ? rows : [])).catch(() => setOffers([]));
+    fetch("/api/accounting/products").then((r) => r.ok ? r.json() : []).then((rows) => setProducts(Array.isArray(rows) ? rows : [])).catch(() => setProducts([]));
+    fetch("/api/accounting/ledger/accounts").then((r) => r.ok ? r.json() : []).then((rows) => setAccounts(Array.isArray(rows) ? rows : [])).catch(() => setAccounts([]));
+    fetch("/api/accounting/company").then((r) => r.ok ? r.json() : null).then((company: Company | null) => {
+      if (!company) return;
       const vatPayer = Boolean(company.vatPayer);
       setCompanyVatPayer(vatPayer);
       if (!vatPayer) {
@@ -102,19 +104,21 @@ export default function NewInvoicePage() {
           ? item
           : { ...item, vatRate: 0, vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }));
       }
-    });
-    fetch("/api/accounting/users").then((r) => r.json()).then((list: UserT[]) => {
+    }).catch(() => undefined);
+    fetch("/api/accounting/users").then((r) => r.ok ? r.json() : []).then((value) => {
+      const list: UserT[] = Array.isArray(value) ? value : [];
       setUsers(list);
       const saved = localStorage.getItem(CURRENT_USER_KEY);
       const match = list.find((u) => String(u.id) === saved) ?? list[0];
       if (match) applyUser(match);
-    });
+    }).catch(() => setUsers([]));
   }, []);
 
   useEffect(() => {
     fetch(`/api/accounting/invoices/next-number?series=${series}`)
-      .then((r) => r.json())
-      .then((d) => { setNextNumber(d.number); setInvoiceNumber(String(d.number)); });
+      .then((r) => r.ok ? r.json() : null)
+      .then((d) => { if (Number.isInteger(d?.number) && d.number > 0) { setNextNumber(d.number); setInvoiceNumber(String(d.number)); } })
+      .catch(() => undefined);
   }, [series]);
 
   async function importConnectionBeneficiary() {
@@ -129,8 +133,8 @@ export default function NewInvoicePage() {
       setImporting(false);
       return alert(data.error || "Beneficiarul nu a putut fi preluat.");
     }
-    const updated = await fetch("/api/accounting/clients").then((r) => r.json()) as Client[];
-    setClients(updated);
+    const updated = await fetch("/api/accounting/clients").then((r) => r.ok ? r.json() : []) as Client[];
+    setClients(Array.isArray(updated) ? updated : []);
     setClientId(data.clientId);
     setImporting(false);
   }
@@ -166,36 +170,30 @@ export default function NewInvoicePage() {
       setOfferImporting(false);
       return alert(data.error || "Oferta nu a putut fi preluată.");
     }
-    const updated = await fetch("/api/accounting/clients").then((r) => r.json()) as Client[];
-    setClients(updated);
+    const updated = await fetch("/api/accounting/clients").then((r) => r.ok ? r.json() : []) as Client[];
+    setClients(Array.isArray(updated) ? updated : []);
     setClientId(data.clientId);
     const typeLabel = selected.connectionType === "NESPECIFICAT" ? "" : ` · branșament ${selected.connectionType.toLowerCase()}`;
     const serviceLabel = selected.serviceType ? ` · ${selected.serviceType}` : "";
     const imported: Item[] = [];
     if (offerParts.execution && selected.executionNet > 0) imported.push({
-      ...newItem(), description: `Execuție branșament${typeLabel}${serviceLabel}`, um: "lucrare",
-      unitPrice: selected.executionNet, vatRate: companyVatPayer ? selected.vatRate : 0,
-      ...(companyVatPayer ? {} : { vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }),
+      ...newItem(vatRatesForDate(issueDate)[0]), description: `Execuție branșament${typeLabel}${serviceLabel}`, um: "lucrare",
+      unitPrice: selected.executionNet, ...offerVat(selected.vatRate),
     });
     if (offerParts.project && selected.projectNet > 0) imported.push({
-      ...newItem(), description: `Proiect / documentație${typeLabel}${serviceLabel}`, um: "serv.",
-      unitPrice: selected.projectNet, vatRate: companyVatPayer ? selected.vatRate : 0,
-      ...(companyVatPayer ? {} : { vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }),
+      ...newItem(vatRatesForDate(issueDate)[0]), description: `Proiect / documentație${typeLabel}${serviceLabel}`, um: "serv.",
+      unitPrice: selected.projectNet, ...offerVat(selected.vatRate),
     });
     if (offerParts.panel && selected.panelIncluded && selected.panelNet > 0) imported.push({
-      ...newItem(), description: `${selected.panelDescription || "Tablou electric"}${typeLabel}`, um: "buc",
-      unitPrice: selected.panelNet, vatRate: companyVatPayer ? selected.vatRate : 0,
-      ...(companyVatPayer ? {} : { vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }),
+      ...newItem(vatRatesForDate(issueDate)[0]), description: `${selected.panelDescription || "Tablou electric"}${typeLabel}`, um: "buc",
+      unitPrice: selected.panelNet, ...offerVat(selected.vatRate),
     });
     if (offerParts.taxes) {
       for (const tax of selected.additionalTaxes) {
         if (tax.amount <= 0) continue;
         imported.push({
-          ...newItem(), description: tax.description.trim() || "Taxă suplimentară", um: "serv.",
-          unitPrice: tax.amount, vatRate: companyVatPayer ? tax.vatRate : 0,
-          ...(companyVatPayer
-            ? (tax.vatRate === 0 ? { vatCategoryCode: "Z" } : {})
-            : { vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }),
+          ...newItem(vatRatesForDate(issueDate)[0]), description: tax.description.trim() || "Taxă suplimentară", um: "serv.",
+          unitPrice: tax.amount, ...offerVat(tax.vatRate),
         });
       }
     }
@@ -214,8 +212,26 @@ export default function NewInvoicePage() {
   }
 
   function onUserChange(id: string) {
+    if (!id) {
+      setUserId("");
+      setDelegateName("");
+      setDelegateCI("");
+      setDelegateCNP("");
+      return;
+    }
     const u = users.find((x) => String(x.id) === id);
     if (u) applyUser(u);
+  }
+
+  function standardRate(rate: number) {
+    const rates = vatRatesForDate(issueDate);
+    return rates.includes(Number(rate)) ? Number(rate) : 0;
+  }
+
+  function offerVat(rate: number) {
+    if (!companyVatPayer) return { vatRate: 0, vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." };
+    if (Number(rate) <= 0) return { vatRate: 0, vatCategoryCode: "Z" };
+    return { vatRate: standardRate(rate), vatCategoryCode: "S" };
   }
 
   const accountSuggestion = useAccountSuggestion("INCOME");
@@ -228,7 +244,7 @@ export default function NewInvoicePage() {
   }
 
   function addItem() {
-    const item = newItem();
+    const item = newItem(vatRatesForDate(issueDate)[0]);
     setItems((its) => [...its, companyVatPayer ? item : { ...item, vatRate: 0, vatCategoryCode: "O", taxExemptionReason: "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." }]);
   }
 
@@ -240,7 +256,8 @@ export default function NewInvoicePage() {
   function pickProduct(key: number, productId: number) {
     const p = products.find((x) => x.id === productId);
     if (!p) return;
-    updateItem(key, { productId: p.id, description: p.name, um: p.um, unitPrice: p.price, vatRate: companyVatPayer ? p.vatRate : 0, unitCode: p.unitCode || "H87", vatCategoryCode: companyVatPayer ? (p.vatCategoryCode || "S") : "O", taxExemptionReasonCode: companyVatPayer ? (p.taxExemptionReasonCode || "") : "", taxExemptionReason: companyVatPayer ? (p.taxExemptionReason || "") : "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal.", revenueAccount: p.revenueAccount || "704" });
+    const category = companyVatPayer ? (p.vatCategoryCode || "S") : "O";
+    updateItem(key, { productId: p.id, description: p.name, um: p.um, unitPrice: p.price, vatRate: category === "S" ? standardRate(p.vatRate) : 0, unitCode: p.unitCode || "H87", vatCategoryCode: category, taxExemptionReasonCode: companyVatPayer ? (p.taxExemptionReasonCode || "") : "", taxExemptionReason: companyVatPayer ? (p.taxExemptionReason || "") : "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal.", revenueAccount: p.revenueAccount || "704" });
   }
 
   const rawSubtotal = items.reduce((s, it) => s + it.qty * it.unitPrice, 0);
@@ -259,6 +276,10 @@ export default function NewInvoicePage() {
     }
     if (items.some((it) => !it.description.trim())) {
       alert("Completeaza denumirea pentru fiecare produs/serviciu.");
+      return;
+    }
+    if (items.some((it) => it.vatCategoryCode === "S" && !vatRatesForDate(issueDate).includes(Number(it.vatRate)))) {
+      alert("Selectează explicit cota TVA valabilă pentru fiecare poziție cu regim standard.");
       return;
     }
     const selectedNumber = Number(invoiceNumber);
@@ -423,7 +444,7 @@ export default function NewInvoicePage() {
         </div>
         <div>
           <label className="field-label">Data emiterii</label>
-          <input type="date" className="input" value={issueDate} onChange={(e) => { const next=e.target.value; setDueDate(current=>current===issueDate?next:current); setIssueDate(next); }} />
+          <input type="date" className="input" value={issueDate} onChange={(e) => { const next=e.target.value; const rates=vatRatesForDate(next); setDueDate(current=>current===issueDate?next:current); setIssueDate(next); setItems(current=>current.map(item=>item.vatCategoryCode==="S"&&!rates.includes(Number(item.vatRate))?{...item,vatRate:0}:item)); }} />
         </div>
       </div>
 
@@ -443,7 +464,7 @@ export default function NewInvoicePage() {
         </div>
         <div>
           <label className="field-label">Moneda</label>
-          <select className="input" value={currency} onChange={(e) => setCurrency(e.target.value)}>
+          <select className="input" value={currency} onChange={(e) => { const next=e.target.value; setCurrency(next); if(next!=="RON")setPaidOnSpot(false); }}>
             <option value="RON">RON</option>
             <option value="EUR">EUR</option>
             <option value="USD">USD</option>
@@ -562,11 +583,16 @@ export default function NewInvoicePage() {
                   />
                 </td>
                 <td>
-                  <input type="number" min={0} max={100} step={1} className="input text-right num" value={it.vatRate}
-                    onChange={(e) => updateItem(it.key, { vatRate: Number(e.target.value), vatCategoryCode: Number(e.target.value) === 0 && it.vatCategoryCode === "S" ? "Z" : it.vatCategoryCode })}/>
-                  <select className="input mt-1" value={it.vatCategoryCode} onChange={(e)=>{ const category=e.target.value; updateItem(it.key,{vatCategoryCode:category,vatRate:category === "S" ? (it.vatRate > 0 ? it.vatRate : 21) : 0,taxExemptionReason:category === "O" && !it.taxExemptionReason ? "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." : it.taxExemptionReason}); }}>
+                  <select className="input text-right num" disabled={it.vatCategoryCode!=="S"} value={it.vatCategoryCode==="S"?it.vatRate:0}
+                    onChange={(e) => updateItem(it.key, { vatRate: Number(e.target.value) })}>
+                    {it.vatCategoryCode==="S"&&!vatRatesForDate(issueDate).includes(Number(it.vatRate))&&<option value={0} disabled>Alege cota TVA</option>}
+                    {vatRatesForDate(issueDate).map(rate=><option key={rate} value={rate}>{rate}%</option>)}
+                    {it.vatCategoryCode!=="S"&&<option value={0}>0%</option>}
+                  </select>
+                  <select className="input mt-1" value={it.vatCategoryCode} onChange={(e)=>{ const category=e.target.value; const rates=vatRatesForDate(issueDate); updateItem(it.key,{vatCategoryCode:category,vatRate:category === "S" ? (rates.includes(Number(it.vatRate)) ? it.vatRate : 0) : 0,taxExemptionReason:category === "O" && !it.taxExemptionReason ? "Neînregistrat în scopuri de TVA conform art. 316 din Codul fiscal." : it.taxExemptionReason}); }}>
                     <option value="S">S · standard</option><option value="Z">Z · cotă zero</option><option value="E">E · scutit</option><option value="AE">AE · taxare inversă</option><option value="O">O · în afara TVA</option>
                   </select>
+                  {it.vatCategoryCode==="S"&&!vatRatesForDate(issueDate).includes(Number(it.vatRate))&&<div className="ref-error">Selectează cota TVA aplicabilă; cotele istorice nu sunt convertite automat.</div>}
                   {it.vatCategoryCode !== "S" && <><input className="input mt-1" value={it.taxExemptionReasonCode} onChange={(e)=>updateItem(it.key,{taxExemptionReasonCode:e.target.value})} placeholder="Cod motiv"/><input className="input mt-1" value={it.taxExemptionReason} onChange={(e)=>updateItem(it.key,{taxExemptionReason:e.target.value})} placeholder="Motiv / temei legal"/></>}
                 </td>
                 <td className="text-right num" style={{ padding: "0 16px" }}>
