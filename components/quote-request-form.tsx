@@ -40,7 +40,12 @@ export function QuoteRequestForm() {
   }
 
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setLoading(true); setError('')
+    event.preventDefault()
+    if (!form.message.trim() && !atrFile) {
+      setError(tr('Completează detaliile despre proiect sau încarcă ATR-ul.'))
+      return
+    }
+    setLoading(true); setError('')
     try {
       let atrPathname = ''
       if (atrFile) {
@@ -56,7 +61,7 @@ export function QuoteRequestForm() {
   }
 
   if (done) return <div className="flex min-h-[560px] flex-col items-center justify-center rounded-[32px] bg-white p-8 text-center shadow-2xl shadow-slate-950/10">
-    <span className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 size={40}/></span><h3 className="mt-7 text-3xl font-bold tracking-tight text-[#082b4d]">{tr('Cererea a ajuns la noi.')}</h3><p className="mt-3 max-w-md leading-7 text-slate-500">{tr('Analizăm datele proiectului și revenim pentru clarificări sau ofertare. ATR-ul încărcat a fost salvat în siguranță.')}</p><button type="button" onClick={() => setDone(false)} className="mt-8 rounded-full bg-[#0d5d8b] px-6 py-3 text-sm font-bold text-white hover:bg-[#082b4d]">{tr('Trimite o altă cerere')}</button>
+    <span className="flex h-20 w-20 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 size={40}/></span><h3 className="mt-7 text-3xl font-bold tracking-tight text-[#082b4d]">{tr('Cererea a ajuns la noi.')}</h3><p className="mt-3 max-w-md leading-7 text-slate-500">{tr('Analizăm informațiile transmise și revenim pentru clarificări sau ofertare.')}</p><button type="button" onClick={() => setDone(false)} className="mt-8 rounded-full bg-[#0d5d8b] px-6 py-3 text-sm font-bold text-white hover:bg-[#082b4d]">{tr('Trimite o altă cerere')}</button>
   </div>
 
   return <form onSubmit={submit} className="rounded-[32px] bg-white p-6 text-left shadow-2xl shadow-slate-950/10 sm:p-9">
@@ -64,7 +69,7 @@ export function QuoteRequestForm() {
     <div className="grid gap-4 sm:grid-cols-2"><label className="quote-label">{tr('Nume și prenume *')}<input className="quote-input" value={form.name} onChange={(e) => update('name', e.target.value)} required maxLength={120}/></label><label className="quote-label">{tr('Telefon *')}<input className="quote-input" type="tel" inputMode="tel" value={form.phone} onChange={(e) => update('phone', e.target.value)} required maxLength={30}/></label><label className="quote-label">Email <span className="font-normal text-slate-400">{tr('(opțional)')}</span><input className="quote-input" type="email" value={form.email} onChange={(e) => update('email', e.target.value)} maxLength={180}/></label><label className="quote-label">{tr('Localitatea lucrării')}<input className="quote-input" value={form.location} onChange={(e) => update('location', e.target.value)} maxLength={180}/></label></div>
     <label className="quote-label mt-4">{tr('Tipul proiectului *')}<select className="quote-input" value={form.serviceType} onChange={(e) => update('serviceType', e.target.value)} required><option>Branșament electric</option><option>Proiectare instalații electrice</option><option>Execuție rețea electrică</option><option>Post de transformare</option><option>Instalație de paratrăsnet / împământare</option><option>Alt tip de lucrare</option></select></label>
     <label className="quote-label mt-4">{tr('Detalii despre proiect')}<textarea className="quote-input min-h-28 resize-y py-3" value={form.message} onChange={(e) => update('message', e.target.value)} maxLength={2000} placeholder="Puterea solicitată, tipul imobilului, termenul dorit sau alte informații utile..."/></label>
-    <div className="mt-5"><span className="quote-label">{tr('Aviz tehnic de racordare - ATR')}</span><input ref={fileInput} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(e) => chooseFile(e.target.files?.[0])}/>
+    <div className="mt-5"><span className="quote-label">{tr('Aviz tehnic de racordare - ATR')}{!form.message.trim() && ' *'}</span><p className="mt-1 text-xs text-slate-500">{tr('Completează detaliile despre proiect sau încarcă ATR-ul.')}</p><input ref={fileInput} type="file" accept="application/pdf,.pdf" className="sr-only" onChange={(e) => chooseFile(e.target.files?.[0])}/>
       {atrFile ? <div className="mt-2 rounded-2xl border border-[#8bc8e5] bg-[#edf7fc] p-4"><div className="flex items-center gap-3"><FileText className="text-[#197fb5]" size={22}/><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-[#082b4d]">{atrFile.name}</p><p className="text-xs text-slate-500">{(atrFile.size / 1024 / 1024).toFixed(2)} MB · PDF</p></div><button type="button" onClick={() => { setAtrFile(null); setAtrOcr(null); setOcrStatus('') }} className="rounded-full p-2 text-slate-400 hover:bg-white hover:text-rose-500" aria-label="Elimină documentul"><X size={18}/></button></div>{ocrStatus && <p className="mt-3 flex items-center gap-2 border-t border-[#c7e5f3] pt-3 text-xs font-semibold text-[#0f679b]">{ocrStatus.includes('%') || ocrStatus.includes('Citesc') || ocrStatus.includes('recunosc') ? <Loader2 size={14} className="animate-spin"/> : <FileSearch size={14}/>} {ocrStatus}</p>}</div> : <button type="button" onClick={() => fileInput.current?.click()} onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); chooseFile(e.dataTransfer.files?.[0]) }} className="mt-2 flex w-full items-center justify-center gap-3 rounded-2xl border border-dashed border-[#8bc8e5] bg-[#f4fbfe] px-5 py-6 text-sm font-bold text-[#0f679b] transition hover:border-[#197fb5] hover:bg-[#edf7fc]"><UploadCloud size={21}/> {tr('Selectează sau trage aici documentul PDF')}</button>}
     </div>
     <label className="mt-5 flex items-start gap-3 text-xs leading-5 text-slate-500"><input type="checkbox" checked={form.consent} onChange={(e) => update('consent', e.target.checked)} required className="mt-1 accent-[#197fb5]"/><span>Sunt de acord ca Elmont S.A. să folosească datele transmise pentru analiza și ofertarea solicitării, conform <a href="/politica-de-confidentialitate" className="font-bold text-[#0f679b] hover:underline">politicii de confidențialitate</a>.</span></label>

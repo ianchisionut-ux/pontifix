@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { head } from '@vercel/blob'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
@@ -27,7 +28,14 @@ export async function POST(request: NextRequest) {
   const parsed = quoteSchema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ error: 'Verifică datele introduse și încearcă din nou.' }, { status: 400 })
   const data = parsed.data
+  if (!data.message && !data.atrPathname) return NextResponse.json({ error: 'Completează detaliile despre proiect sau încarcă ATR-ul.' }, { status: 400 })
   if (data.atrPathname && !data.atrPathname.startsWith('cereri-oferta/')) return NextResponse.json({ error: 'Document ATR invalid.' }, { status: 400 })
+  if (data.atrPathname) {
+    const uploaded = await head(data.atrPathname).catch(() => null)
+    if (!uploaded || uploaded.contentType !== 'application/pdf' || uploaded.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'ATR-ul încărcat nu este un PDF valid.' }, { status: 400 })
+    }
+  }
 
   await ensureQuoteStorage()
   const id = crypto.randomUUID()
