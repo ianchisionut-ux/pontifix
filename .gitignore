@@ -42,3 +42,7 @@ hs_err_pid*.log
 # Android SMS build and local release signing key
 android-sms-gateway/.gradle/
 android-sms-gateway/.local/
+
+# Windows chat installer and downloaded Electron runtime
+desktop-chat/dist/
+desktop-chat/.cache/

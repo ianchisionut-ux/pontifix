@@ -1,0 +1,32 @@
+{
+  "name": "elmont-chat-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chat Elmont pentru Windows",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.js",
+    "package:win": "electron-builder --win nsis portable --x64"
+  },
+  "devDependencies": {
+    "electron": "45.3.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "ro.elmont.chat",
+    "productName": "Chat Elmont",
+    "asar": true,
+    "files": ["main.js", "main-preload.js", "popup-preload.js", "popup.html", "popup.css", "popup.js", "notification-state.js", "assets/**/*"],
+    "directories": { "output": "dist" },
+    "win": { "icon": "assets/chat.ico", "target": ["nsis", "portable"] },
+    "nsis": {
+      "artifactName": "Chat-Elmont-Setup-${version}.${ext}",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "runAfterFinish": true
+    },
+    "portable": { "artifactName": "Chat-Elmont-Portable-${version}.${ext}" }
+  }
+}

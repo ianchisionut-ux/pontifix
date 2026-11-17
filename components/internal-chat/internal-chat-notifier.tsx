@@ -14,6 +14,7 @@ export function InternalChatNotifier() {
   const [count, setCount] = useState(0)
 
   useEffect(() => {
+    if ((window as Window & {elmontDesktop?:boolean}).elmontDesktop) return
     const onPushEnabled = () => { pushActive.current = true }
     window.addEventListener('internal-chat-push-enabled', onPushEnabled)
     if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
