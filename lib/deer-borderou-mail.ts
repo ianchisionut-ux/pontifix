@@ -51,14 +51,14 @@ export async function syncDeerBorderouri(businessId: string) {
         const content = attachment.content
         if (!content || content.length < 100 || content.length > MAX_PDF_BYTES || content.subarray(0, 5).toString() !== '%PDF-') continue
         const sourceKey = emailAttachmentKey(mail.messageId || String(uid), filename, content)
-        const exists = await prisma.$queryRaw<Array<{ id: string; connectionId: string | null; documentKind: string }>>`
-          SELECT "id", "connectionId", "documentKind" FROM "DeerBorderou" WHERE "businessId"=${businessId} AND "sourceKey"=${sourceKey} LIMIT 1
+        const exists = await prisma.$queryRaw<Array<{ id: string; connectionId: string | null; projectId: string | null; documentKind: string }>>`
+          SELECT "id", "connectionId", "projectId", "documentKind" FROM "DeerBorderou" WHERE "businessId"=${businessId} AND "sourceKey"=${sourceKey} LIMIT 1
         `
         if (exists.length) {
-          if (connectionId && (exists[0].connectionId !== connectionId || exists[0].documentKind !== documentKind)) {
+          if (connectionId && !exists[0].projectId && (exists[0].connectionId !== connectionId || exists[0].documentKind !== documentKind)) {
             await prisma.$executeRaw`
               UPDATE "DeerBorderou" SET "connectionId"=${connectionId}, "documentKind"=${documentKind}, "dossierNumber"=${dossierNumber}, "beneficiary"=${beneficiary}, "notificationStatus"='PENDING'
-              WHERE "id"=${exists[0].id} AND "businessId"=${businessId} AND "source"='EMAIL'
+              WHERE "id"=${exists[0].id} AND "businessId"=${businessId} AND "source"='EMAIL' AND "projectId" IS NULL
             `
             result.corrected++
           }

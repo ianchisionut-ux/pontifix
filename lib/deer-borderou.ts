@@ -8,6 +8,7 @@ import { DATR_EMAIL_FILENAME_PATTERN, type DeerDocumentKind } from '@/lib/deer-b
 export type DeerBorderou = {
   id: string
   connectionId: string | null
+  projectId: string | null
   documentKind: DeerDocumentKind
   documentPathname: string
   documentName: string
@@ -26,6 +27,7 @@ export function ensureDeerBorderouStorage() {
     "id" TEXT NOT NULL PRIMARY KEY,
     "businessId" TEXT NOT NULL,
     "connectionId" TEXT,
+    "projectId" TEXT,
     "documentKind" TEXT NOT NULL DEFAULT 'BORDEROU',
     "documentPathname" TEXT NOT NULL,
     "documentData" BYTEA,
@@ -44,6 +46,8 @@ export function ensureDeerBorderouStorage() {
     await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "documentData" BYTEA`)
     await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "documentKind" TEXT NOT NULL DEFAULT 'BORDEROU'`)
     await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "notificationStatus" TEXT NOT NULL DEFAULT 'READ'`)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "DeerBorderou" ADD COLUMN IF NOT EXISTS "projectId" TEXT`)
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "DeerBorderou_business_project_idx" ON "DeerBorderou" ("businessId", "projectId")`)
   }).catch((error) => { ready = null; throw error })
   return ready
 }
@@ -88,7 +92,7 @@ export async function findDeerCase(businessId: string, dossierNumber: string, be
 export async function listDeerBorderouri(businessId: string) {
   await ensureDeerBorderouStorage()
   return prisma.$queryRaw<DeerBorderou[]>`
-    SELECT "id", "connectionId", "documentKind", "documentPathname", "documentName", "source", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt", "notificationStatus"
+    SELECT "id", "connectionId", "projectId", "documentKind", "documentPathname", "documentName", "source", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt", "notificationStatus"
     FROM "DeerBorderou" WHERE "businessId"=${businessId}
       AND ("source"<>'EMAIL' OR "documentName" !~* ${DATR_EMAIL_FILENAME_PATTERN})
     ORDER BY "receivedAt" DESC, "createdAt" DESC
@@ -96,7 +100,7 @@ export async function listDeerBorderouri(businessId: string) {
 }
 
 export async function saveDeerBorderou(input: {
-  businessId: string; connectionId: string | null; documentPathname: string; documentName: string
+  businessId: string; connectionId: string | null; projectId?: string | null; documentPathname: string; documentName: string
   documentKind: DeerDocumentKind
   documentData?: Buffer
   source: 'EMAIL' | 'UPLOAD'; sourceKey?: string; sender?: string; subject?: string
@@ -107,8 +111,8 @@ export async function saveDeerBorderou(input: {
   const sourceKey = input.sourceKey || `upload:${id}`
   const receivedAt = input.receivedAt || new Date()
   await prisma.$executeRaw(Prisma.sql`
-    INSERT INTO "DeerBorderou" ("id", "businessId", "connectionId", "documentKind", "documentPathname", "documentData", "documentName", "source", "sourceKey", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt", "notificationStatus")
-    VALUES (${id}, ${input.businessId}, ${input.connectionId}, ${input.documentKind}, ${input.documentPathname}, ${input.documentData || null}, ${input.documentName}, ${input.source}, ${sourceKey}, ${input.sender || null}, ${input.subject || null}, ${input.dossierNumber || null}, ${input.beneficiary || null}, ${receivedAt}, ${input.source === 'EMAIL' ? 'PENDING' : 'READ'})
+    INSERT INTO "DeerBorderou" ("id", "businessId", "connectionId", "projectId", "documentKind", "documentPathname", "documentData", "documentName", "source", "sourceKey", "sender", "subject", "dossierNumber", "beneficiary", "receivedAt", "notificationStatus")
+    VALUES (${id}, ${input.businessId}, ${input.connectionId}, ${input.projectId || null}, ${input.documentKind}, ${input.documentPathname}, ${input.documentData || null}, ${input.documentName}, ${input.source}, ${sourceKey}, ${input.sender || null}, ${input.subject || null}, ${input.dossierNumber || null}, ${input.beneficiary || null}, ${receivedAt}, ${input.source === 'EMAIL' ? 'PENDING' : 'READ'})
     ON CONFLICT ("businessId", "sourceKey") DO NOTHING
   `)
   return id

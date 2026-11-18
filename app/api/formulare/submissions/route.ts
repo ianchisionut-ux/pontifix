@@ -31,8 +31,18 @@ export async function POST(request: NextRequest) {
   const parsed = schema.safeParse(await request.json())
   if (!parsed.success) return NextResponse.json({ error: 'Datele cererii sunt invalide.' }, { status: 400 })
   await ensureFormStorage(businessId)
-  const template = await prisma.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "FormTemplate" WHERE "id"=${parsed.data.formTemplateId} AND "businessId"=${businessId} LIMIT 1`
+  const template = await prisma.$queryRaw<Array<{ id: string; category: string }>>`SELECT "id", "category" FROM "FormTemplate" WHERE "id"=${parsed.data.formTemplateId} AND "businessId"=${businessId} LIMIT 1`
   if (!template[0]) return NextResponse.json({ error: 'Model inexistent.' }, { status: 404 })
+  if (template[0].category === 'DEER') {
+    const sourceId = parsed.data.sourceId || ''
+    if (parsed.data.sourceType === 'CONNECTION') {
+      const rows = await prisma.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "ConnectionCase" WHERE "id"=${sourceId} AND "businessId"=${businessId} LIMIT 1`
+      if (!rows.length) return NextResponse.json({ error: 'Branșament inexistent.' }, { status: 404 })
+    } else if (parsed.data.sourceType === 'PROJECT') {
+      const project = await prisma.project.findFirst({ where: { id: sourceId, businessId }, select: { id: true } })
+      if (!project) return NextResponse.json({ error: 'Proiect inexistent.' }, { status: 404 })
+    } else return NextResponse.json({ error: 'Alege un branșament sau proiect.' }, { status: 400 })
+  }
   const id = parsed.data.id || crypto.randomUUID()
   if (parsed.data.id) {
     const changed = Number(await prisma.$executeRaw`UPDATE "FormSubmission" SET "title"=${parsed.data.title}, "sourceType"=${parsed.data.sourceType || null}, "sourceId"=${parsed.data.sourceId || null}, "values"=${JSON.stringify(parsed.data.values)}::jsonb, "fieldSchema"=${JSON.stringify(parsed.data.fieldSchema)}::jsonb, "stampSchema"=${JSON.stringify(parsed.data.stampSchema)}::jsonb, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${businessId}`)

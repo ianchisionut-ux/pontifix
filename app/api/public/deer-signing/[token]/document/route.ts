@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (signed && (!row.completedAt || !row.signedPathname)) return NextResponse.json({ error: 'Documentele nu au fost semnate.' }, { status: 404 })
   const result = await get(signed ? row.signedPathname! : row.bundlePathname, { access: 'private' })
   if (!result?.stream) return NextResponse.json({ error: 'PDF indisponibil.' }, { status: 404 })
-  const filename = `DEER-${row.nib.replace(/[^A-Za-z0-9-]/g, '')}${signed ? '-semnat' : '-de-analizat'}.pdf`
+  const filename = `DEER-${row.projectId || row.nib.replace(/[^A-Za-z0-9-]/g, '')}${signed ? '-semnat' : '-de-analizat'}.pdf`
   return new Response(result.stream, { headers: {
     'Content-Type': 'application/pdf',
     'Content-Disposition': `${request.nextUrl.searchParams.get('download') === '1' ? 'attachment' : 'inline'}; filename="${filename}"`,

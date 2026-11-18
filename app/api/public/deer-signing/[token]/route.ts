@@ -3,6 +3,7 @@ import { get, put } from '@vercel/blob'
 import { degrees, PDFDocument } from 'pdf-lib'
 import { prisma } from '@/lib/prisma'
 import { ensureBeneficiarySignatureStorage } from '@/lib/beneficiary-signature'
+import { ensureProjectBeneficiarySignatureStorage } from '@/lib/project-beneficiary-signature'
 import { getSigningRequest, requestAvailable, sha256 } from '@/lib/deer-signing'
 import { SIGNING_DECLARATION } from '@/lib/deer-signing-shared'
 import { BENEFICIARY_SIGNED_KEY } from '@/components/forms/form-stamps'
@@ -49,11 +50,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     pdf.setModificationDate(new Date())
     const signedBytes = await pdf.save()
     const signedHash = sha256(signedBytes)
-    const signedBlob = await put(`formulare/deer-signing/${row.connectionId}/${row.id}-${randomUUID()}-signed.pdf`, Buffer.from(signedBytes), { access: 'private', contentType: 'application/pdf' })
+    const signedBlob = await put(`formulare/deer-signing/${row.connectionId || row.projectId}/${row.id}-${randomUUID()}-signed.pdf`, Buffer.from(signedBytes), { access: 'private', contentType: 'application/pdf' })
     const signedPathname = signedBlob.pathname
     const signerIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim().slice(0, 100) || null
     const signerUserAgent = request.headers.get('user-agent')?.slice(0, 400) || null
-    await ensureBeneficiarySignatureStorage()
+    if (row.projectId) await ensureProjectBeneficiarySignatureStorage()
+    else await ensureBeneficiarySignatureStorage()
     const signedIds = row.documents.filter((item) => item.signatures.length).map((item) => item.id)
     await prisma.$transaction(async (tx) => {
       const updated = await tx.$executeRaw`UPDATE "DeerSigningRequest" SET "signedPathname"=${signedPathname}, "signedHash"=${signedHash},
@@ -61,15 +63,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         "readDocumentIds"=${JSON.stringify(readIds)}::jsonb, "signatureImage"=${image}, "signerIp"=${signerIp}, "signerUserAgent"=${signerUserAgent}
         WHERE "id"=${row.id} AND "completedAt" IS NULL AND "revokedAt" IS NULL AND "expiresAt">CURRENT_TIMESTAMP`
       if (updated !== 1) throw new Error('Acest link a fost deja folosit sau anulat.')
-      await tx.$executeRaw`INSERT INTO "BeneficiarySignature" ("businessId", "connectionId", "image", "capturedByEmail")
-        VALUES (${row.businessId}, ${row.connectionId}, ${image}, 'link beneficiar')
-        ON CONFLICT ("businessId", "connectionId") DO UPDATE SET "image"=EXCLUDED."image", "capturedByEmail"=EXCLUDED."capturedByEmail",
-          "consentConfirmedAt"=CURRENT_TIMESTAMP, "signedAt"=CURRENT_TIMESTAMP, "updatedAt"=CURRENT_TIMESTAMP`
+      if (row.projectId) {
+        await tx.$executeRaw`INSERT INTO "ProjectBeneficiarySignature" ("businessId", "projectId", "image", "capturedByEmail")
+          VALUES (${row.businessId}, ${row.projectId}, ${image}, 'link beneficiar')
+          ON CONFLICT ("businessId", "projectId") DO UPDATE SET "image"=EXCLUDED."image", "capturedByEmail"=EXCLUDED."capturedByEmail",
+            "consentConfirmedAt"=CURRENT_TIMESTAMP, "signedAt"=CURRENT_TIMESTAMP, "updatedAt"=CURRENT_TIMESTAMP`
+      } else {
+        await tx.$executeRaw`INSERT INTO "BeneficiarySignature" ("businessId", "connectionId", "image", "capturedByEmail")
+          VALUES (${row.businessId}, ${row.connectionId}, ${image}, 'link beneficiar')
+          ON CONFLICT ("businessId", "connectionId") DO UPDATE SET "image"=EXCLUDED."image", "capturedByEmail"=EXCLUDED."capturedByEmail",
+            "consentConfirmedAt"=CURRENT_TIMESTAMP, "signedAt"=CURRENT_TIMESTAMP, "updatedAt"=CURRENT_TIMESTAMP`
+      }
       for (const templateId of signedIds) {
         const count = await tx.$executeRaw`UPDATE "FormSubmission" SET "values"=jsonb_set(COALESCE("values", '{}'::jsonb), ${`{${BENEFICIARY_SIGNED_KEY}}`}::text[], '"yes"'::jsonb), "updatedAt"=CURRENT_TIMESTAMP
-          WHERE "businessId"=${row.businessId} AND "sourceId"=${row.connectionId} AND "formTemplateId"=${templateId}`
+          WHERE "businessId"=${row.businessId} AND "sourceType"=${row.projectId ? 'PROJECT' : 'CONNECTION'} AND "sourceId"=${row.projectId || row.connectionId} AND "formTemplateId"=${templateId}`
         if (!count) await tx.$executeRaw`INSERT INTO "FormSubmission" ("id", "businessId", "formTemplateId", "title", "sourceType", "sourceId", "values", "fieldSchema", "stampSchema")
-          SELECT ${randomUUID()}, ${row.businessId}, "id", "title", 'CONNECTION', ${row.connectionId}, ${JSON.stringify({ [BENEFICIARY_SIGNED_KEY]: 'yes' })}::jsonb, "fieldSchema", '[]'::jsonb
+          SELECT ${randomUUID()}, ${row.businessId}, "id", "title", ${row.projectId ? 'PROJECT' : 'CONNECTION'}, ${row.projectId || row.connectionId}, ${JSON.stringify({ [BENEFICIARY_SIGNED_KEY]: 'yes' })}::jsonb, "fieldSchema", '[]'::jsonb
           FROM "FormTemplate" WHERE "id"=${templateId} AND "businessId"=${row.businessId}`
       }
     })

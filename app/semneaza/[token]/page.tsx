@@ -10,6 +10,6 @@ export default async function SigningPage({ params }: { params: Promise<{ token:
   const { token } = await params
   const row = await getSigningRequest(token)
   if (!row) notFound()
-  return <DeerSigner token={token} beneficiaryName={row.beneficiaryName} nib={row.nib} documents={row.documents}
+  return <DeerSigner token={token} beneficiaryName={row.beneficiaryName} nib={row.nib} sourceType={row.projectId ? 'project' : 'connection'} documents={row.documents}
     available={Boolean(requestAvailable(row))} completed={Boolean(row.completedAt)} expiresAt={row.expiresAt.toISOString()}/>
 }

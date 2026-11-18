@@ -3,20 +3,23 @@
 import { useEffect, useState } from 'react'
 import { Download, Loader2, Printer, X } from 'lucide-react'
 import type { FormField, FormSubmissionDto, FormTemplateDto, StampPlacement } from '@/lib/ensure-form-storage'
-import { beneficiarySignatureImage, boundValue, loadImage, transparentStamp, type ConnectionFormOption } from './pdf-request-editor'
+import { beneficiarySignatureImage, boundValue, loadImage, transparentStamp, type ConnectionFormOption, type ProjectFormOption } from './pdf-request-editor'
 import { deerDocumentKindForTemplate, type DeerDocumentKind } from '@/lib/deer-borderou-shared'
 import { beneficiarySigned, effectiveStampPlacements } from './form-stamps'
 
 type PreviewProps = {
   templates: FormTemplateDto[]
   submissions: FormSubmissionDto[]
-  connection: ConnectionFormOption
+  connection?: ConnectionFormOption
+  project?: ProjectFormOption
+  sourceType: 'connection' | 'project'
+  sourceId: string
   caseDocumentIds: Partial<Record<DeerDocumentKind, string>>
   onClose: () => void
 }
 
-function fieldText(field: FormField, submission: FormSubmissionDto | undefined, connection: ConnectionFormOption) {
-  if (field.binding) return boundValue(field.binding, connection) || submission?.values[field.id] || ''
+function fieldText(field: FormField, submission: FormSubmissionDto | undefined, connection?: ConnectionFormOption, project?: ProjectFormOption) {
+  if (field.binding) return boundValue(field.binding, connection, project) || submission?.values[field.id] || ''
   return submission?.values[field.id] ?? field.defaultValue ?? ''
 }
 
@@ -46,7 +49,7 @@ function drawField(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement,
   if (line) context.fillText(line, x, y + lineNo * size * 1.18)
 }
 
-export function DeerBulkPreview({ templates, submissions, connection, caseDocumentIds, onClose }: PreviewProps) {
+export function DeerBulkPreview({ templates, submissions, connection, project, sourceType, sourceId, caseDocumentIds, onClose }: PreviewProps) {
   const [previewUrl, setPreviewUrl] = useState('')
   const [error, setError] = useState('')
   const [current, setCurrent] = useState('')
@@ -61,7 +64,7 @@ export function DeerBulkPreview({ templates, submissions, connection, caseDocume
         const [pdfjs, { PDFDocument }] = await Promise.all([import('pdfjs-dist'), import('pdf-lib')])
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
         const output = await PDFDocument.create()
-        const beneficiarySignature = await beneficiarySignatureImage(connection.id)
+        const beneficiarySignature = await beneficiarySignatureImage(sourceId, sourceType)
         let pages = 0
         for (const template of templates) {
           if (cancelled) return
@@ -69,7 +72,7 @@ export function DeerBulkPreview({ templates, submissions, connection, caseDocume
           const kind = deerDocumentKindForTemplate(template)
           const caseDocumentId = kind ? caseDocumentIds[kind] : undefined
           const documentUrl = template.documentPathname.startsWith('connection-document:')
-            ? `/api/bransamente/${encodeURIComponent(connection.id)}/document?type=${encodeURIComponent(template.documentPathname.slice('connection-document:'.length))}&format=pdf`
+            ? connection ? `/api/bransamente/${encodeURIComponent(connection.id)}/document?type=${encodeURIComponent(template.documentPathname.slice('connection-document:'.length))}&format=pdf` : ''
             : kind && caseDocumentId
             ? `/api/formulare/borderou/${encodeURIComponent(caseDocumentId)}/document`
             : `/api/formulare/${encodeURIComponent(template.id)}/document`
@@ -77,7 +80,7 @@ export function DeerBulkPreview({ templates, submissions, connection, caseDocume
           if (!response.ok) throw new Error(`PDF-ul „${template.title}” nu poate fi deschis.`)
           const loadingTask = pdfjs.getDocument({ data: await response.arrayBuffer(), wasmUrl: '/pdfjs/wasm/' })
           const pdf = await loadingTask.promise
-          const submission = submissions.find((item) => item.formTemplateId === template.id && item.sourceId === connection.id)
+          const submission = submissions.find((item) => item.formTemplateId === template.id && item.sourceType === sourceType.toUpperCase() && item.sourceId === sourceId)
           const fields = submission?.fieldSchema?.length ? submission.fieldSchema : template.fieldSchema
           const stamps: StampPlacement[] = effectiveStampPlacements(template.stampSchema, submission?.stampSchema)
           const signed = beneficiarySigned(submission?.values)
@@ -95,7 +98,7 @@ export function DeerBulkPreview({ templates, submissions, connection, caseDocume
             if (!context) throw new Error('Previzualizarea PDF nu este disponibilă în acest browser.')
             await page.render({ canvas, canvasContext: context, viewport }).promise
             for (const field of fields.filter((item) => item.page === pageNumber)) {
-              drawField(context, canvas, field, fieldText(field, submission, connection), scale)
+              drawField(context, canvas, field, fieldText(field, submission, connection, project), scale)
             }
             for (const stamp of stamps.filter((item) => item.page === pageNumber)) {
               if (stamp.stampKey === 'beneficiary-signature' && !signed) continue
@@ -129,7 +132,7 @@ export function DeerBulkPreview({ templates, submissions, connection, caseDocume
       }
     })()
     return () => { cancelled = true; controller.abort(); if (url) URL.revokeObjectURL(url) }
-  }, [templates, submissions, connection, caseDocumentIds])
+  }, [templates, submissions, connection, project, sourceType, sourceId, caseDocumentIds])
 
   function printAll() {
     if (!previewUrl) return
@@ -147,8 +150,8 @@ export function DeerBulkPreview({ templates, submissions, connection, caseDocume
   return <div className="fixed inset-0 z-[90] flex flex-col bg-[#edf4f8]">
     <header className="flex flex-wrap items-center gap-3 border-b border-slate-200 bg-white px-5 py-3 shadow-sm">
       <button type="button" className="round-action" onClick={onClose} aria-label="Închide previzualizarea"><X size={18}/></button>
-      <div className="mr-auto"><b className="block text-[#082b4d]">Documente DEER · {connection.fields.Beneficiar || connection.nib}</b><span className="text-xs text-slate-500">{templates.length} șabloane · {pageCount} pagini</span></div>
-      <a href={previewUrl || undefined} download={`DEER-${connection.nib || 'documente'}.pdf`} aria-disabled={!previewUrl} className={`btn-secondary inline-flex items-center gap-2 !py-2 ${!previewUrl ? 'pointer-events-none opacity-50' : ''}`}><Download size={16}/> Descarcă toate</a>
+      <div className="mr-auto"><b className="block text-[#082b4d]">Documente DEER · {connection?.fields.Beneficiar || project?.beneficiary || connection?.nib || project?.name}</b><span className="text-xs text-slate-500">{templates.length} șabloane · {pageCount} pagini</span></div>
+      <a href={previewUrl || undefined} download={`DEER-${connection?.nib || project?.name || 'documente'}.pdf`} aria-disabled={!previewUrl} className={`btn-secondary inline-flex items-center gap-2 !py-2 ${!previewUrl ? 'pointer-events-none opacity-50' : ''}`}><Download size={16}/> Descarcă toate</a>
       <button type="button" className="btn-primary inline-flex items-center gap-2 !py-2" disabled={!previewUrl} onClick={printAll}><Printer size={16}/> Printează toate</button>
     </header>
     {error ? <div role="alert" className="m-5 rounded-xl bg-red-50 p-4 font-semibold text-red-700">{error}</div> : previewUrl ? <iframe title="Previzualizarea tuturor documentelor DEER" src={`${previewUrl}#toolbar=0&navpanes=0`} className="min-h-0 flex-1 bg-white"/> : <div role="status" className="flex flex-1 items-center justify-center gap-3 text-[#0d5d8b]"><Loader2 className="animate-spin" size={22}/> Pregătesc {current || 'documentele'}…</div>}

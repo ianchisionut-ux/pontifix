@@ -2,13 +2,13 @@
 
 import type { FormField, FormSubmissionDto, FormTemplateDto, StampPlacement } from './ensure-form-storage'
 import { deerDocumentKindForTemplate, type DeerDocumentKind } from './deer-borderou-shared'
-import { boundValue, loadImage, transparentStamp, type ConnectionFormOption } from '@/components/forms/pdf-request-editor'
+import { boundValue, loadImage, transparentStamp, type ConnectionFormOption, type ProjectFormOption } from '@/components/forms/pdf-request-editor'
 import { effectiveStampPlacements } from '@/components/forms/form-stamps'
 
 export type SigningDocument = { id: string; title: string; firstPage: number; pageCount: number; signatures: Array<{ page: number; x: number; y: number; width: number; height: number; rotation: number }> }
 
-function fieldText(field: FormField, submission: FormSubmissionDto | undefined, connection: ConnectionFormOption) {
-  return field.binding ? boundValue(field.binding, connection) || submission?.values[field.id] || '' : submission?.values[field.id] ?? field.defaultValue ?? ''
+function fieldText(field: FormField, submission: FormSubmissionDto | undefined, connection?: ConnectionFormOption, project?: ProjectFormOption) {
+  return field.binding ? boundValue(field.binding, connection, project) || submission?.values[field.id] || '' : submission?.values[field.id] ?? field.defaultValue ?? ''
 }
 
 function drawField(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement, field: FormField, value: string, scale: number) {
@@ -33,7 +33,7 @@ function drawField(context: CanvasRenderingContext2D, canvas: HTMLCanvasElement,
 }
 
 /** Creates the exact, unsigned PDF snapshot the beneficiary reviews. */
-export async function buildDeerSigningBundle(templates: FormTemplateDto[], submissions: FormSubmissionDto[], connection: ConnectionFormOption, caseDocumentIds: Partial<Record<DeerDocumentKind, string>>, onProgress?: (title: string) => void) {
+export async function buildDeerSigningBundle(templates: FormTemplateDto[], submissions: FormSubmissionDto[], source: { sourceType: 'connection' | 'project'; sourceId: string; connection?: ConnectionFormOption; project?: ProjectFormOption }, caseDocumentIds: Partial<Record<DeerDocumentKind, string>>, onProgress?: (title: string) => void) {
   const [pdfjs, { PDFDocument }] = await Promise.all([import('pdfjs-dist'), import('pdf-lib')])
   pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`
   const output = await PDFDocument.create()
@@ -44,7 +44,7 @@ export async function buildDeerSigningBundle(templates: FormTemplateDto[], submi
     const kind = deerDocumentKindForTemplate(template)
     const caseDocumentId = kind ? caseDocumentIds[kind] : undefined
     const documentUrl = template.documentPathname.startsWith('connection-document:')
-      ? `/api/bransamente/${encodeURIComponent(connection.id)}/document?type=${encodeURIComponent(template.documentPathname.slice('connection-document:'.length))}&format=pdf`
+      ? source.connection ? `/api/bransamente/${encodeURIComponent(source.connection.id)}/document?type=${encodeURIComponent(template.documentPathname.slice('connection-document:'.length))}&format=pdf` : ''
       : kind && caseDocumentId ? `/api/formulare/borderou/${encodeURIComponent(caseDocumentId)}/document`
       : `/api/formulare/${encodeURIComponent(template.id)}/document`
     const response = await fetch(documentUrl, { cache: 'no-store' })
@@ -52,7 +52,7 @@ export async function buildDeerSigningBundle(templates: FormTemplateDto[], submi
     const loadingTask = pdfjs.getDocument({ data: await response.arrayBuffer(), wasmUrl: '/pdfjs/wasm/' })
     const pdf = await loadingTask.promise
     try {
-      const submission = submissions.find((item) => item.formTemplateId === template.id && item.sourceId === connection.id)
+      const submission = submissions.find((item) => item.formTemplateId === template.id && item.sourceType === source.sourceType.toUpperCase() && item.sourceId === source.sourceId)
       const fields = submission?.fieldSchema?.length ? submission.fieldSchema : template.fieldSchema
       const stamps: StampPlacement[] = effectiveStampPlacements(template.stampSchema, submission?.stampSchema)
       const signatures = stamps.filter((item) => item.stampKey === 'beneficiary-signature' && item.page >= 1 && item.page <= pdf.numPages).map((item) => ({ page: pageIndex + item.page, x: item.x, y: item.y, width: item.width, height: item.height, rotation: item.rotation }))
@@ -67,7 +67,7 @@ export async function buildDeerSigningBundle(templates: FormTemplateDto[], submi
         const context = canvas.getContext('2d')
         if (!context) throw new Error('PDF-ul nu poate fi pregătit pe acest dispozitiv.')
         await page.render({ canvas, canvasContext: context, viewport }).promise
-        for (const field of fields.filter((item) => item.page === pageNumber)) drawField(context, canvas, field, fieldText(field, submission, connection), scale)
+        for (const field of fields.filter((item) => item.page === pageNumber)) drawField(context, canvas, field, fieldText(field, submission, source.connection, source.project), scale)
         for (const stamp of stamps.filter((item) => item.page === pageNumber && item.stampKey !== 'beneficiary-signature')) {
           const source = await transparentStamp(stamp.stampKey)
           if (!source) continue
@@ -85,7 +85,7 @@ export async function buildDeerSigningBundle(templates: FormTemplateDto[], submi
       }
     } finally { await loadingTask.destroy() }
   }
-  if (!documents.length) throw new Error('Nu există documente pentru acest branșament.')
+  if (!documents.length) throw new Error('Nu există documente pentru acest dosar.')
   if (!documents.some((item) => item.signatures.length)) throw new Error('Așază mai întâi „Semnătura beneficiarului” pe documentele care trebuie semnate.')
   return { bytes: await output.save(), documents }
 }

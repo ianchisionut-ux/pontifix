@@ -27,6 +27,7 @@ export function deerDocumentKindForTemplate(template: { category: string; title:
 export type DeerBorderouDto = {
   id: string
   connectionId: string | null
+  projectId: string | null
   documentKind: DeerDocumentKind
   documentName: string
   source: string

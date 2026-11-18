@@ -3,9 +3,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Eraser, Loader2, PenLine, Trash2, X } from 'lucide-react'
 
-export function BeneficiarySignatureCapture({ connectionId, beneficiary, onClose, onSaved }: {
-  connectionId: string; beneficiary: string; onClose: () => void; onSaved: () => void
+export function BeneficiarySignatureCapture({ sourceType, sourceId, beneficiary, onClose, onSaved }: {
+  sourceType: 'connection' | 'project'; sourceId: string; beneficiary: string; onClose: () => void; onSaved: () => void
 }) {
+  const signatureUrl = `/api/formulare/${sourceType === 'project' ? 'project-signature' : 'beneficiary-signature'}/${encodeURIComponent(sourceId)}`
+  const sourceLabel = sourceType === 'project' ? 'proiect' : 'branșament'
   const canvas = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
   const lastPoint = useRef<{ x: number; y: number } | null>(null)
@@ -22,12 +24,18 @@ export function BeneficiarySignatureCapture({ connectionId, beneficiary, onClose
     target.width = 900
     target.height = 300
     const context = target.getContext('2d')!
+    context.clearRect(0, 0, target.width, target.height)
     context.strokeStyle = '#1648b0'
     context.lineWidth = 4
     context.lineCap = 'round'
     context.lineJoin = 'round'
+    setHasInk(false)
+    setExisting(false)
+    setConsent(false)
+    setError('')
+    setLoading(true)
     let cancelled = false
-    fetch(`/api/formulare/beneficiary-signature/${encodeURIComponent(connectionId)}`, { cache: 'no-store' })
+    fetch(signatureUrl, { cache: 'no-store' })
       .then(async (response) => {
         if (response.status === 404) return
         if (!response.ok) throw new Error('Semnătura existentă nu a putut fi încărcată.')
@@ -38,7 +46,7 @@ export function BeneficiarySignatureCapture({ connectionId, beneficiary, onClose
       }).catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Semnătura nu a putut fi încărcată.') })
       .finally(() => { if (!cancelled) setLoading(false) })
     return () => { cancelled = true }
-  }, [connectionId])
+  }, [signatureUrl])
 
   function point(event: React.PointerEvent<HTMLCanvasElement>) {
     const box = event.currentTarget.getBoundingClientRect()
@@ -83,7 +91,7 @@ export function BeneficiarySignatureCapture({ connectionId, beneficiary, onClose
     if (!hasInk || !canvas.current) return
     setBusy(true); setError('')
     try {
-      const response = await fetch(`/api/formulare/beneficiary-signature/${encodeURIComponent(connectionId)}`, {
+      const response = await fetch(signatureUrl, {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image: canvas.current.toDataURL('image/png'), consentConfirmed: consent }),
       })
@@ -98,7 +106,7 @@ export function BeneficiarySignatureCapture({ connectionId, beneficiary, onClose
     if (!window.confirm(`Ștergi semnătura salvată pentru ${beneficiary}?`)) return
     setBusy(true); setError('')
     try {
-      const response = await fetch(`/api/formulare/beneficiary-signature/${encodeURIComponent(connectionId)}`, { method: 'DELETE' })
+      const response = await fetch(signatureUrl, { method: 'DELETE' })
       if (!response.ok) throw new Error('Semnătura nu a putut fi ștearsă.')
       onSaved(); onClose()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Semnătura nu a putut fi ștearsă.') }
@@ -115,8 +123,8 @@ export function BeneficiarySignatureCapture({ connectionId, beneficiary, onClose
       <div className="mt-4 min-w-0 max-w-full rounded-2xl border-2 border-dashed border-blue-300 bg-white p-1 sm:mt-5">
         <canvas ref={canvas} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp} className={`block h-[190px] w-full min-w-0 max-w-full touch-none rounded-xl sm:h-[260px] landscape:max-h-[36dvh] ${loading ? 'pointer-events-none opacity-40' : ''}`} aria-label="Zona de semnare a beneficiarului"/>
       </div>
-      <p className="mt-2 text-xs text-slate-500">Semnătura albastră se păstrează numai pentru acest branșament. Nu este aplicată automat pe documente fără o poziție configurată.</p>
-      <label className="mt-4 flex items-start gap-3 rounded-xl bg-blue-50 p-3 text-sm font-medium text-[#082b4d]"><input type="checkbox" className="mt-1" checked={consent} onChange={(event) => setConsent(event.target.checked)}/> Confirm că beneficiarul a fost informat și a acceptat folosirea semnăturii desenate pentru documentele acestui branșament.</label>
+      <p className="mt-2 text-xs text-slate-500">Semnătura albastră se păstrează numai pentru acest {sourceLabel}. Nu este aplicată automat pe documente fără o poziție configurată.</p>
+      <label className="mt-4 flex items-start gap-3 rounded-xl bg-blue-50 p-3 text-sm font-medium text-[#082b4d]"><input type="checkbox" className="mt-1" checked={consent} onChange={(event) => setConsent(event.target.checked)}/> Confirm că beneficiarul a fost informat și a acceptat folosirea semnăturii desenate pentru documentele acestui {sourceLabel}.</label>
       {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-sm font-semibold text-red-700">{error}</p>}
       <div className="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
         {existing && <button type="button" className="btn-secondary inline-flex w-full items-center justify-center gap-2 !text-red-600 sm:mr-auto sm:w-auto" disabled={busy} onClick={remove}><Trash2 size={16}/> Șterge semnătura</button>}

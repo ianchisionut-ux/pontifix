@@ -68,8 +68,9 @@ export function loadImage(src: string) {
   })
 }
 
-export async function beneficiarySignatureImage(connectionId: string): Promise<string | null> {
-  const response = await fetch(`/api/formulare/beneficiary-signature/${encodeURIComponent(connectionId)}`, { cache: 'no-store' })
+export async function beneficiarySignatureImage(sourceId: string, sourceType: 'connection' | 'project' = 'connection'): Promise<string | null> {
+  const route = sourceType === 'project' ? 'project-signature' : 'beneficiary-signature'
+  const response = await fetch(`/api/formulare/${route}/${encodeURIComponent(sourceId)}`, { cache: 'no-store' })
   if (response.status === 404) return null
   if (!response.ok) throw new Error('Semnătura beneficiarului nu a putut fi încărcată.')
   const blob = await response.blob()
@@ -142,10 +143,10 @@ function PdfCanvas({ pdf, pageNumber }: { pdf: any; pageNumber: number }) {
   return <canvas ref={ref} className="block h-auto w-full bg-white" />
 }
 
-export function PdfRequestEditor({ template, initialSubmission, defaultConnectionId, connections, projects, identityCards, borderouri, canManage, onClose }: {
+export function PdfRequestEditor({ template, initialSubmission, defaultSource, connections, projects, identityCards, borderouri, canManage, onClose }: {
   template: FormTemplateDto
   initialSubmission?: FormSubmissionDto
-  defaultConnectionId?: string
+  defaultSource?: string
   connections: ConnectionFormOption[]
   projects: ProjectFormOption[]
   identityCards: IdentityCardRecord[]
@@ -158,7 +159,8 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   const isDeer = template.category === 'DEER'
   const caseDocumentKind = deerDocumentKindForTemplate(template)
   const connectionDocumentType = template.documentPathname === 'connection-document:contract' ? 'contract' : null
-  const defaultConnection = isDeer && defaultConnectionId ? connections.find((item) => item.id === defaultConnectionId) : undefined
+  const defaultConnection = isDeer && defaultSource?.startsWith('connection:') ? connections.find((item) => item.id === defaultSource.slice(11)) : undefined
+  const defaultProject = isDeer && defaultSource?.startsWith('project:') ? projects.find((item) => item.id === defaultSource.slice(8)) : undefined
   const [pdf, setPdf] = useState<any>(null)
   const [pageCount, setPageCount] = useState(0)
   const [fields, setFields] = useState<FormField[]>(() => initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema)
@@ -168,11 +170,11 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   const [selectedStampId, setSelectedStampId] = useState('')
   const [values, setValues] = useState<Record<string, string>>(() => {
     const saved = initialSubmission?.values || {}
-    return { ...saved, ...Object.fromEntries((initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema).map((field) => [field.id, saved[field.id] ?? (field.binding === 'system.today' ? todayInBucharest() : boundValue(field.binding, defaultConnection) || field.defaultValue || '')])) }
+    return { ...saved, ...Object.fromEntries((initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema).map((field) => [field.id, saved[field.id] ?? (field.binding === 'system.today' ? todayInBucharest() : boundValue(field.binding, defaultConnection, defaultProject) || field.defaultValue || '')])) }
   })
-  const [sourceId, setSourceId] = useState(initialSubmission?.sourceId ? `${initialSubmission.sourceType?.toLowerCase()}:${initialSubmission.sourceId}` : defaultConnection ? `connection:${defaultConnection.id}` : '')
+  const [sourceId, setSourceId] = useState(initialSubmission?.sourceId ? `${initialSubmission.sourceType?.toLowerCase()}:${initialSubmission.sourceId}` : defaultSource || '')
   const [submissionId, setSubmissionId] = useState(initialSubmission?.id || '')
-  const [title, setTitle] = useState(initialSubmission?.title || (defaultConnection ? `${template.title} - ${defaultConnection.fields.Beneficiar || defaultConnection.nib}` : template.title))
+  const [title, setTitle] = useState(initialSubmission?.title || (defaultConnection ? `${template.title} - ${defaultConnection.fields.Beneficiar || defaultConnection.nib}` : defaultProject ? `${template.title} - ${defaultProject.beneficiary || defaultProject.name}` : template.title))
   const [layoutMode, setLayoutMode] = useState(false)
   const [selectedId, setSelectedId] = useState('')
   const [activePage, setActivePage] = useState(1)
@@ -183,8 +185,8 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   const [error, setError] = useState('')
   const drag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; field: FormField; box: DOMRect } | null>(null)
   const stampDrag = useRef<{ id: string; kind: 'move' | 'resize'; startX: number; startY: number; item: StampPlacement; box: DOMRect } | null>(null)
-  const caseDocument = caseDocumentKind && sourceId.startsWith('connection:')
-    ? borderouri.find((item) => item.connectionId === sourceId.slice(11) && item.documentKind === caseDocumentKind) : undefined
+  const caseDocument = caseDocumentKind && (sourceId.startsWith('connection:') || sourceId.startsWith('project:'))
+    ? borderouri.find((item) => (sourceId.startsWith('connection:') ? item.connectionId === sourceId.slice(11) : item.projectId === sourceId.slice(8)) && item.documentKind === caseDocumentKind) : undefined
   const documentUrl = connectionDocumentType
     ? sourceId.startsWith('connection:') ? `/api/bransamente/${encodeURIComponent(sourceId.slice(11))}/document?type=${connectionDocumentType}&format=pdf&v=${documentVersion}` : ''
     : caseDocumentKind
@@ -203,9 +205,11 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   }, [isDeer])
 
   useEffect(() => {
-    if (!isDeer || !sourceId.startsWith('connection:')) return
+    if (!isDeer || !(sourceId.startsWith('connection:') || sourceId.startsWith('project:'))) return
     let cancelled = false
-    beneficiarySignatureImage(sourceId.slice(11)).then((source) => {
+    const projectSource = sourceId.startsWith('project:')
+    setStampImages((all) => { const next = { ...all }; delete next['beneficiary-signature']; return next })
+    beneficiarySignatureImage(sourceId.slice(projectSource ? 8 : 11), projectSource ? 'project' : 'connection').then((source) => {
       if (!cancelled && source) setStampImages((all) => ({ ...all, 'beneficiary-signature': source }))
     }).catch((cause) => { if (!cancelled) setError(cause instanceof Error ? cause.message : 'Semnătura nu este disponibilă.') })
     return () => { cancelled = true }
@@ -377,21 +381,21 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
         if (beneficiarySigned(values) && !placements.some((item) => item.stampKey === 'beneficiary-signature')) throw new Error('Șablonul a fost salvat. Debifează „Beneficiarul a semnat acest document” înainte de a șterge ultima poziție a semnăturii.')
         const saved = await fetch('/api/formulare/submissions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
           id: submissionId, formTemplateId: template.id, title,
-          sourceType: 'CONNECTION', sourceId: sourceId.slice(11), values, fieldSchema: fields, stampSchema: placements,
+          sourceType: sourceId.split(':')[0].toUpperCase(), sourceId: sourceId.split(':').slice(1).join(':'), values, fieldSchema: fields, stampSchema: placements,
         }) })
         const result = await saved.json().catch(() => ({}))
-        if (!saved.ok) throw new Error(result.error || 'Poziția din completarea acestui branșament nu a putut fi salvată.')
+        if (!saved.ok) throw new Error(result.error || 'Poziția din completarea acestui dosar nu a putut fi salvată.')
       }
-      setSaveNotice(isDeer && submissionId ? 'Șablonul și pozițiile acestui branșament au fost salvate.' : 'Șablonul a fost salvat. Pentru a apărea la „Completări salvate”, alege un branșament și apasă „Salvează completarea”.')
+      setSaveNotice(isDeer && submissionId ? 'Șablonul și pozițiile acestui dosar au fost salvate.' : 'Șablonul a fost salvat. Pentru a apărea la „Completări salvate”, alege un dosar și apasă „Salvează completarea”.')
       router.refresh()
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Modelul nu a putut fi salvat.') }
     finally { setBusy('') }
   }
 
   async function saveSubmission(nextValues: Record<string, string> = values, signatureOnly = false) {
-    if (isDeer && !sourceId.startsWith('connection:')) return setError('Alege branșamentul pentru acest document DEER.')
+    if (isDeer && !(sourceId.startsWith('connection:') || sourceId.startsWith('project:'))) return setError('Alege un branșament sau proiect pentru acest document DEER.')
     if (isDeer && beneficiarySigned(nextValues) && !placements.some((item) => item.stampKey === 'beneficiary-signature')) return setError('Așază semnătura beneficiarului pe PDF înainte de a marca documentul ca semnat.')
-    if (isDeer && beneficiarySigned(nextValues) && !stampImages['beneficiary-signature']) return setError('Salvează mai întâi semnătura beneficiarului pentru acest branșament.')
+    if (isDeer && beneficiarySigned(nextValues) && !stampImages['beneficiary-signature']) return setError('Salvează mai întâi semnătura beneficiarului pentru acest dosar.')
     setBusy(signatureOnly ? 'signature' : 'save'); setError(''); setSaveNotice('')
     try {
       const response = await fetch('/api/formulare/submissions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
@@ -415,7 +419,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
       throw new Error('Așază semnătura beneficiarului pe PDF înainte de export.')
     }
     if (isDeer && beneficiarySigned(values) && !stampImages['beneficiary-signature']) {
-      throw new Error('Beneficiarul este marcat ca semnatar, dar semnătura lui nu este înregistrată pentru acest branșament.')
+      throw new Error('Beneficiarul este marcat ca semnatar, dar semnătura lui nu este înregistrată pentru acest dosar.')
     }
     const { PDFDocument } = await import('pdf-lib')
     const output = await PDFDocument.create()
@@ -464,7 +468,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
   }
 
   async function downloadOrPrint(print: boolean) {
-    if (isDeer && !sourceId.startsWith('connection:')) return setError('Alege branșamentul înainte de export.')
+    if (isDeer && !(sourceId.startsWith('connection:') || sourceId.startsWith('project:'))) return setError('Alege un branșament sau proiect înainte de export.')
     setBusy(print ? 'print' : 'download'); setError('')
     try {
       const bytes = await generatePdf(print && printPage > 0 ? printPage : undefined)
@@ -505,11 +509,11 @@ export function PdfRequestEditor({ template, initialSubmission, defaultConnectio
     <header className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
       <button className="round-action mr-1" onClick={onClose}><X size={18}/></button>
       <input className="min-w-[260px] flex-1 border-0 bg-transparent text-lg font-bold text-[#082b4d] outline-none" value={title} onChange={(e) => setTitle(e.target.value)}/>
-      <select className="input-field !w-auto min-w-[290px] !py-2" value={sourceId} disabled={isDeer} title={isDeer ? 'Pentru alt branșament, închide editorul și alege-l din lista DEER.' : undefined} onChange={(e) => chooseSource(e.target.value)}>
-        <option value="">{isDeer ? 'Alege branșamentul DEER' : tr('Fără legătură - completare manuală')}</option>
+      <select className="input-field !w-auto min-w-[290px] !py-2" value={sourceId} disabled={isDeer} title={isDeer ? 'Pentru alt dosar, închide editorul și alege-l din lista DEER.' : undefined} onChange={(e) => chooseSource(e.target.value)}>
+        <option value="">{isDeer ? 'Alege dosarul DEER' : tr('Fără legătură - completare manuală')}</option>
         <optgroup label={tr('Branșamente')}>{connections.map((item) => <option key={item.id} value={`connection:${item.id}`}>{item.nib} - {item.fields.Beneficiar || tr('Fără beneficiar')}</option>)}</optgroup>
-        {!isDeer && <><optgroup label="Cărți de identitate">{identityCards.map((item) => <option key={item.id} value={`identity:${item.id}`}>{item.fullName} - {[item.series, item.number].filter(Boolean).join(' ') || 'fără serie'}</option>)}</optgroup>
-        <optgroup label={tr('Proiecte')}>{projects.map((item) => <option key={item.id} value={`project:${item.id}`}>{item.name} - {item.beneficiary || tr('Fără beneficiar')}</option>)}</optgroup></>}
+        {!isDeer && <optgroup label="Cărți de identitate">{identityCards.map((item) => <option key={item.id} value={`identity:${item.id}`}>{item.fullName} - {[item.series, item.number].filter(Boolean).join(' ') || 'fără serie'}</option>)}</optgroup>}
+        <optgroup label={tr('Proiecte')}>{projects.map((item) => <option key={item.id} value={`project:${item.id}`}>{item.name} - {item.beneficiary || tr('Fără beneficiar')}</option>)}</optgroup>
       </select>
       {canManage && !caseDocumentKind && !connectionDocumentType && <label className="btn-secondary inline-flex cursor-pointer items-center gap-2 !py-2">{busy === 'replace' ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {tr('Înlocuiește')} PDF<input type="file" accept="application/pdf,.pdf" className="hidden" disabled={!!busy} onChange={(event) => { replacePdf(event.target.files?.[0]); event.currentTarget.value = '' }}/></label>}
       {canManage && <button className={`btn-secondary inline-flex items-center gap-2 !py-2 ${layoutMode ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`} onClick={() => setLayoutMode((value) => !value)}><Settings2 size={16}/> {tr('Poziționare')}</button>}

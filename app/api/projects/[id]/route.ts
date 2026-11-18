@@ -4,6 +4,8 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { z } from 'zod'
 import { ensureProjectAuthorizationStorage } from '@/lib/ensure-project-authorization-storage'
+import { ensureDeerBorderouStorage } from '@/lib/deer-borderou'
+import { ensureDeerSigningStorage } from '@/lib/deer-signing'
 
 const schema = z.object({
   name: z.string().trim().min(2).max(200).optional(),
@@ -74,7 +76,15 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   if ((session as any)?.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Doar Super Adminul poate modifica proiectele.' }, { status: 403 })
 
   const { id } = await params
-  const result = await prisma.project.deleteMany({ where: { id, businessId } })
+  await Promise.all([ensureDeerBorderouStorage(), ensureDeerSigningStorage()])
+  const result = await prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`UPDATE "DeerSigningRequest" SET "revokedAt"=CURRENT_TIMESTAMP WHERE "businessId"=${businessId} AND "projectId"=${id} AND "completedAt" IS NULL AND "revokedAt" IS NULL`
+    const deleted = await tx.project.deleteMany({ where: { id, businessId } })
+    if (deleted.count) {
+      await tx.$executeRaw`UPDATE "DeerBorderou" SET "projectId"=NULL WHERE "businessId"=${businessId} AND "projectId"=${id}`
+    }
+    return deleted
+  })
   if (!result.count) return NextResponse.json({ error: 'Proiect inexistent.' }, { status: 404 })
 
   refreshProjectPages()

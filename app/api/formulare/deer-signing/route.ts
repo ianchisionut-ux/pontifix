@@ -10,23 +10,30 @@ import type { SigningDocument } from '@/lib/deer-signing-bundle'
 export const runtime = 'nodejs'
 export const maxDuration = 60
 
-async function access(connectionId: string) {
+async function access(connectionId: string, projectId: string) {
+  if (Boolean(connectionId) === Boolean(projectId)) return null
   const session = await auth()
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId || (session as any)?.role !== 'SUPER_ADMIN') return null
-  const rows = await prisma.$queryRaw<Array<{ nib: string; fields: Record<string, string> }>>`
-    SELECT "nib", "fields" FROM "ConnectionCase" WHERE "id"=${connectionId} AND "businessId"=${businessId} LIMIT 1`
-  return rows[0] ? { businessId, email: session?.user?.email || null, ...rows[0] } : null
+  const email = session?.user?.email || null
+  if (connectionId) {
+    const rows = await prisma.$queryRaw<Array<{ nib: string; fields: Record<string, string> }>>`
+      SELECT "nib", "fields" FROM "ConnectionCase" WHERE "id"=${connectionId} AND "businessId"=${businessId} LIMIT 1`
+    return rows[0] ? { businessId, email, connectionId, projectId: null, reference: rows[0].nib, beneficiaryName: String(rows[0].fields?.Beneficiar || '').trim() } : null
+  }
+  const project = await prisma.project.findFirst({ where: { id: projectId, businessId }, select: { name: true, beneficiary: true } })
+  return project ? { businessId, email, connectionId: null, projectId, reference: project.name, beneficiaryName: String(project.beneficiary || '').trim() } : null
 }
 
 export async function GET(request: NextRequest) {
   const connectionId = request.nextUrl.searchParams.get('connectionId') || ''
-  const user = await access(connectionId)
+  const projectId = request.nextUrl.searchParams.get('projectId') || ''
+  const user = await access(connectionId, projectId)
   if (!user) return NextResponse.json({ error: 'Acces interzis.' }, { status: 403 })
   await ensureDeerSigningStorage()
   const rows = await prisma.$queryRaw<Array<Pick<SigningRequestRow, 'id' | 'documents' | 'createdAt' | 'expiresAt' | 'revokedAt' | 'completedAt' | 'acceptedName' | 'signedPathname'>>>`
     SELECT "id", "documents", "createdAt", "expiresAt", "revokedAt", "completedAt", "acceptedName", "signedPathname"
-    FROM "DeerSigningRequest" WHERE "businessId"=${user.businessId} AND "connectionId"=${connectionId}
+    FROM "DeerSigningRequest" WHERE "businessId"=${user.businessId} AND ("connectionId"=${user.connectionId} OR "projectId"=${user.projectId})
     ORDER BY "createdAt" DESC LIMIT 10`
   return NextResponse.json({ requests: rows })
 }
@@ -34,12 +41,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null)
   const connectionId = typeof body?.connectionId === 'string' ? body.connectionId : ''
-  const user = await access(connectionId)
+  const projectId = typeof body?.projectId === 'string' ? body.projectId : ''
+  const user = await access(connectionId, projectId)
   if (!user) return NextResponse.json({ error: 'Acces interzis.' }, { status: 403 })
   const pathname = typeof body?.bundlePathname === 'string' ? body.bundlePathname : ''
   const hash = typeof body?.bundleHash === 'string' ? body.bundleHash : ''
   const documents = body?.documents as SigningDocument[]
-  if (!pathname.startsWith(`formulare/deer-signing/${connectionId}/`) || !/^[a-f0-9]{64}$/.test(hash) || !Array.isArray(documents) || !documents.length || documents.length > 30) {
+  if (!pathname.startsWith(`formulare/deer-signing/${connectionId || projectId}/`) || !/^[a-f0-9]{64}$/.test(hash) || !Array.isArray(documents) || !documents.length || documents.length > 30) {
     return NextResponse.json({ error: 'Pachetul de documente este invalid.' }, { status: 400 })
   }
   try {
@@ -65,13 +73,13 @@ export async function POST(request: NextRequest) {
     if (expectedPage - 1 !== pdf.getPageCount() || !signatureCount || signatureCount > 80) throw new Error('Paginile sau pozițiile de semnare nu corespund PDF-ului.')
     const token = newSigningToken()
     const id = newSigningId()
-    const beneficiaryName = String(user.fields?.Beneficiar || '').trim()
-    if (beneficiaryName.length < 3) throw new Error('Beneficiarul nu este completat în dosar.')
+    const beneficiaryName = user.beneficiaryName
+    if (beneficiaryName.length < 3) throw new Error(`Beneficiarul nu este completat în ${projectId ? 'proiect' : 'dosar'}.`)
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
     await prisma.$transaction(async (tx) => {
-      await tx.$executeRaw`UPDATE "DeerSigningRequest" SET "revokedAt"=CURRENT_TIMESTAMP WHERE "businessId"=${user.businessId} AND "connectionId"=${connectionId} AND "completedAt" IS NULL AND "revokedAt" IS NULL`
-      await tx.$executeRaw`INSERT INTO "DeerSigningRequest" ("id", "businessId", "connectionId", "tokenHash", "beneficiaryName", "nib", "bundlePathname", "bundleHash", "documents", "createdByEmail", "expiresAt")
-        VALUES (${id}, ${user.businessId}, ${connectionId}, ${signingTokenHash(token)}, ${beneficiaryName}, ${user.nib}, ${pathname}, ${hash}, ${JSON.stringify(documents)}::jsonb, ${user.email}, ${expiresAt})`
+      await tx.$executeRaw`UPDATE "DeerSigningRequest" SET "revokedAt"=CURRENT_TIMESTAMP WHERE "businessId"=${user.businessId} AND ("connectionId"=${user.connectionId} OR "projectId"=${user.projectId}) AND "completedAt" IS NULL AND "revokedAt" IS NULL`
+      await tx.$executeRaw`INSERT INTO "DeerSigningRequest" ("id", "businessId", "connectionId", "projectId", "tokenHash", "beneficiaryName", "nib", "bundlePathname", "bundleHash", "documents", "createdByEmail", "expiresAt")
+        VALUES (${id}, ${user.businessId}, ${user.connectionId}, ${user.projectId}, ${signingTokenHash(token)}, ${beneficiaryName}, ${user.reference}, ${pathname}, ${hash}, ${JSON.stringify(documents)}::jsonb, ${user.email}, ${expiresAt})`
     })
     return NextResponse.json({ id, link: `${request.nextUrl.origin}/semneaza/${token}`, expiresAt })
   } catch (error) {
@@ -82,10 +90,11 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   const body = await request.json().catch(() => null)
   const connectionId = typeof body?.connectionId === 'string' ? body.connectionId : ''
+  const projectId = typeof body?.projectId === 'string' ? body.projectId : ''
   const id = typeof body?.id === 'string' ? body.id : ''
-  const user = await access(connectionId)
+  const user = await access(connectionId, projectId)
   if (!user) return NextResponse.json({ error: 'Acces interzis.' }, { status: 403 })
   await ensureDeerSigningStorage()
-  await prisma.$executeRaw`UPDATE "DeerSigningRequest" SET "revokedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${user.businessId} AND "connectionId"=${connectionId} AND "completedAt" IS NULL`
+  await prisma.$executeRaw`UPDATE "DeerSigningRequest" SET "revokedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${user.businessId} AND ("connectionId"=${user.connectionId} OR "projectId"=${user.projectId}) AND "completedAt" IS NULL`
   return NextResponse.json({ success: true })
 }

@@ -10,14 +10,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!businessId) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
   await ensureDeerSigningStorage()
   const { id } = await params
-  const rows = await prisma.$queryRaw<Array<{ nib: string; beneficiaryName: string; acceptedName: string | null; documents: SigningDocument[]; readDocumentIds: string[] | null; createdAt: Date; completedAt: Date | null; expiresAt: Date; declaration: string | null; bundleHash: string; signedHash: string | null; signerIp: string | null; signerUserAgent: string | null }>>`
-    SELECT "nib", "beneficiaryName", "acceptedName", "documents", "readDocumentIds", "createdAt", "completedAt", "expiresAt", "declaration", "bundleHash", "signedHash", "signerIp", "signerUserAgent"
+  const rows = await prisma.$queryRaw<Array<{ nib: string; projectId: string | null; beneficiaryName: string; acceptedName: string | null; documents: SigningDocument[]; readDocumentIds: string[] | null; createdAt: Date; completedAt: Date | null; expiresAt: Date; declaration: string | null; bundleHash: string; signedHash: string | null; signerIp: string | null; signerUserAgent: string | null }>>`
+    SELECT "nib", "projectId", "beneficiaryName", "acceptedName", "documents", "readDocumentIds", "createdAt", "completedAt", "expiresAt", "declaration", "bundleHash", "signedHash", "signerIp", "signerUserAgent"
     FROM "DeerSigningRequest" WHERE "id"=${id} AND "businessId"=${businessId} LIMIT 1`
   const row = rows[0]
   if (!row?.completedAt) return NextResponse.json({ error: 'Semnarea nu este finalizată.' }, { status: 404 })
   const lines = [
     'ELMONT S.A. - DOVADA FLUXULUI DE SEMNARE ELECTRONICA SIMPLA',
-    `Dosar: ${row.nib}`, `Beneficiar din dosar: ${row.beneficiaryName}`, `Nume declarat de semnatar: ${row.acceptedName}`,
+    `${row.projectId ? 'Proiect' : 'Dosar'}: ${row.nib}`, `Beneficiar din ${row.projectId ? 'proiect' : 'dosar'}: ${row.beneficiaryName}`, `Nume declarat de semnatar: ${row.acceptedName}`,
     `Link creat la (UTC): ${row.createdAt.toISOString()}`, `Acord si semnatura la (UTC): ${row.completedAt.toISOString()}`,
     `Expirarea linkului (UTC): ${row.expiresAt.toISOString()}`, '', 'Declaratia acceptata:', row.declaration || '', '',
     'Documente prezentate si declarate parcurse:',
@@ -27,5 +27,5 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     '', 'Aceste date consemneaza actiunea prin linkul privat. Ele nu certifica prin ele insele identitatea persoanei si nu reprezinta semnatura electronica calificata.',
   ]
   return new Response(`\uFEFF${lines.join('\r\n')}\r\n`, { headers: { 'Content-Type': 'text/plain; charset=utf-8',
-    'Content-Disposition': `attachment; filename="DEER-${row.nib.replace(/[^A-Za-z0-9-]/g, '')}-dovada-semnare.txt"`, 'Cache-Control': 'private, no-store' } })
+    'Content-Disposition': `attachment; filename="DEER-${row.projectId || row.nib.replace(/[^A-Za-z0-9-]/g, '')}-dovada-semnare.txt"`, 'Cache-Control': 'private, no-store' } })
 }
