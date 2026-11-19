@@ -1,7 +1,9 @@
 import type { PoolClient } from "pg";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { ready } from "./db";
 import { syncPaidPayrollToRef } from "./payroll-ref";
+import { sagaJournalEntrySourceKeys } from "./saga-journal-import";
+import { bucharestDate } from "./date";
 
 export type AccountNature = "DEBIT" | "CREDIT" | "BOTH" | "GROUP";
 
@@ -315,17 +317,16 @@ export async function createManualJournalEntry(input: JournalEntryInput) {
   }
 }
 
-function sagaEntrySourceKey(entry: JournalEntryInput) {
-  const signature = JSON.stringify({ date: entry.date, documentNumber: entry.documentNumber || "", description: entry.description,
-    lines: entry.lines.map(line => ({ accountCode: line.accountCode, debit: round2(Number(line.debit || 0)), credit: round2(Number(line.credit || 0)) })) });
-  return createHash("sha256").update(signature).digest("hex");
+function validateSagaImportKey(importKey: string) {
+  if (!/^[a-f0-9]{64}$/.test(importKey)) throw new Error("Identificatorul importului nu este valid.");
 }
 
-export async function validateSagaJournalEntries(entries: JournalEntryInput[]) {
+export async function validateSagaJournalEntries(entries: JournalEntryInput[], importKey: string) {
+  validateSagaImportKey(importKey);
   const pool = await ready();
   const codes = [...new Set(entries.flatMap(entry => entry.lines.map(line => line.accountCode)))];
   const periods = [...new Set(entries.map(entry => entry.date.slice(0, 7)))];
-  const sourceKeys = entries.map(sagaEntrySourceKey);
+  const sourceKeys = sagaJournalEntrySourceKeys(entries);
   const [accountsResult, periodsResult, duplicateResult] = await Promise.all([
     pool.query(`SELECT code,active,"allowPosting" FROM accounting_accounts WHERE code=ANY($1::text[])`, [codes]),
     pool.query(`SELECT year,month FROM accounting_periods WHERE status='CLOSED' AND concat(year,'-',lpad(month::text,2,'0'))=ANY($1::text[])`, [periods]),
@@ -346,14 +347,15 @@ export async function validateSagaJournalEntries(entries: JournalEntryInput[]) {
 
 export async function importSagaJournalEntries(entries: JournalEntryInput[], importKey: string, createdBy?: string) {
   if (!entries.length) throw new Error("Fișierul nu conține articole contabile.");
-  if (!/^[a-f0-9]{64}$/.test(importKey)) throw new Error("Identificatorul importului nu este valid.");
+  validateSagaImportKey(importKey);
   const connection = await (await ready()).connect();
   try {
     await connection.query("BEGIN");
     await connection.query(`SELECT pg_advisory_xact_lock(hashtext('PONTIFIX_SAGA_JOURNAL_IMPORT'))`);
     let created = 0, skipped = 0;
-    for (const entry of entries) {
-      const sourceKey = sagaEntrySourceKey(entry);
+    const sourceKeys = sagaJournalEntrySourceKeys(entries);
+    for (const [index, entry] of entries.entries()) {
+      const sourceKey = sourceKeys[index];
       const exists = (await connection.query(
         `SELECT id FROM journal_entries WHERE "sourceType"='SAGA_IMPORT' AND "sourceKey"=$1`, [sourceKey],
       )).rows[0];
@@ -391,7 +393,15 @@ function addSignedLines(
 }
 
 async function replaceAutomaticEntry(client: PoolClient, input: JournalEntryInput) {
-  await assertOpenPeriod(client, input.date);
+  const existing = await client.query(
+    `SELECT date::text AS date FROM journal_entries WHERE "sourceType"=$1 AND "sourceId"=$2`,
+    [input.sourceType, input.sourceId],
+  );
+  const affectedDates = [...new Set([
+    input.date,
+    ...existing.rows.map((row) => String(row.date).slice(0, 10)),
+  ])].sort();
+  for (const date of affectedDates) await assertOpenPeriod(client, date);
   await client.query(
     `DELETE FROM journal_entries WHERE "sourceType"=$1 AND "sourceId"=$2`,
     [input.sourceType, input.sourceId],
@@ -706,7 +716,7 @@ export async function setPeriodStatus(year: number, month: number, status: "OPEN
 
 export async function getLedgerStats() {
   const pool = await ready();
-  const month = new Date().toISOString().slice(0, 7);
+  const month = bucharestDate().slice(0, 7);
   const { rows } = await pool.query(
     `SELECT
        (SELECT COUNT(*) FROM accounting_accounts WHERE active=1 AND "allowPosting"=1) AS accounts,

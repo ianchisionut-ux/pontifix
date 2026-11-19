@@ -1,10 +1,28 @@
 import ExcelJS from 'exceljs'
+import { createHash } from 'node:crypto'
 
 export type SagaJournalEntry={date:string;documentNumber:string;description:string;lines:Array<{accountCode:string;debit:number;credit:number;explanation:string}>}
+type SagaJournalSourceEntry={date:string;documentNumber?:string;description:string;lines:Array<{accountCode:string;debit?:number;credit?:number}>}
 const normalize=(value:unknown)=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]/g,'')
 const text=(value:unknown)=>String(value??'').trim()
-const number=(value:unknown)=>{let raw=text(value).replace(/\s/g,'');if(raw.includes(','))raw=raw.replace(/\./g,'').replace(',','.');const parsed=Number(raw);return Number.isFinite(parsed)?Math.round(parsed*100)/100:0}
+const number=(value:unknown)=>{let raw=text(value).replace(/[\s\u00a0]/g,'');if(raw.includes(','))raw=raw.replace(/\./g,'').replace(',','.');else if(/^[+-]?\d{1,3}(?:\.\d{3})+$/.test(raw))raw=raw.replace(/\./g,'');const parsed=Number(raw);return Number.isFinite(parsed)?Math.round(parsed*100)/100:0}
 const date=(value:unknown)=>{if(value instanceof Date)return value.toISOString().slice(0,10);const raw=text(value);const match=raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/);if(match)return `${match[3]}-${match[2].padStart(2,'0')}-${match[1].padStart(2,'0')}`;return /^\d{4}-\d{2}-\d{2}/.test(raw)?raw.slice(0,10):''}
+
+const sourceText=(value:unknown)=>text(value).normalize('NFC').replace(/\s+/g,' ')
+const sourceAmount=(value:unknown)=>Math.round(Number(value||0)*100)/100
+export function sagaJournalEntrySourceKeys(entries:SagaJournalSourceEntry[]){
+  const occurrences=new Map<string,number>()
+  return entries.map(entry=>{
+    const signature=createHash('sha256').update(JSON.stringify({
+      date:sourceText(entry.date),documentNumber:sourceText(entry.documentNumber).toUpperCase(),description:sourceText(entry.description),
+      lines:entry.lines.map(line=>({accountCode:sourceText(line.accountCode).toUpperCase(),debit:sourceAmount(line.debit),credit:sourceAmount(line.credit)})),
+    })).digest('hex')
+    const occurrence=(occurrences.get(signature)||0)+1
+    occurrences.set(signature,occurrence)
+    return createHash('sha256').update(`${signature}:${occurrence}`).digest('hex')
+  })
+}
+
 function find(row:Record<string,unknown>,aliases:string[]){for(const [key,value] of Object.entries(row))if(aliases.some(alias=>normalize(alias)===normalize(key)))return value}
 function parseDelimited(content:string){
   const lines=content.replace(/^\uFEFF/,'').split(/\r?\n/).filter(line=>line.trim());const sample=lines.slice(0,10).join('\n');const delimiter=[';','\t',','].sort((a,b)=>sample.split(b).length-sample.split(a).length)[0]

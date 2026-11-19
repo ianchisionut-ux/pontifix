@@ -29,9 +29,11 @@ const fields = {
 const employeeSchema = z.object(fields)
 const updateSchema = z.object({ id: z.string().min(1), ...fields, active: z.boolean().default(true) })
 
-async function businessFromSession(write = false) {
+async function businessFromSession() {
   const session = await auth()
-  if (write && (session as any)?.role === 'STAFF') return undefined
+  // Employee records contain CNP, salary, IBAN and contract data. Read-only
+  // application access must not imply access to confidential HR data.
+  if ((session as any)?.role === 'STAFF') return undefined
   return (session as any)?.businessId as string | undefined
 }
 
@@ -44,7 +46,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const businessId = await businessFromSession(true)
+  const businessId = await businessFromSession()
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
   await ensurePayrollSchema()
   const parsed = employeeSchema.safeParse(await req.json())
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  const businessId = await businessFromSession(true)
+  const businessId = await businessFromSession()
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
   await ensurePayrollSchema()
   const parsed = updateSchema.safeParse(await req.json())
@@ -87,7 +89,7 @@ const reorderSchema = z.object({
 })
 
 export async function PUT(req: NextRequest) {
-  const businessId = await businessFromSession(true)
+  const businessId = await businessFromSession()
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
   await ensurePayrollSchema()
   const parsed = reorderSchema.safeParse(await req.json())

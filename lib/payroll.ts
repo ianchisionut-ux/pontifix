@@ -1,4 +1,5 @@
 import { prisma } from './prisma'
+import type { Prisma } from '@prisma/client'
 import { ensurePayrollSchema } from './payroll-storage'
 import { postPayrollToLedger } from './accounting/ledger'
 import { calculatePayrollLine, isPayrollWorkingDay, payrollRules, workingDaysForEmployment, workingDaysInMonth } from './payroll-calculation'
@@ -7,21 +8,19 @@ export { calculatePayrollLine, payrollRules, workingDaysForEmployment, workingDa
 
 const round = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
-export async function generatePayroll(businessId: string, month: string) {
-  await ensurePayrollSchema()
+export async function generatePayrollInTransaction(tx: Prisma.TransactionClient, businessId: string, month: string) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error('Luna nu este validă.')
   const [year, number] = month.split('-').map(Number)
   const start = new Date(Date.UTC(year, number - 1, 1))
   const end = new Date(Date.UTC(year, number, 1))
   const rules = payrollRules(month)
-  const run = await prisma.payrollRun.upsert({
+  const run = await tx.payrollRun.upsert({
     where: { businessId_month: { businessId, month } },
     create: { businessId, month, minimumGross: rules.minimumGross, nonTaxableAmount: rules.nonTaxableAmount,
       casRate: rules.casRate, cassRate: rules.cassRate, incomeTaxRate: rules.incomeTaxRate, camRate: rules.camRate },
     update: {},
   })
-  await prisma.$transaction(async (tx) => {
-    const locked = await tx.$queryRaw<Array<{ status: string }>>`
+  const locked = await tx.$queryRaw<Array<{ status: string }>>`
       SELECT status::text FROM "PayrollRun" WHERE id=${run.id} FOR UPDATE`
     if (locked[0]?.status === 'FINALIZED') throw new Error('Statul finalizat nu mai poate fi recalculat.')
     const [employees, attendance, existing] = await Promise.all([
@@ -78,8 +77,18 @@ export async function generatePayroll(businessId: string, month: string) {
         baseGross: employee.grossSalary, ...financialValues, source: previous?.source || 'CALCULATED' },
       })
     }
+  return tx.payrollRun.findUnique({
+    where: { businessId_month: { businessId, month } },
+    include: {
+      payments: { orderBy: { createdAt: 'asc' } },
+      lines: { include: { employee: true }, orderBy: [{ employee: { lastName: 'asc' } }, { employee: { firstName: 'asc' } }] },
+    },
   })
-  return getPayroll(businessId, month)
+}
+
+export async function generatePayroll(businessId: string, month: string) {
+  await ensurePayrollSchema()
+  return prisma.$transaction((tx) => generatePayrollInTransaction(tx, businessId, month), { timeout: 30_000 })
 }
 
 export async function getPayroll(businessId: string, month: string) {

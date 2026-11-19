@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { GripVertical, Pencil, Plus, Users } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import { bucharestDate } from '@/lib/accounting/date'
 
 type Category = 'TESA' | 'PRODUCTIE'
 type Employee = { id: string; firstName: string; lastName: string; email: string | null; phone: string | null; position: string | null; department: string | null; category: Category; employmentType: string; weeklyHours: number; dailyHours: number; sortOrder: number; active: boolean; cnp: string | null; contractNumber: string | null; contractDate: string | Date | null; hiredAt: string | Date; endedAt: string | Date | null; grossSalary: number; baseFunction: boolean; dependents: number; personalDeduction: number; iban: string | null }
-const EMPTY = { firstName: '', lastName: '', email: '', phone: '', position: '', department: '', category: 'PRODUCTIE' as Category, employmentType: 'FULL_TIME', weeklyHours: 40, dailyHours: 8, active: true, cnp: '', contractNumber: '', contractDate: '', hiredAt: new Date().toISOString().slice(0,10), endedAt: '', grossSalary: 0, baseFunction: true, dependents: 0, personalDeduction: 0, iban: '' }
+const EMPTY = { firstName: '', lastName: '', email: '', phone: '', position: '', department: '', category: 'PRODUCTIE' as Category, employmentType: 'FULL_TIME', weeklyHours: 40, dailyHours: 8, active: true, cnp: '', contractNumber: '', contractDate: '', hiredAt: bucharestDate(), endedAt: '', grossSalary: 0, baseFunction: true, dependents: 0, personalDeduction: 0, iban: '' }
 const GROUPS: Array<{ key: Category; label: string; hint: string }> = [
   { key: 'TESA', label: 'TESA', hint: 'Personal tehnic, economic și administrativ' },
   { key: 'PRODUCTIE', label: 'PRODUCȚIE', hint: 'Personal direct productiv' },
@@ -19,6 +20,7 @@ export function EmployeeManager({ employees }: { employees: Employee[] }) {
   const [draggedId, setDraggedId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const router = useRouter()
+  useEffect(() => setItems(employees), [employees])
   const current = editing === 'new' || editing === null ? EMPTY : editing
   const grouped = useMemo(() => Object.fromEntries(GROUPS.map((group) => [
     group.key,
@@ -31,11 +33,17 @@ export function EmployeeManager({ employees }: { employees: Employee[] }) {
       return { ...employee, sortOrder: peers.findIndex((item) => item.id === employee.id) }
     })
     setItems(normalized)
-    const response = await fetch('/api/attendance/employees', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ employees: normalized.map((employee) => ({ id: employee.id, category: employee.category, sortOrder: employee.sortOrder })) }),
-    })
-    if (!response.ok) { alert('Ordinea nu a putut fi salvată.'); router.refresh() }
+    try {
+      const response = await fetch('/api/attendance/employees', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employees: normalized.map((employee) => ({ id: employee.id, category: employee.category, sortOrder: employee.sortOrder })) }),
+      })
+      if (!response.ok) throw new Error()
+    } catch {
+      setItems(employees)
+      alert('Ordinea nu a putut fi salvată.')
+      router.refresh()
+    }
   }
 
   function moveEmployee(targetCategory: Category, targetId?: string) {
@@ -55,10 +63,13 @@ export function EmployeeManager({ employees }: { employees: Employee[] }) {
     setBusy(true)
     const values = Object.fromEntries(formData)
     const payload = { ...values, weeklyHours: Number(values.weeklyHours), dailyHours: Number(values.dailyHours), grossSalary: Number(values.grossSalary), dependents: Number(values.dependents), personalDeduction: Number(values.personalDeduction), baseFunction: formData.get('baseFunction') === 'on', active: editing === 'new' || formData.get('active') === 'on', ...(editing !== 'new' && editing ? { id: editing.id } : {}) }
-    const response = await fetch('/api/attendance/employees', { method: editing === 'new' ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-    setBusy(false)
-    if (!response.ok) return alert((await response.json()).error || 'Angajatul nu a putut fi salvat.')
-    setEditing(null); router.refresh()
+    try {
+      const response = await fetch('/api/attendance/employees', { method: editing === 'new' ? 'POST' : 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) return alert(data.error || 'Angajatul nu a putut fi salvat.')
+      setEditing(null); router.refresh()
+    } catch { alert('Serverul nu răspunde. Angajatul nu a putut fi salvat.') }
+    finally { setBusy(false) }
   }
 
   return <div>

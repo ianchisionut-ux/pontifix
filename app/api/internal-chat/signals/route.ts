@@ -10,7 +10,7 @@ const signalSchema = z.object({
   recipientId: z.string().min(1),
   transferId: z.string().uuid(),
   type: z.enum(['offer', 'answer', 'ice', 'accept', 'reject', 'cancel']),
-  payload: z.record(z.unknown()).default({}),
+  payload: z.record(z.string(), z.unknown()).default({}),
 })
 
 async function access() {

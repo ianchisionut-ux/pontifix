@@ -1,5 +1,6 @@
 import { ready } from "./db";
 import { postPurchaseInvoiceToLedger, postSupplierPaymentToLedger } from "./ledger";
+import { createRefExpenseForSupplierPayment } from "./ref";
 import { defaultVatRegimeReason, isVatRateAllowedForDate, isVatRegimeCode, suggestVatRegime, vatRegimeNeedsReason, type VatRegimeCode } from "./vat-regime";
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
@@ -117,6 +118,7 @@ export async function createPurchase(input: PurchaseInput) {
   if (!supplierId) throw new Error("Selectează furnizorul.");
   if (!documentNumber) throw new Error("Completează numărul documentului.");
   if (!validDate(issueDate) || !validDate(dueDate)) throw new Error("Data documentului sau scadența nu este validă.");
+  if (dueDate < issueDate) throw new Error("Scadența nu poate fi anterioară datei documentului.");
   if (!items.length) throw new Error("Adaugă cel puțin o poziție în factură.");
   const supplierContext = (await (await ready()).query(`SELECT blocked,"vatPayer","countryCode" FROM suppliers WHERE id=$1`, [supplierId])).rows[0];
   const company = (await (await ready()).query(`SELECT "vatPayer" FROM company WHERE id=1`)).rows[0];
@@ -132,12 +134,14 @@ export async function createPurchase(input: PurchaseInput) {
     if (deductibility < 0 || deductibility > 100) throw new Error(`Poziția ${index + 1}: deductibilitatea TVA trebuie să fie între 0% și 100%.`);
     if (!Number(company.vatPayer) && deductibility > 0) throw new Error(`Poziția ${index + 1}: firma neplătitoare de TVA nu poate deduce TVA din achiziții.`);
     if (item.vatCategoryCode && !isVatRegimeCode(item.vatCategoryCode)) throw new Error(`Regimul TVA al poziției ${index + 1} nu este valid.`);
-    const vatCategoryCode = item.vatCategoryCode || suggestVatRegime({ type: "EXPENSE", partnerVatPayer: domesticNonVatSupplier ? false : undefined, vatRate: enteredVatRate, reverseCharge: Boolean(reverseCharge) });
-    const vatRate = vatCategoryCode === "S" ? enteredVatRate : 0;
+    const requestedVatCategory = item.vatCategoryCode || suggestVatRegime({ type: "EXPENSE", partnerVatPayer: domesticNonVatSupplier ? false : undefined, vatRate: enteredVatRate, reverseCharge: Boolean(reverseCharge) });
+    const vatCategoryCode = reverseCharge ? "AE" : requestedVatCategory;
+    if (!reverseCharge && vatCategoryCode === "AE") throw new Error(`Poziția ${index + 1}: regimul AE necesită bifarea taxării inverse.`);
+    const vatRate = vatCategoryCode === "S" || vatCategoryCode === "AE" ? enteredVatRate : 0;
     const taxExemptionReasonCode = text(item.taxExemptionReasonCode);
     const taxExemptionReason = text(item.taxExemptionReason) || defaultVatRegimeReason(vatCategoryCode);
-    if (vatCategoryCode === "S" && vatRate <= 0) throw new Error(`Poziția ${index + 1}: regimul standard necesită o cotă TVA pozitivă.`);
-    if (vatCategoryCode === "S" && !isVatRateAllowedForDate(vatRate, issueDate)) throw new Error(`Poziția ${index + 1}: cota TVA nu este valabilă la data documentului.`);
+    if ((vatCategoryCode === "S" || vatCategoryCode === "AE") && vatRate <= 0) throw new Error(`Poziția ${index + 1}: regimul ${vatCategoryCode} necesită o cotă TVA pozitivă.`);
+    if ((vatCategoryCode === "S" || vatCategoryCode === "AE") && !isVatRateAllowedForDate(vatRate, issueDate)) throw new Error(`Poziția ${index + 1}: cota TVA nu este valabilă la data documentului.`);
     if (vatRegimeNeedsReason(vatCategoryCode) && !taxExemptionReason && !taxExemptionReasonCode) throw new Error(`Poziția ${index + 1}: completează motivul legal al regimului TVA.`);
     return { description: text(item.description), expenseAccount: text(item.expenseAccount || "628"), unit: text(item.unit || "buc"), quantity,
       unitPrice, vatRate, vatCategoryCode, taxExemptionReasonCode, taxExemptionReason, deductibility, net: round2(quantity * unitPrice), vat: round2(quantity * unitPrice * vatRate / 100) };
@@ -180,24 +184,39 @@ export async function createPurchase(input: PurchaseInput) {
 }
 
 export async function updatePurchase(id: number, input: PurchaseInput) {
+  const pool=await ready();
+  const existingPaymentCount=Number((await pool.query(`SELECT COUNT(*) count FROM supplier_payments WHERE "purchaseInvoiceId"=$1`,[id])).rows[0]?.count||0);
+  if(existingPaymentCount) throw new Error("Documentul are plăți și nu mai poate fi modificat. Folosește fluxul de storno/corecție pentru a păstra jurnalul și registrul fiscal reconciliate.");
   const supplierId=Number(input.supplierId||0),documentNumber=text(input.documentNumber),issueDate=text(input.issueDate),dueDate=text(input.dueDate||issueDate),items=Array.isArray(input.items)?input.items:[];
   if(!supplierId||!documentNumber||!validDate(issueDate)||!validDate(dueDate)||!items.length) throw new Error("Completează corect furnizorul, documentul, datele și pozițiile.");
+  if(dueDate<issueDate) throw new Error("Scadența nu poate fi anterioară datei documentului.");
   const reverseCharge=flag(input.reverseCharge);
-  const company=(await (await ready()).query(`SELECT "vatPayer" FROM company WHERE id=1`)).rows[0];
+  const company=(await pool.query(`SELECT "vatPayer" FROM company WHERE id=1`)).rows[0];
   if(!company) throw new Error("Completează datele firmei înainte de a modifica achiziții.");
+  const supplierContext=(await pool.query(`SELECT blocked,"vatPayer","countryCode" FROM suppliers WHERE id=$1`,[supplierId])).rows[0];
+  if(!supplierContext) throw new Error("Furnizorul selectat nu există.");
+  if(supplierContext.blocked) throw new Error("Furnizorul este blocat. Deblochează-l înainte de operare.");
+  const domesticNonVatSupplier=String(supplierContext.countryCode||"RO").toUpperCase()==="RO"&&!Number(supplierContext.vatPayer);
   const normalized=items.map((item,index)=>{const quantity=Number(item.quantity||0),unitPrice=Number(item.unitPrice||0),enteredVatRate=Number(item.vatRate||0),deductibility=Number(item.deductibilityPercent??(company.vatPayer?100:0));
     if(!text(item.description)||!Number.isFinite(quantity)||!Number.isFinite(unitPrice)||!Number.isFinite(enteredVatRate)||!Number.isFinite(deductibility)||quantity<=0||unitPrice<0||enteredVatRate<0||enteredVatRate>100) throw new Error(`Poziția ${index+1} nu este completată corect.`);
     if(deductibility<0||deductibility>100) throw new Error(`Poziția ${index+1}: deductibilitatea TVA trebuie să fie între 0% și 100%.`);
     if(!Number(company.vatPayer)&&deductibility>0) throw new Error(`Poziția ${index+1}: firma neplătitoare de TVA nu poate deduce TVA din achiziții.`);
-    const vatCategoryCode=item.vatCategoryCode||suggestVatRegime({type:"EXPENSE",vatRate:enteredVatRate,reverseCharge:Boolean(reverseCharge)}),vatRate=vatCategoryCode==="S"?enteredVatRate:0,taxExemptionReasonCode=text(item.taxExemptionReasonCode),taxExemptionReason=text(item.taxExemptionReason)||defaultVatRegimeReason(vatCategoryCode);
+    if(item.vatCategoryCode&&!isVatRegimeCode(item.vatCategoryCode)) throw new Error(`Regimul TVA al poziției ${index+1} nu este valid.`);
+    const requestedVatCategory=item.vatCategoryCode||suggestVatRegime({type:"EXPENSE",partnerVatPayer:domesticNonVatSupplier?false:undefined,vatRate:enteredVatRate,reverseCharge:Boolean(reverseCharge)}),vatCategoryCode=reverseCharge?"AE":requestedVatCategory;
+    if(!reverseCharge&&vatCategoryCode==="AE") throw new Error(`Poziția ${index+1}: regimul AE necesită bifarea taxării inverse.`);
+    const vatRate=vatCategoryCode==="S"||vatCategoryCode==="AE"?enteredVatRate:0,taxExemptionReasonCode=text(item.taxExemptionReasonCode),taxExemptionReason=text(item.taxExemptionReason)||defaultVatRegimeReason(vatCategoryCode);
+    if((vatCategoryCode==="S"||vatCategoryCode==="AE")&&vatRate<=0) throw new Error(`Poziția ${index+1}: regimul ${vatCategoryCode} necesită o cotă TVA pozitivă.`);
+    if((vatCategoryCode==="S"||vatCategoryCode==="AE")&&!isVatRateAllowedForDate(vatRate,issueDate)) throw new Error(`Poziția ${index+1}: cota TVA nu este valabilă la data documentului.`);
     if(vatRegimeNeedsReason(vatCategoryCode)&&!taxExemptionReason&&!taxExemptionReasonCode) throw new Error(`Poziția ${index+1}: completează motivul regimului TVA.`);
     return {description:text(item.description),expenseAccount:text(item.expenseAccount||"628"),unit:text(item.unit||"buc"),quantity,unitPrice,vatRate,vatCategoryCode,taxExemptionReasonCode,taxExemptionReason,deductibility,net:round2(quantity*unitPrice),vat:round2(quantity*unitPrice*vatRate/100)};});
   const exchangeRate=Number(input.exchangeRate||1);if(!Number.isFinite(exchangeRate)||exchangeRate<=0) throw new Error("Cursul valutar nu este valid.");
-  const subtotal=round2(normalized.reduce((s,x)=>s+x.net,0)),vatTotal=round2(normalized.reduce((s,x)=>s+x.vat,0)),total=reverseCharge?subtotal:round2(subtotal+vatTotal),connection=await(await ready()).connect();
+  const subtotal=round2(normalized.reduce((s,x)=>s+x.net,0)),vatTotal=round2(normalized.reduce((s,x)=>s+x.vat,0)),total=reverseCharge?subtotal:round2(subtotal+vatTotal),connection=await pool.connect();
   try { await connection.query("BEGIN"); const old=(await connection.query(`SELECT * FROM purchase_invoices WHERE id=$1 FOR UPDATE`,[id])).rows[0]; if(!old||old.status==="CANCELED") throw new Error("Factura de intrare nu poate fi editată.");
+    const lockedSupplier=(await connection.query(`SELECT blocked FROM suppliers WHERE id=$1 FOR UPDATE`,[supplierId])).rows[0];
+    if(!lockedSupplier) throw new Error("Furnizorul selectat nu există.");
+    if(lockedSupplier.blocked) throw new Error("Furnizorul este blocat. Deblochează-l înainte de operare.");
     const paymentCount=Number((await connection.query(`SELECT COUNT(*) count FROM supplier_payments WHERE "purchaseInvoiceId"=$1`,[id])).rows[0].count);
-    const financialChanged=Number(old.supplierId)!==supplierId||Number(old.total)!==total||Number(old.exchangeRate)!==exchangeRate||String(old.currency)!==text(input.currency||"RON").toUpperCase()||String(old.issueDate).slice(0,10)!==issueDate;
-    if(paymentCount&&financialChanged) throw new Error("Factura are plăți. Poți corecta numai numărul, scadența, observațiile și descrierile fără modificarea valorilor.");
+    if(paymentCount) throw new Error("Documentul are plăți și nu mai poate fi modificat. Folosește fluxul de storno/corecție pentru a păstra jurnalul și registrul fiscal reconciliate.");
     const codes=[...new Set(normalized.map(x=>x.expenseAccount))],validAccounts=await connection.query(`SELECT code FROM accounting_accounts WHERE code=ANY($1::text[]) AND active=1 AND "allowPosting"=1`,[codes]); if(validAccounts.rowCount!==codes.length) throw new Error("Un cont de cheltuială este inexistent sau inactiv.");
     await connection.query(`UPDATE purchase_invoices SET "supplierId"=$2,"documentType"=$3,"documentNumber"=$4,"issueDate"=$5,"dueDate"=$6,currency=$7,"exchangeRate"=$8,subtotal=$9,"vatTotal"=$10,total=$11,"reverseCharge"=$12,"vatOnCollection"=$13,notes=$14 WHERE id=$1`,[id,supplierId,text(input.documentType||"FACTURA"),documentNumber,issueDate,dueDate,text(input.currency||"RON").toUpperCase(),exchangeRate,subtotal,vatTotal,total,reverseCharge,flag(input.vatOnCollection),text(input.notes)]);
     await connection.query(`DELETE FROM purchase_invoice_items WHERE "purchaseInvoiceId"=$1`,[id]);
@@ -224,6 +243,7 @@ export async function addSupplierPayment(purchaseInvoiceId: number, input: { dat
     const newPaid = round2(Number(invoice.paidAmount) + amount);
     await connection.query(`UPDATE purchase_invoices SET "paidAmount"=$2,status=$3 WHERE id=$1`, [purchaseInvoiceId,newPaid,newPaid >= Number(invoice.total)-0.009 ? "PAID" : "PARTIAL"]);
     await postSupplierPaymentToLedger(Number(rows[0].id), connection);
+    await createRefExpenseForSupplierPayment(Number(rows[0].id), connection);
     await connection.query("COMMIT");
     return Number(rows[0].id);
   } catch (error) { await connection.query("ROLLBACK"); throw error; } finally { connection.release(); }

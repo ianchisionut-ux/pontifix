@@ -25,17 +25,35 @@ export type SagaImportRow = {
 
 const normalize = (value: unknown) => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '')
 const text = (value: unknown) => String(value ?? '').trim()
-const number = (value: unknown) => {
-  const parsed = Number(String(value ?? '').replace(/\s/g, '').replace(',', '.'))
-  return Number.isFinite(parsed) ? parsed : 0
+function parsedNumber(value: unknown, label: string, row: number) {
+  let raw = text(value).replace(/[\s\u00a0]/g, '')
+  if (!raw) return null
+  if (raw.includes(',')) raw = raw.replace(/\./g, '').replace(',', '.')
+  else if (/^[+-]?\d{1,3}(?:\.\d{3})+$/.test(raw)) raw = raw.replace(/\./g, '')
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0) throw new Error(`Rând ${row}: valoarea „${text(value)}” din ${label} nu este o sumă validă.`)
+  return parsed
 }
-const nullableNumber = (value: unknown) => text(value) === '' ? null : number(value)
-const date = (value: unknown) => {
-  if (value instanceof Date) return value.toISOString().slice(0, 10)
+const number = (value: unknown, label: string, row: number) => parsedNumber(value, label, row) ?? 0
+const nullableNumber = (value: unknown, label: string, row: number) => parsedNumber(value, label, row)
+function validIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+const date = (value: unknown, label: string, row: number) => {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) throw new Error(`Rând ${row}: ${label} nu este o dată calendaristică validă.`)
+    return value.toISOString().slice(0, 10)
+  }
   const raw = text(value)
+  if (!raw) return ''
   const match = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/)
-  if (match) return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`
-  return /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : ''
+  const candidate = match
+    ? `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`
+    : /^\d{4}-\d{2}-\d{2}/.test(raw) ? raw.slice(0, 10) : ''
+  if (!validIsoDate(candidate)) throw new Error(`Rând ${row}: ${label} „${raw}” nu este o dată calendaristică validă.`)
+  return candidate
 }
 
 function find(row: Record<string, unknown>, aliases: string[]) {
@@ -71,14 +89,14 @@ function canonical(row: Record<string, unknown>, index: number): SagaImportRow {
     email: text(find(row, ['email','e-mail'])), phone: text(find(row, ['telefon','phone'])),
     position: text(find(row, ['functie','ocupatie','cor','post'])), department: text(find(row, ['departament','activitate','centru profit'])),
     contractNumber: text(find(row, ['nr contract','numar contract','contract','nrcim'])),
-    contractDate: date(find(row, ['data contract','datacim'])), hiredAt: date(find(row, ['data angajarii','data angajare','inceput contract'])),
+    contractDate: date(find(row, ['data contract','datacim']), 'data contractului', index), hiredAt: date(find(row, ['data angajarii','data angajare','inceput contract']), 'data angajării', index),
     iban: text(find(row, ['iban','cont bancar'])).replace(/\s/g, '').toUpperCase(),
-    grossSalary: number(find(row, ['salariu baza','salariu de baza','salariu incadrare','brut incadrare','salariubrut'])),
-    grossIncome: nullableNumber(find(row, ['venit brut','total brut','brut realizat','brut'])),
-    cas: nullableNumber(find(row, ['cas','contributie cas'])), cass: nullableNumber(find(row, ['cass','contributie cass'])),
-    incomeTax: nullableNumber(find(row, ['impozit','impozit salariu','impozit venit'])),
-    netSalary: nullableNumber(find(row, ['net','rest de plata','rest plata','salariu net'])),
-    cam: nullableNumber(find(row, ['cam','contributie asiguratorie munca'])),
+    grossSalary: number(find(row, ['salariu baza','salariu de baza','salariu incadrare','brut incadrare','salariubrut']), 'salariul de bază', index),
+    grossIncome: nullableNumber(find(row, ['venit brut','total brut','brut realizat','brut']), 'venitul brut', index),
+    cas: nullableNumber(find(row, ['cas','contributie cas']), 'CAS', index), cass: nullableNumber(find(row, ['cass','contributie cass']), 'CASS', index),
+    incomeTax: nullableNumber(find(row, ['impozit','impozit salariu','impozit venit']), 'impozitul pe venit', index),
+    netSalary: nullableNumber(find(row, ['net','rest de plata','rest plata','salariu net']), 'salariul net', index),
+    cam: nullableNumber(find(row, ['cam','contributie asiguratorie munca']), 'CAM', index),
   }
 }
 

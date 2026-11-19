@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Calculator, CheckCircle2, FileUp, Loader2, RefreshCw, TriangleAlert } from 'lucide-react'
+import { bucharestDate } from '@/lib/accounting/date'
 
 type Line = { id:string; workingDays:number; workedDays:number; vacationDays:number; medicalDays:number; workedHours:number; overtimeHours:number; attendanceGross:number; overtimeAmount:number; bonuses:number; medicalAllowance:number; mealTickets:number; grossIncome:number; cas:number; cass:number; incomeTax:number; advancePaid:number; otherDeductions:number; netSalary:number; cam:number; employerCost:number; source:string; employee:{ firstName:string; lastName:string; position:string|null } }
 type PaymentType = 'NET_SALARIES'|'CAS'|'CASS'|'INCOME_TAX'|'CAM'|'OTHER_DEDUCTIONS'
@@ -14,7 +15,7 @@ const money = (value:number) => value.toLocaleString('ro-RO',{minimumFractionDig
 
 export function PayrollWorkspace({ initialRun, initialMonth, accountingAccess }:{ initialRun:Run; initialMonth:string; accountingAccess:boolean }) {
   const [run,setRun]=useState(initialRun), [busy,setBusy]=useState(''), [file,setFile]=useState<File|null>(null), [preview,setPreview]=useState<Preview|null>(null), [message,setMessage]=useState('')
-  const [paymentDate,setPaymentDate]=useState(new Date().toISOString().slice(0,10)), [paymentMethod,setPaymentMethod]=useState<'BANK'|'CASH'>('BANK')
+  const [paymentDate,setPaymentDate]=useState(bucharestDate()), [paymentMethod,setPaymentMethod]=useState<'BANK'|'CASH'>('BANK')
   const [d112,setD112]=useState<D112Status|null>(null)
   const router=useRouter()
   const totals=useMemo(()=>run?.lines.reduce((sum,line)=>({gross:sum.gross+line.grossIncome,cas:sum.cas+line.cas,cass:sum.cass+line.cass,tax:sum.tax+line.incomeTax,net:sum.net+line.netSalary,cam:sum.cam+line.cam,other:sum.other+line.otherDeductions,cost:sum.cost+line.employerCost}),{gross:0,cas:0,cass:0,tax:0,net:0,cam:0,other:0,cost:0})||{gross:0,cas:0,cass:0,tax:0,net:0,cam:0,other:0,cost:0},[run])

@@ -17,6 +17,8 @@ export type BillingInvoice = {
   total: number;
   paidAmount: number;
   vatTotal: number;
+  currency: string;
+  exchangeRate: number;
   status: string;
   invoiceType: string;
   eFacturaStatus: string | null;
@@ -43,13 +45,13 @@ export function BillingDashboard({ invoices, stats, anafEnvironment, today }: { 
   const month = today.slice(0, 7);
   const overdue = invoices.filter(inv => balance(inv) > 0 && day(inv.dueDate) && day(inv.dueDate) < today).length;
   const dueToday = invoices.filter(inv => balance(inv) > 0 && day(inv.dueDate) === today).length;
-  const monthVat = invoices.filter(inv => day(inv.issueDate).startsWith(month) && !["canceled", "stornoed"].includes(inv.status)).reduce((sum, inv) => sum + Number(inv.vatTotal), 0);
-  const pendingAnaf = invoices.filter(inv => anafGroup(inv.eFacturaStatus) === "pending" && inv.invoiceType !== "STORNO").length;
+  const monthVat = invoices.filter(inv => day(inv.issueDate).startsWith(month) && inv.status !== "canceled").reduce((sum, inv) => sum + Number(inv.vatTotal) * Number(inv.exchangeRate || 1), 0);
+  const pendingAnaf = invoices.filter(inv => anafGroup(inv.eFacturaStatus) === "pending" && !["canceled", "stornoed"].includes(inv.status)).length;
   const kpis = [
-    ["Facturi", String(stats.totalInvoices)], ["Facturat luna aceasta", money(stats.monthRevenue)],
-    ["Încasat", money(stats.totalCollected)], ["Sold clienți", money(stats.totalOutstanding)],
+    ["Facturi", String(stats.totalInvoices)], ["Facturat luna aceasta (RON)", money(stats.monthRevenue)],
+    ["Încasat (RON)", money(stats.totalCollected)], ["Sold clienți (RON)", money(stats.totalOutstanding)],
     ["Restante", String(overdue)], ["Scadente azi", String(dueToday)],
-    ["TVA luna aceasta", money(monthVat)], ["ANAF netrimise / erori", `${pendingAnaf} / ${stats.anafProblems}`],
+    ["TVA luna aceasta (RON)", money(monthVat)], ["ANAF netrimise / erori", `${pendingAnaf} / ${stats.anafProblems}`],
   ];
   const filtered = useMemo(() => invoices.filter(inv => {
     const q = query.trim().toLocaleLowerCase("ro-RO");
@@ -93,7 +95,7 @@ export function BillingDashboard({ invoices, stats, anafEnvironment, today }: { 
         {visible.map(inv => <tr key={inv.id} onClick={() => setSelectedId(inv.id)}>
           <td><button type="button" className="billing-invoice-link" onClick={() => setSelectedId(inv.id)}>{inv.series} {String(inv.number).padStart(4, "0")}</button></td>
           <td>{date(inv.issueDate)}</td><td title={inv.clientName}>{inv.clientName}</td><td>{inv.clientCif || "—"}</td><td>{date(inv.dueDate)}</td>
-          <td>{money(inv.total)}</td><td>{money(inv.paidAmount)}</td><td>{money(balance(inv))}</td><td><StatusBadge status={inv.status}/></td><td>{anafLabel(inv.eFacturaStatus)}</td>
+          <td>{money(inv.total)} {inv.currency}</td><td>{money(inv.paidAmount)} {inv.currency}</td><td>{money(balance(inv))} {inv.currency}</td><td><StatusBadge status={inv.status}/></td><td>{anafLabel(inv.eFacturaStatus)}</td>
           <td><button type="button" className="billing-more" onClick={event => { event.stopPropagation(); setSelectedId(inv.id); }} aria-label={`Detalii factura ${inv.series} ${inv.number}`}><MoreHorizontal size={18}/></button></td>
         </tr>)}
       </tbody></table></div>
@@ -102,7 +104,7 @@ export function BillingDashboard({ invoices, stats, anafEnvironment, today }: { 
     {selected && <div className="billing-drawer-backdrop" onClick={() => setSelectedId(null)}><aside className="billing-drawer" role="dialog" aria-modal="true" aria-label={`Factura ${selected.series} ${selected.number}`} onClick={event => event.stopPropagation()}>
       <div className="billing-drawer-head"><div><small>FACTURĂ</small><h2>{selected.series} {String(selected.number).padStart(4, "0")}</h2></div><button ref={closeButton} type="button" onClick={() => setSelectedId(null)} aria-label="Închide"><X size={20}/></button></div>
       <h3>{selected.clientName}</h3><p>{selected.clientCif || "CUI necompletat"}</p>
-      <dl><div><dt>Total</dt><dd>{money(selected.total)} RON</dd></div><div><dt>Achitat</dt><dd>{money(selected.paidAmount)} RON</dd></div><div><dt>Sold</dt><dd>{money(balance(selected))} RON</dd></div><div><dt>Scadență</dt><dd>{date(selected.dueDate)}</dd></div><div><dt>ANAF</dt><dd>{anafLabel(selected.eFacturaStatus)}</dd></div></dl>
+      <dl><div><dt>Total</dt><dd>{money(selected.total)} {selected.currency}</dd></div><div><dt>Achitat</dt><dd>{money(selected.paidAmount)} {selected.currency}</dd></div><div><dt>Sold</dt><dd>{money(balance(selected))} {selected.currency}</dd></div><div><dt>Scadență</dt><dd>{date(selected.dueDate)}</dd></div><div><dt>ANAF</dt><dd>{anafLabel(selected.eFacturaStatus)}</dd></div></dl>
       <div className="billing-drawer-actions">
         <Link href={`${base}/${selected.id}`} className="btn-primary">Deschide / Încasează</Link>
         <a href={`/api/accounting/invoices/${selected.id}/pdf`} className="btn-secondary" download><FileDown size={15}/> PDF</a>

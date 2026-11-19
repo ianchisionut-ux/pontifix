@@ -3,21 +3,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Download, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { VAT_REGIME_LABELS, VAT_REGIME_OPTIONS, calculateIncludedVat, defaultVatRegimeReason, suggestVatRegime, vatRatesForDate, vatRegimeNeedsReason, type VatRegimeCode } from "@/lib/accounting/vat-regime";
+import { bucharestDate } from "@/lib/accounting/date";
 
 type RefRow = {
   id: number; type: "INCOME" | "EXPENSE"; date: string; documentType: string; documentNumber: string;
   explanation: string; grossAmount: number; vatAmount: number; vatRate:number|null; vatCategoryCode:VatRegimeCode; taxExemptionReasonCode:string; taxExemptionReason:string; netAmount: number; fiscalCategory: string;
-  deductibilityPercent: number; fiscalAmount: number; source: "MANUAL" | "AUTO_PAYMENT" | "AUTO_PAYROLL";
+  deductibilityPercent: number; fiscalAmount: number; source: "MANUAL" | "AUTO_PAYMENT" | "AUTO_PAYROLL" | "AUTO_SUPPLIER_PAYMENT";
   partnerName: string; partnerCif: string; partnerCountryCode: string; partnerVatPayer:number;
   partnerRegCom:string; partnerAddress:string; partnerCounty:string; partnerCity:string; partnerPostalCode:string; partnerPhone:string; partnerRegistrationStatus:string; partnerInactive:number;
 };
 type AccountSummary = { accountCode:string; accountName:string; type:"INCOME"|"EXPENSE"; debit:number; credit:number; accountingAmount:number; entries:number };
 type Summary = { totalIncome: number; taxableIncome: number; totalExpenses: number; deductibleExpenses: number; fiscalResult: number };
 const emptySummary: Summary = { totalIncome: 0, taxableIncome: 0, totalExpenses: 0, deductibleExpenses: 0, fiscalResult: 0 };
-const currentYear = new Date().getFullYear();
+const currentYear = Number(bucharestDate().slice(0, 4));
 const money = (value: number) => value.toLocaleString("ro-RO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const categoryLabels: Record<string, string> = { TAXABLE_INCOME: "Venit impozabil", NON_TAXABLE_INCOME: "Venit neimpozabil", DEDUCTIBLE_EXPENSE: "Deductibilă integral", PARTIAL_EXPENSE: "Parțial deductibilă", NON_DEDUCTIBLE_EXPENSE: "Nedeductibilă" };
-const sourceLabels:Record<RefRow['source'],string> = {MANUAL:'Poziție manuală',AUTO_PAYMENT:'Încasare factură',AUTO_PAYROLL:'Plată salarială'};
+const sourceLabels:Record<RefRow['source'],string> = {MANUAL:'Poziție manuală',AUTO_PAYMENT:'Încasare factură',AUTO_PAYROLL:'Plată salarială',AUTO_SUPPLIER_PAYMENT:'Plată furnizor'};
 
 export default function RefPage() {
   const [year, setYear] = useState(currentYear);
@@ -30,18 +31,19 @@ export default function RefPage() {
   const [anafLoading, setAnafLoading] = useState(false);
   const [anafNotice, setAnafNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [error, setError] = useState("");
+  const [warnings, setWarnings] = useState<string[]>([]);
   const loadController=useRef<AbortController|null>(null);
-  const [form, setForm] = useState({ type: "EXPENSE" as "INCOME" | "EXPENSE", date: new Date().toISOString().slice(0, 10), documentType: "FACTURA", documentNumber: "", explanation: "", grossAmount: "", vatAmount: "0", vatRate:"21", vatCategoryOverride:"" as "" | VatRegimeCode, taxExemptionReasonCode:"", taxExemptionReason:"", fiscalCategory: "DEDUCTIBLE_EXPENSE", deductibilityPercent: "100", notes: "", partnerName: "", partnerCif: "", partnerCountryCode: "RO",partnerVatPayer:"1", partnerRegCom:"",partnerAddress:"",partnerCounty:"",partnerCity:"",partnerPostalCode:"",partnerPhone:"",partnerRegistrationStatus:"",partnerInactive:0 });
+  const [form, setForm] = useState({ type: "EXPENSE" as "INCOME" | "EXPENSE", date: bucharestDate(), documentType: "FACTURA", documentNumber: "", explanation: "", grossAmount: "", vatAmount: "0", vatRate:"21", vatCategoryOverride:"" as "" | VatRegimeCode, taxExemptionReasonCode:"", taxExemptionReason:"", fiscalCategory: "DEDUCTIBLE_EXPENSE", deductibilityPercent: "100", notes: "", partnerName: "", partnerCif: "", partnerCountryCode: "RO",partnerVatPayer:"1", partnerRegCom:"",partnerAddress:"",partnerCounty:"",partnerCity:"",partnerPostalCode:"",partnerPhone:"",partnerRegistrationStatus:"",partnerInactive:0 });
 
   const load = useCallback(async () => {
     loadController.current?.abort();
     const controller=new AbortController();loadController.current=controller;
-    setLoading(true);setError("");setRows([]);setAccountSummary([]);setSummary(emptySummary);
+    setLoading(true);setError("");setWarnings([]);setRows([]);setAccountSummary([]);setSummary(emptySummary);
     try {
       const response = await fetch(`/api/accounting/ref/transactions?year=${year}`,{cache:'no-store',signal:controller.signal});
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !Array.isArray(data.transactions) || !data.summary) throw new Error(data.error || "Registrul nu a putut fi încărcat.");
-      if (!controller.signal.aborted) {setRows(data.transactions);setAccountSummary(data.accountSummary || []);setSummary(data.summary);setVatPayer(data.vatPayer);}
+      if (!controller.signal.aborted) {setRows(data.transactions);setAccountSummary(data.accountSummary || []);setSummary(data.summary);setVatPayer(data.vatPayer);setWarnings(Array.isArray(data.warnings)?data.warnings:[]);}
     } catch(error) {if(!controller.signal.aborted)setError(error instanceof Error?error.message:'Registrul nu a putut fi încărcat.');}
     finally {if(!controller.signal.aborted)setLoading(false);}
   }, [year]);
@@ -57,36 +59,53 @@ export default function RefPage() {
     return String(calculateIncludedVat(Number(grossAmount || 0), Number(vatRate || 0)));
   }
 
+  function regimeFor(value: typeof form): VatRegimeCode {
+    const nonVatSupplier = value.type === "EXPENSE" && value.partnerCountryCode.toUpperCase() === "RO" && value.partnerVatPayer === "0";
+    return value.vatCategoryOverride || suggestVatRegime({
+      type: value.type,
+      companyVatPayer: vatPayer,
+      partnerVatPayer: nonVatSupplier ? false : undefined,
+      vatAmount: Number(value.vatAmount || 0),
+      vatRate: Number(value.vatRate || 0),
+    });
+  }
+
   function setGrossAmount(grossAmount: string) {
-    setForm((value) => ({
-      ...value,
-      grossAmount,
-      vatAmount: effectiveVatCategory === "S" ? includedVat(grossAmount, value.vatRate) : "0",
-    }));
+    setForm((value) => {
+      const next = { ...value, grossAmount };
+      return { ...next, vatAmount: regimeFor(next) === "S" ? includedVat(grossAmount, next.vatRate) : "0" };
+    });
   }
 
   function setVatRate(vatRate: string) {
-    setForm((value) => ({
-      ...value,
-      vatRate,
-      vatAmount: effectiveVatCategory === "S" ? includedVat(value.grossAmount, vatRate) : "0",
-    }));
+    setForm((value) => {
+      const next = { ...value, vatRate };
+      return { ...next, vatAmount: regimeFor(next) === "S" ? includedVat(next.grossAmount, vatRate) : "0" };
+    });
   }
 
   function setDocumentDate(date: string) {
     setForm((value) => {
       const rates = vatRatesForDate(date);
-      const vatRate = rates.includes(Number(value.vatRate)) ? value.vatRate : String(rates[0]);
-      const nonVatSupplier = value.type === "EXPENSE" && value.partnerCountryCode.toUpperCase() === "RO" && value.partnerVatPayer === "0";
-      const regime = value.vatCategoryOverride || suggestVatRegime({ type: value.type, companyVatPayer: vatPayer, partnerVatPayer: nonVatSupplier ? false : undefined, vatRate: Number(vatRate) });
-      return { ...value, date, vatRate, vatAmount: regime === "S" ? includedVat(value.grossAmount, vatRate) : "0" };
+      const currentCategory = regimeFor(value);
+      const rateIsValid = rates.includes(Number(value.vatRate));
+      const vatRate = rateIsValid ? value.vatRate : "0";
+      const next = { ...value, date, vatRate, vatCategoryOverride: !rateIsValid && (currentCategory === "S" || currentCategory === "AE") ? currentCategory : value.vatCategoryOverride };
+      return { ...next, vatAmount: regimeFor(next) === "S" ? includedVat(next.grossAmount, vatRate) : "0" };
     });
   }
 
   function setPartnerVatStatus(partnerVatPayer: string) {
     setForm((value) => {
-      const nonVatSupplier = value.type === "EXPENSE" && value.partnerCountryCode.toUpperCase() === "RO" && partnerVatPayer === "0";
-      return { ...value, partnerVatPayer, vatCategoryOverride: "", vatAmount: nonVatSupplier ? "0" : includedVat(value.grossAmount, value.vatRate) };
+      const next = { ...value, partnerVatPayer, vatCategoryOverride: "" as const };
+      return { ...next, vatAmount: regimeFor(next) === "S" ? includedVat(next.grossAmount, next.vatRate) : "0" };
+    });
+  }
+
+  function setPartnerCountryCode(partnerCountryCode: string) {
+    setForm((value) => {
+      const next = { ...value, partnerCountryCode: partnerCountryCode.toUpperCase(), vatCategoryOverride: "" as const };
+      return { ...next, vatAmount: regimeFor(next) === "S" ? includedVat(next.grossAmount, next.vatRate) : "0" };
     });
   }
 
@@ -98,7 +117,10 @@ export default function RefPage() {
   }, [form, vatPayer]);
 
   function setType(type: "INCOME" | "EXPENSE") {
-    setForm((value) => ({ ...value, type, fiscalCategory: type === "INCOME" ? "TAXABLE_INCOME" : "DEDUCTIBLE_EXPENSE", deductibilityPercent: "100", vatCategoryOverride: "", taxExemptionReasonCode: "", taxExemptionReason: "" })); setAnafNotice(null);
+    setForm((value) => {
+      const next = { ...value, type, fiscalCategory: type === "INCOME" ? "TAXABLE_INCOME" : "DEDUCTIBLE_EXPENSE", deductibilityPercent: "100", vatCategoryOverride: "" as const, taxExemptionReasonCode: "", taxExemptionReason: "" };
+      return { ...next, vatAmount: regimeFor(next) === "S" ? includedVat(next.grossAmount, next.vatRate) : "0" };
+    }); setAnafNotice(null);
   }
   async function lookupAnaf() {
     const cui = form.partnerCif.replace(/\D/g, "");
@@ -106,20 +128,25 @@ export default function RefPage() {
     setAnafLoading(true); setAnafNotice(null);
     try {
       const response = await fetch(`/api/accounting/anaf-company?cui=${encodeURIComponent(cui)}`);
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
       if (!response.ok) { setAnafNotice({ ok:false, text:data.error || "Firma nu a fost găsită." }); return; }
       const company = data.company;
-      setForm((value) => { const countryCode=company.countryCode || "RO", partnerVatPayer=String(company.vatPayer ? 1 : 0), nonVatSupplier=value.type==="EXPENSE"&&countryCode.toUpperCase()==="RO"&&partnerVatPayer==="0"; return ({ ...value, partnerName:company.name || "", partnerCif:company.cif || cui, partnerRegCom:company.regCom || "", partnerAddress:company.address || "", partnerCounty:company.judet || "", partnerCity:company.city || "", partnerPostalCode:company.postalCode || "", partnerPhone:company.phone || "", partnerCountryCode:countryCode, partnerVatPayer, vatCategoryOverride:"", vatAmount:nonVatSupplier?"0":includedVat(value.grossAmount,value.vatRate), partnerRegistrationStatus:company.registrationStatus || "", partnerInactive:company.inactive ? 1 : 0 }); });
+      setForm((value) => { const countryCode=company.countryCode || "RO", partnerVatPayer=String(company.vatPayer ? 1 : 0); const next={ ...value, partnerName:company.name || "", partnerCif:company.cif || cui, partnerRegCom:company.regCom || "", partnerAddress:company.address || "", partnerCounty:company.judet || "", partnerCity:company.city || "", partnerPostalCode:company.postalCode || "", partnerPhone:company.phone || "", partnerCountryCode:countryCode, partnerVatPayer, vatCategoryOverride:"" as const, partnerRegistrationStatus:company.registrationStatus || "", partnerInactive:company.inactive ? 1 : 0 }; return ({...next,vatAmount:regimeFor(next)==="S"?includedVat(next.grossAmount,next.vatRate):"0"}); });
       setAnafNotice({ ok:!company.inactive, text:company.inactive ? "Firma a fost găsită, dar figurează inactivă fiscal." : "Datele partenerului au fost completate din registrul ANAF." });
     } catch { setAnafNotice({ ok:false, text:"Serviciul ANAF nu răspunde. Datele pot fi completate manual." }); }
     finally { setAnafLoading(false); }
   }
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setSaving(true); setError("");
-    const response = await fetch("/api/accounting/ref/transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({...form,vatCategoryCode:effectiveVatCategory,taxExemptionReason:effectiveVatReason,vatRate:Number(form.vatAmount)>0?Number(form.vatRate):null}) });
+    event.preventDefault(); setError("");
+    if ((effectiveVatCategory === "S" || effectiveVatCategory === "AE") && !availableVatRates.includes(Number(form.vatRate))) {
+      setError("Alege explicit o cotă TVA valabilă la data documentului.");
+      return;
+    }
+    setSaving(true);
+    const response = await fetch("/api/accounting/ref/transactions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({...form,vatCategoryCode:effectiveVatCategory,taxExemptionReason:effectiveVatReason,vatRate:effectiveVatCategory==="S"||effectiveVatCategory==="AE"?Number(form.vatRate):null}) });
     const data = await response.json().catch(() => ({})); setSaving(false);
     if (!response.ok) { setError(data.error || "Poziția nu a putut fi salvată."); return; }
-    setForm((value) => ({ ...value, documentNumber: "", explanation: "", grossAmount: "", vatAmount: "0", vatCategoryOverride:"", taxExemptionReasonCode:"", taxExemptionReason:"", notes: "", partnerName: "", partnerCif: "", partnerRegCom:"",partnerAddress:"",partnerCounty:"",partnerCity:"",partnerPostalCode:"",partnerPhone:"",partnerRegistrationStatus:"",partnerInactive:0 })); setAnafNotice(null);
+    setForm((value) => ({ ...value, documentNumber: "", explanation: "", grossAmount: "", vatAmount: "0", vatCategoryOverride:"", taxExemptionReasonCode:"", taxExemptionReason:"", notes: "", partnerName: "", partnerCif: "", partnerCountryCode:"RO", partnerVatPayer:"1", partnerRegCom:"",partnerAddress:"",partnerCounty:"",partnerCity:"",partnerPostalCode:"",partnerPhone:"",partnerRegistrationStatus:"",partnerInactive:0 })); setAnafNotice(null);
     await load();
   }
   async function remove(row: RefRow) {
@@ -135,6 +162,7 @@ export default function RefPage() {
       <div className="ref-actions"><select className="input ref-year" value={year} onChange={(event) => setYear(Number(event.target.value))}>{Array.from({ length: 7 }, (_, index) => currentYear - 5 + index).reverse().map((value) => <option key={value}>{value}</option>)}</select><a className="btn-secondary" href={`/api/accounting/ref/export/pdf?year=${year}`}><Download size={15}/>Export PDF</a></div>
     </div>
     <div className="ref-notice"><strong>Regulă de calcul:</strong> totalurile REF includ încasările și plățile înregistrate, la data efectuării lor. Emiterea facturii și calcularea salariilor apar separat, în rulajele contabile. {vatPayer ? "Firma este marcată plătitoare de TVA; baza fiscală exclude TVA." : "Firma este marcată neplătitoare de TVA; baza fiscală folosește suma brută."}</div>
+    {warnings.map((warning,index)=><div className="ref-notice" role="status" key={`${index}-${warning}`}><strong>Verificare necesară:</strong> {warning}</div>)}
     {error && <div className="ref-error" role="alert">{error}</div>}
     <div className="ref-summary-grid" aria-busy={loading}>
       {[['Venituri încasate', summary.totalIncome, 'var(--cyan)'], ['Venituri impozabile', summary.taxableIncome, 'var(--emerald)'], ['Cheltuieli efectuate', summary.totalExpenses, 'var(--amber)'], ['Cheltuieli deductibile', summary.deductibleExpenses, 'var(--purple)'], ['Rezultat fiscal', summary.fiscalResult, summary.fiscalResult >= 0 ? 'var(--emerald)' : 'var(--red)']].map(([label, value, color]) => <div className="stat-card" style={{ '--accent': color } as React.CSSProperties} key={String(label)}><div className="stat-label">{label}</div><div className="stat-value">{loading ? "…" : error ? "—" : `${money(Number(value))} RON`}</div></div>)}
@@ -161,9 +189,9 @@ export default function RefPage() {
         <label className="field-label">Data încasării/plății<input className="input" type="date" required value={form.date} onChange={(e) => setDocumentDate(e.target.value)}/></label>
         <div className="ref-form-row"><label className="field-label">Document<select className="input" value={form.documentType} onChange={(e) => setForm({ ...form, documentType: e.target.value })}><option value="FACTURA">Factură</option><option value="CHITANTA">Chitanță</option><option value="EXTRAS_BANCAR">Extras bancar</option><option value="BON_FISCAL">Bon fiscal</option><option value="ALTELE">Alt document</option></select></label><label className="field-label">Număr<input className="input" value={form.documentNumber} onChange={(e) => setForm({ ...form, documentNumber: e.target.value })}/></label></div>
         <label className="field-label">Explicație<input className="input" required placeholder="Ex. servicii contabilitate" value={form.explanation} onChange={(e) => setForm({ ...form, explanation: e.target.value })}/></label>
-        <div className="ref-partner-box"><div className="section-label">{form.type === "EXPENSE" ? "Furnizor" : "Client / plătitor"}</div><label className="field-label">CUI / cod TVA<div className="ref-cui-lookup"><input className="input" placeholder="RO12345678" value={form.partnerCif} onChange={(e) => { setForm({ ...form, partnerCif: e.target.value.toUpperCase() }); setAnafNotice(null); }} onKeyDown={(e)=>{if(e.key==="Enter"){e.preventDefault();void lookupAnaf();}}}/><button type="button" className="btn-secondary" disabled={anafLoading} onClick={()=>void lookupAnaf()}>{anafLoading?<RefreshCw size={14} className="ef-spin"/>:<Search size={14}/>} {anafLoading?"Se caută":"Caută ANAF"}</button></div></label>{anafNotice&&<div className={anafNotice.ok?"ref-anaf-ok":"ref-error"}>{anafNotice.text}</div>}<label className="field-label">Denumire<input className="input" placeholder={form.type === "EXPENSE" ? "Denumire furnizor" : "Denumire client"} value={form.partnerName} onChange={(e) => setForm({ ...form, partnerName: e.target.value })}/></label><div className="ref-form-row"><label className="field-label">Nr. Registrul Comerțului<input className="input" value={form.partnerRegCom} onChange={(e)=>setForm({...form,partnerRegCom:e.target.value})}/></label><label className="field-label">Statut TVA<select className="input" value={form.partnerVatPayer} onChange={e=>setPartnerVatStatus(e.target.value)}><option value="1">Înregistrat TVA RO</option><option value="0">Neînregistrat TVA</option><option value="-1">Necunoscut</option></select></label></div><label className="field-label">Adresă<input className="input" value={form.partnerAddress} onChange={(e)=>setForm({...form,partnerAddress:e.target.value})}/></label><div className="ref-form-row"><label className="field-label">Județ<input className="input" value={form.partnerCounty} onChange={(e)=>setForm({...form,partnerCounty:e.target.value})}/></label><label className="field-label">Localitate<input className="input" value={form.partnerCity} onChange={(e)=>setForm({...form,partnerCity:e.target.value})}/></label></div><div className="ref-form-row"><label className="field-label">Cod poștal<input className="input" value={form.partnerPostalCode} onChange={(e)=>setForm({...form,partnerPostalCode:e.target.value})}/></label><label className="field-label">Țară<input className="input" maxLength={2} value={form.partnerCountryCode} onChange={(e) => setForm({ ...form, partnerCountryCode: e.target.value.toUpperCase() })}/></label></div><label className="field-label">Telefon<input className="input" value={form.partnerPhone} onChange={(e)=>setForm({...form,partnerPhone:e.target.value})}/></label>{form.partnerRegistrationStatus&&<div className="ref-auto">Stare înregistrare firmă ANAF: {form.partnerRegistrationStatus}</div>}</div>
+        <div className="ref-partner-box"><div className="section-label">{form.type === "EXPENSE" ? "Furnizor" : "Client / plătitor"}</div><label className="field-label">CUI / cod TVA<div className="ref-cui-lookup"><input className="input" placeholder="RO12345678" value={form.partnerCif} onChange={(e) => { setForm({ ...form, partnerCif: e.target.value.toUpperCase() }); setAnafNotice(null); }} onKeyDown={(e)=>{if(e.key==="Enter"){e.preventDefault();void lookupAnaf();}}}/><button type="button" className="btn-secondary" disabled={anafLoading} onClick={()=>void lookupAnaf()}>{anafLoading?<RefreshCw size={14} className="ef-spin"/>:<Search size={14}/>} {anafLoading?"Se caută":"Caută ANAF"}</button></div></label>{anafNotice&&<div className={anafNotice.ok?"ref-anaf-ok":"ref-error"}>{anafNotice.text}</div>}<label className="field-label">Denumire<input className="input" placeholder={form.type === "EXPENSE" ? "Denumire furnizor" : "Denumire client"} value={form.partnerName} onChange={(e) => setForm({ ...form, partnerName: e.target.value })}/></label><div className="ref-form-row"><label className="field-label">Nr. Registrul Comerțului<input className="input" value={form.partnerRegCom} onChange={(e)=>setForm({...form,partnerRegCom:e.target.value})}/></label><label className="field-label">Statut TVA<select className="input" value={form.partnerVatPayer} onChange={e=>setPartnerVatStatus(e.target.value)}><option value="1">Înregistrat TVA RO</option><option value="0">Neînregistrat TVA</option><option value="-1">Necunoscut</option></select></label></div><label className="field-label">Adresă<input className="input" value={form.partnerAddress} onChange={(e)=>setForm({...form,partnerAddress:e.target.value})}/></label><div className="ref-form-row"><label className="field-label">Județ<input className="input" value={form.partnerCounty} onChange={(e)=>setForm({...form,partnerCounty:e.target.value})}/></label><label className="field-label">Localitate<input className="input" value={form.partnerCity} onChange={(e)=>setForm({...form,partnerCity:e.target.value})}/></label></div><div className="ref-form-row"><label className="field-label">Cod poștal<input className="input" value={form.partnerPostalCode} onChange={(e)=>setForm({...form,partnerPostalCode:e.target.value})}/></label><label className="field-label">Țară<input className="input" maxLength={2} value={form.partnerCountryCode} onChange={(e) => { setPartnerCountryCode(e.target.value); setAnafNotice(null); }}/></label></div><label className="field-label">Telefon<input className="input" value={form.partnerPhone} onChange={(e)=>setForm({...form,partnerPhone:e.target.value})}/></label>{form.partnerRegistrationStatus&&<div className="ref-auto">Stare înregistrare firmă ANAF: {form.partnerRegistrationStatus}</div>}</div>
         <div className="ref-form-row"><label className="field-label">Sumă brută (RON)<input className="input" type="number" min="0.01" step="0.01" required value={form.grossAmount} onChange={(e) => setGrossAmount(e.target.value)}/></label><label className="field-label">TVA inclus (RON)<input className="input" type="number" min="0" step="0.01" value={form.vatAmount} onChange={(e) => setForm({ ...form, vatAmount: e.target.value })}/></label></div>
-        {effectiveVatCategory==="S"&&<label className="field-label">Cotă TVA<select className="input" value={form.vatRate} onChange={(e)=>setVatRate(e.target.value)}>{availableVatRates.map(rate=><option key={rate} value={rate}>{rate}%</option>)}</select><span className="ref-auto">TVA este calculat automat din suma brută; valoarea poate fi corectată manual.</span></label>}
+        {(effectiveVatCategory==="S"||effectiveVatCategory==="AE")&&<label className="field-label">Cotă TVA<select className="input" value={form.vatRate} onChange={(e)=>setVatRate(e.target.value)}>{!availableVatRates.includes(Number(form.vatRate))&&<option value="0" disabled>Alege cota TVA</option>}{availableVatRates.map(rate=><option key={rate} value={rate}>{rate}%</option>)}</select><span className="ref-auto">{effectiveVatCategory==="AE"?"Cota este folosită la autoimpunere; TVA plătit furnizorului rămâne zero.":"TVA este calculat automat din suma brută; valoarea poate fi corectată manual."}</span>{!availableVatRates.includes(Number(form.vatRate))&&<span className="ref-error">Cota istorică nu este valabilă la această dată. Alege explicit cota corectă.</span>}</label>}
         <label className="field-label">Regim TVA<select className="input" value={form.vatCategoryOverride} onChange={(e) => { const value=e.target.value as "" | VatRegimeCode; const nextCategory=value || suggestedVatCategory; setForm({...form,vatCategoryOverride:value,vatAmount:nextCategory==="S"?includedVat(form.grossAmount,form.vatRate):"0",taxExemptionReason:value?defaultVatRegimeReason(value):"",taxExemptionReasonCode:""}); }}><option value="">Automat · {VAT_REGIME_LABELS[suggestedVatCategory]}</option>{VAT_REGIME_OPTIONS.map(([code,label])=><option key={code} value={code}>Manual · {label}</option>)}</select><span className="ref-auto">Aplicat: {VAT_REGIME_LABELS[effectiveVatCategory]}</span>{domesticNonVatSupplier&&effectiveVatCategory==="S"&&<span className="ref-error">Corecție manuală: ANAF indică furnizor neînregistrat în scopuri de TVA. Verifică factura înainte de salvare.</span>}</label>
         {vatRegimeNeedsReason(effectiveVatCategory)&&<div className="ref-partner-box"><div className="ref-form-row"><label className="field-label">Cod motiv (opțional)<input className="input" value={form.taxExemptionReasonCode} onChange={(e)=>setForm({...form,taxExemptionReasonCode:e.target.value})}/></label><label className="field-label">Motiv TVA<input className="input" required value={effectiveVatReason} onChange={(e)=>setForm({...form,taxExemptionReason:e.target.value})}/></label></div></div>}
         <label className="field-label">Categorie fiscală<select className="input" value={form.fiscalCategory} onChange={(e) => setForm({ ...form, fiscalCategory: e.target.value, deductibilityPercent: e.target.value === "PARTIAL_EXPENSE" ? "50" : "100" })}>{form.type === "INCOME" ? <><option value="TAXABLE_INCOME">Venit impozabil</option><option value="NON_TAXABLE_INCOME">Venit neimpozabil</option></> : <><option value="DEDUCTIBLE_EXPENSE">Deductibilă integral</option><option value="PARTIAL_EXPENSE">Parțial deductibilă</option><option value="NON_DEDUCTIBLE_EXPENSE">Nedeductibilă</option></>}</select></label>

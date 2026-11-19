@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer'
+import nodemailer from 'secure-nodemailer'
 import { prisma } from '@/lib/prisma'
 import { decrypt } from '@/lib/crypto'
 

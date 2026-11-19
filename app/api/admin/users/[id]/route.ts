@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ensureInternalChatStorage } from '@/lib/ensure-internal-chat-storage'
-import { requireUserAdministrator } from '@/lib/user-administration'
+import { ensureUserAdministrationStorage, invalidateUserSessions, requireUserAdministrator } from '@/lib/user-administration'
 
 const updateSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('edit'), email: z.string().trim().email().max(254), displayName: z.string().trim().min(2).max(60), role: z.enum(['STAFF', 'OWNER', 'SUPER_ADMIN']) }),
@@ -29,16 +29,24 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (admin.email.toLowerCase() !== 'ianchisionut@gmail.com') return NextResponse.json({ error: 'Doar superadminul principal poate alege parolele administratorilor.' }, { status: 403 })
     if (user.role !== 'OWNER' && user.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Poți seta aici parola doar pentru administratori.' }, { status: 400 })
     if (id === admin.userId || user.email === 'ianchisionut@gmail.com') return NextResponse.json({ error: 'Folosește schimbarea parolei proprii pentru contul de superadmin.' }, { status: 400 })
-    await prisma.$transaction([
-      prisma.user.update({ where: { id }, data: { password: await bcrypt.hash(parsed.data.password, 12) } }),
-      prisma.passwordResetToken.deleteMany({ where: { userId: id } }),
-    ])
+    const password = await bcrypt.hash(parsed.data.password, 12)
+    await ensureUserAdministrationStorage()
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id }, data: { password } })
+      await tx.passwordResetToken.deleteMany({ where: { userId: id } })
+      await invalidateUserSessions(id, tx)
+    })
     return NextResponse.json({ success: true })
   }
   if (parsed.data.action === 'resetPassword') {
     const password = randomBytes(18).toString('base64url')
-    await prisma.user.update({ where: { id }, data: { password: await bcrypt.hash(password, 12) } })
-    await prisma.passwordResetToken.deleteMany({ where: { userId: id } })
+    const passwordHash = await bcrypt.hash(password, 12)
+    await ensureUserAdministrationStorage()
+    await prisma.$transaction(async (tx) => {
+      await tx.user.update({ where: { id }, data: { password: passwordHash } })
+      await tx.passwordResetToken.deleteMany({ where: { userId: id } })
+      await invalidateUserSessions(id, tx)
+    })
     return NextResponse.json({ success: true, temporaryPassword: password })
   }
   if (parsed.data.action === 'restore') {

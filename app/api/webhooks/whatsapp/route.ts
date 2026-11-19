@@ -5,7 +5,9 @@ export const dynamic = 'force-dynamic'
 
 function validSignature(body: string, signature: string | null) {
   const appSecret = process.env.META_APP_SECRET
-  if (!appSecret) return true
+  // Never accept unsigned webhook traffic because of a missing deployment
+  // secret. A configuration error must fail closed.
+  if (!appSecret) return false
   if (!signature?.startsWith('sha256=')) return false
 
   const received = signature.slice(7)

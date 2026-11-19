@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { ensureUserAdministrationStorage, invalidateUserSessions } from '@/lib/user-administration'
 import bcrypt from 'bcryptjs'
 import { z } from 'zod'
 
 const schema = z.object({
   currentPassword: z.string().min(1),
-  newPassword: z.string().min(8, 'Parola nouă trebuie să aibă minim 8 caractere.'),
+  newPassword: z.string().min(8, 'Parola nouă trebuie să aibă minim 8 caractere.').max(128),
 })
 
 export async function PATCH(req: NextRequest) {
@@ -31,7 +32,12 @@ export async function PATCH(req: NextRequest) {
   }
 
   const hashed = await bcrypt.hash(parsed.data.newPassword, 10)
-  await prisma.user.update({ where: { id: userId }, data: { password: hashed } })
+  await ensureUserAdministrationStorage()
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: userId }, data: { password: hashed } })
+    await tx.passwordResetToken.deleteMany({ where: { userId } })
+    await invalidateUserSessions(userId, tx)
+  })
 
   return NextResponse.json({ success: true })
 }

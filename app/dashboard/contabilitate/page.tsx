@@ -20,6 +20,8 @@ export default async function DashboardPage() {
       total: Number(invoice.total),
       paidAmount: Number(invoice.paidAmount),
       vatTotal: Number(invoice.vatTotal),
+      currency: invoice.currency,
+      exchangeRate: Number(invoice.exchangeRate || 1),
       status: invoice.status,
       invoiceType: invoice.invoiceType,
       eFacturaStatus: invoice.eFacturaStatus,

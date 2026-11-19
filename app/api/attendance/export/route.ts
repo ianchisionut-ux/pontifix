@@ -11,6 +11,7 @@ export async function GET(req: NextRequest) {
   const session = await auth()
   const businessId = (session as any)?.businessId as string | undefined
   if (!businessId) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
+  if ((session as any)?.role === 'STAFF') return NextResponse.json({ error: 'Acces interzis.' }, { status: 403 })
   const days = Math.min(366, Math.max(1, Number(req.nextUrl.searchParams.get('days') || 30)))
   const today = new Date()
   const endDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()))
