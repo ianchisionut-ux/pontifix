@@ -12,7 +12,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const access = await getConnectionAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
   const type = request.nextUrl.searchParams.get('type') === 'a3' ? 'a3' : 'contract'
-  const part = request.nextUrl.searchParams.get('part') === 'contract-notification' ? 'contract-notification' : 'full'
+  const requestedPart = request.nextUrl.searchParams.get('part')
+  const part = type === 'a3' ? 'full' :
+    requestedPart === 'contract-notification' ||
+    requestedPart === 'contract-only' ||
+    requestedPart === 'notification-only' ||
+    requestedPart === 'memorandum-only' ||
+    requestedPart === 'request-only' ? requestedPart : 'full'
   await ensureConnectionStorage()
   const { id } = await params
   const rows = await prisma.$queryRaw<Array<{ fields: unknown }>>`

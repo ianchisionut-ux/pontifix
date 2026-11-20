@@ -62,6 +62,14 @@ function textRunStyles(paragraph: string) {
     .map((run) => /<w:rPr\b[\s\S]*?<\/w:rPr>/.exec(run)?.[0] || '')
 }
 
+function assertBoldItalicValue(paragraph: string, value: string) {
+  const run = [...paragraph.matchAll(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g)]
+    .map((match) => match[0]).find((item) => visibleText(item).includes(value))
+  assert.ok(run, `Lipsește valoarea ${value} din run`)
+  assert.match(run, /<w:b(?:\s|\/|>)/, `Valoarea ${value} trebuie să fie bold`)
+  assert.match(run, /<w:i(?:\s|\/|>)/, `Valoarea ${value} trebuie să fie italic`)
+}
+
 async function main() {
   const templateXml = new PizZip(await fs.readFile('assets/bransamente/contract-template.docx')).file('word/document.xml')!.asText()
   for (const [input, expected] of [
@@ -76,7 +84,11 @@ async function main() {
     assert.equal(connectionAmountToWordsRO(amount!), expected)
   }
 
-  const fields = { ...defaultConnectionFields(), TipBeneficiar: 'PF', Beneficiar: 'PETKES JULIA-CSILLA', CNP: '2880719314012', SumaFaraTVA: '2430.00' }
+  const fields = {
+    ...defaultConnectionFields(), TipBeneficiar: 'PF', Beneficiar: 'PETKES JULIA-CSILLA', CNP: '2880719314012',
+    Strada: 'FLORILOR', Nr: '42', Telefon: '0744165317', CiSerie: 'SX', CiNumar: '429575',
+    CiEmisaDe: 'SPCLEP ZALAU', CiValabilaDeLa: '01.01.2025', PTA: 'PTA 6729 TEST', SumaFaraTVA: '2430.00',
+  }
   const contractBuffer = await generateConnectionDocx(fields, 'contract')
   if (process.env.CONNECTION_DOCX_SAMPLE_PATH) await fs.writeFile(process.env.CONNECTION_DOCX_SAMPLE_PATH, contractBuffer)
   const contract = new PizZip(contractBuffer)
@@ -99,7 +111,19 @@ async function main() {
   const physicalSourceStyles = textRunStyles(paragraphWithVisibleText(templateXml, '•PERSOANĂ FIZICĂ'))
   const physicalOutputStyles = textRunStyles(physicalNotificationParagraph)
   assert.deepEqual(physicalOutputStyles.slice(0, 3), physicalSourceStyles.slice(0, 3), 'Păstrează stilul bulinei, al titlului subliniat și al separatorului PF')
-  assert.equal(physicalOutputStyles[4], physicalSourceStyles[5], 'Numele PF păstrează stilul valorii din șablon')
+  for (const value of [fields.Beneficiar, fields.Oras, fields.Strada, fields.Nr, fields.Telefon, fields.CNP]) {
+    assertBoldItalicValue(physicalNotificationParagraph, value)
+  }
+  const physicalIdentity = paragraphWithVisibleText(xml, 'având C.I. seria')
+  for (const value of [fields.CiSerie, fields.CiNumar, fields.CiEmisaDe, fields.CiValabilaDeLa]) {
+    assertBoldItalicValue(physicalIdentity, value)
+    assert.equal(visibleText(physicalIdentity).split(value).length - 1, 1, `Valoarea CI ${value} apare o singură dată`)
+  }
+  assert.match(visibleText(physicalIdentity), /cont nr\. \.{8}, deschis la \.{8}, filiala \.{8}/,
+    'Punctele de completare pentru contul opțional rămân vizibile')
+  assert.ok(physicalIdentity.includes('w:name="NrSX"'), 'Bookmarkul actului de identitate rămâne în paragraf')
+  const memoriu = xml.slice(xml.indexOf('MEMORIU  TEHNIC'))
+  assertBoldItalicValue(paragraphWithVisibleText(memoriu, fields.PTA), fields.PTA)
   assert.ok(visibleText(xml).includes('•PERSOANĂ JURIDICĂ'), 'Rubrica juridică rămâne în structura originală')
   assert.ok(!xml.includes('NEJUR MIRCEA'))
   assertSingleBreakBeforeNotification(xml)
@@ -114,6 +138,26 @@ async function main() {
   assert.ok(!signingXml.includes('CEREREA PENTRU ELIBERAREA AUTORIZATIEI'))
   assertSingleBreakBeforeNotification(signingXml)
   assert.equal(connectionDocumentName(fields, 'contract', 'contract-notification'), 'Contract-Notificare-PETKES-JULIA-CSILLA.docx')
+
+  for (const [part, present, absent, filename] of [
+    ['contract-only', 'Contract', ['NOTIFICARE ÎNCHEIERE CONTRACT', 'MEMORIU  TEHNIC', 'CEREREA PENTRU ELIBERAREA AUTORIZATIEI'], 'Contract-PETKES-JULIA-CSILLA.docx'],
+    ['notification-only', 'NOTIFICARE ÎNCHEIERE CONTRACT', ['CAP.II', 'MEMORIU  TEHNIC', 'CEREREA PENTRU ELIBERAREA AUTORIZATIEI'], 'Notificare-PETKES-JULIA-CSILLA.docx'],
+    ['memorandum-only', 'MEMORIU  TEHNIC', ['NOTIFICARE ÎNCHEIERE CONTRACT', 'CEREREA PENTRU ELIBERAREA AUTORIZATIEI'], 'Memoriu-PETKES-JULIA-CSILLA.docx'],
+    ['request-only', 'CEREREA PENTRU ELIBERAREA AUTORIZATIEI', ['NOTIFICARE ÎNCHEIERE CONTRACT', 'MEMORIU  TEHNIC'], 'Cerere-PETKES-JULIA-CSILLA.docx'],
+  ] as const) {
+    const singleXml = new PizZip(await generateConnectionDocx(fields, 'contract', part)).file('word/document.xml')!.asText()
+    assert.equal(XMLValidator.validate(singleXml), true, `${part} trebuie să fie XML valid`)
+    assert.ok(singleXml.includes(present), `${part} trebuie să includă secțiunea sa`)
+    for (const marker of absent) assert.ok(!singleXml.includes(marker), `${part} nu trebuie să includă ${marker}`)
+    assert.equal((singleXml.match(/<w:sectPr\b/g) || []).length, 1, `${part} trebuie să aibă o singură secțiune Word`)
+    assert.ok(!/<w:instrText\b[^>]*>[^<]*\bREF\s+[A-Za-z]/i.test(singleXml), `${part} nu lasă referințe fără sursă`)
+    assert.ok(!/<w:instrText\b[^>]*>[^<]*=\s*(?:SUM|PRODUCT)\b/i.test(singleXml),
+      `${part} păstrează rezultatul formulelor fără trimiteri către alt document`)
+    assert.equal(connectionDocumentName(fields, 'contract', part), filename)
+    const firstBody = singleXml.slice(singleXml.indexOf('<w:body>') + 8, singleXml.indexOf('</w:body>'))
+    const firstParagraph = /<w:p\b[^>]*>[\s\S]*?<\/w:p>/.exec(firstBody)?.[0] || ''
+    assert.ok(!/<w:br\b(?=[^>]*w:type="page")/.test(firstParagraph), `${part} nu începe cu pagină goală`)
+  }
 
   const legalFields = {
     ...defaultConnectionFields(), TipBeneficiar: 'PJ', Beneficiar: 'PAROHIA REFORMATA VALEA POMILOR',
@@ -142,7 +186,23 @@ async function main() {
     const legalSourceStyles = textRunStyles(paragraphWithVisibleText(templateXml, '•PERSOANĂ JURIDICĂ'))
     const legalOutputStyles = textRunStyles(legalNotificationParagraph)
     assert.deepEqual(legalOutputStyles.slice(0, 3), legalSourceStyles.slice(0, 3), 'Păstrează stilul bulinei, al titlului subliniat și al separatorului PJ')
-    assert.deepEqual(legalOutputStyles, legalSourceStyles, 'Rubrica PJ păstrează stilurile tuturor segmentelor originale')
+    for (const value of [legalFields.Beneficiar, legalFields.Oras, legalFields.Sat]) {
+      assertBoldItalicValue(legalNotificationParagraph, value)
+    }
+    for (const [marker, values] of [
+      ['DENUMIRE –', [legalFields.Beneficiar]],
+      ['ADRESA SEDIULUI –', [legalFields.Oras, legalFields.Sat]],
+      ['str. PRINCIPALĂ, nr. 119', [legalFields.Strada, legalFields.Nr, legalFields.Judet]],
+      ['C.U.I./C.I.F.', [legalFields.CUI]],
+      ['Telefon 0749393854', [legalFields.Telefon]],
+    ] as const) {
+      const paragraph = paragraphWithVisibleText(legalXml, marker)
+      for (const value of values) assertBoldItalicValue(paragraph, value)
+    }
+    const legalAddress = paragraphWithVisibleText(legalXml, 'str. PRINCIPALĂ, nr. 119, județ')
+    for (const value of [legalFields.Strada, legalFields.Nr, legalFields.Judet, legalFields.Telefon, legalFields.CUI]) {
+      assertBoldItalicValue(legalAddress, value)
+    }
     assert.ok(!legalXml.includes('J31/123/2026'), 'Un nr. Registrul Comerțului necunoscut nu trebuie inventat')
     assert.ok(!renderedText(legalXml).includes('SX-VECHI-99'), 'Un act PJ nu include numărul SX moștenit')
     assert.ok(!renderedText(legalXml).includes('01.01.2000'), 'Un act PJ nu include data SX moștenită')
@@ -185,6 +245,23 @@ async function main() {
     }
   }
 
+  for (const part of ['contract-only', 'notification-only', 'memorandum-only', 'request-only'] as const) {
+    const legalSingle = new PizZip(await generateConnectionDocx(legalFields, 'contract', part)).file('word/document.xml')!.asText()
+    assert.equal(XMLValidator.validate(legalSingle), true, `${part} PJ trebuie să fie XML valid`)
+    assert.ok(renderedText(legalSingle).includes(legalFields.Beneficiar), `${part} PJ include beneficiarul completat`)
+    assert.ok(!/<w:instrText\b[^>]*>[^<]*\bREF\s+[A-Za-z]/i.test(legalSingle),
+      `${part} PJ nu păstrează referințe către celelalte documente`)
+    if (part === 'contract-only') {
+      assert.ok(!renderedText(paragraphWithVisibleText(legalSingle, 'NUME SI PRENUME')).includes(legalFields.Beneficiar),
+        'Contractul PJ nu completează rubrica PF')
+    }
+    if (part === 'notification-only') {
+      assert.ok(!renderedText(paragraphWithVisibleText(legalSingle, '• PERSOANĂ FIZICĂ')).includes(legalFields.Beneficiar),
+        'Notificarea PJ nu completează rubrica PF')
+      assertBoldItalicValue(paragraphWithVisibleText(legalSingle, '•PERSOANĂ JURIDICĂ'), legalFields.Beneficiar)
+    }
+  }
+
   const companyXml = new PizZip(await generateConnectionDocx({
     ...legalFields, Beneficiar: 'SC EXEMPLU SRL', CUI: 'RO12345678',
     NrRegCom: 'J31/123/2026', ReprezentantLegal: 'IONESCU MARIA', FunctieReprezentant: 'Administrator',
@@ -193,8 +270,64 @@ async function main() {
   assert.match(visibleText(paragraphWith(companyXml, 'Reprezentant legal')), /IONESCU MARIA.*Administrator/)
   assert.match(visibleText(paragraphWith(companyXml, 'nr. înreg.')), /J31\/123\/2026.*IONESCU MARIA.*Administrator/)
 
-  const a3 = new PizZip(await generateConnectionDocx(fields, 'a3'))
-  assert.ok(a3.file('word/document.xml')!.asText().length > 0)
+  const parochiaA3 = new PizZip(await generateConnectionDocx({
+    ...legalFields, AmplasamentA3: 'județul Sălaj, - ȘAMȘUD, sat VALEA POMILOR, nr. 78', Nrloc: '',
+  }, 'a3')).file('word/document.xml')!.asText()
+  assert.equal(XMLValidator.validate(parochiaA3), true)
+  const a3Beneficiary = paragraphWith(parochiaA3, 'w:name="Beneficiar"')
+  assert.equal(/<w:t\b[^>]*>( +)<\/w:t>/.exec(a3Beneficiary)?.[1].length, 48,
+    'Numele parohiei are aceeași poziție de 48 spații ca exemplul aranjat manual')
+  const parochiaAddress = paragraphWith(parochiaA3, 'w:name="AmplasamentA3"')
+  const parochiaAddressIndex = parochiaA3.indexOf(parochiaAddress)
+  const parochiaAddressLine = /<w:p\b[^>]*>[\s\S]*?<\/w:p>/.exec(parochiaA3.slice(parochiaAddressIndex + parochiaAddress.length))?.[0] || ''
+  assert.match(visibleText(parochiaAddressLine), /sat VALEA POMILOR, nr\. 78/)
+  assert.equal((visibleText(parochiaAddressLine).match(/nr\./g) || []).length, 1, 'Numărul nu se dublează dacă Nrloc este gol')
+  const physicalA3 = new PizZip(await generateConnectionDocx({
+    ...fields, AmplasamentA3: 'județul TEST, - ORAȘ TEST, str. FLORILOR nr. 42', Nrloc: '',
+  }, 'a3')).file('word/document.xml')!.asText()
+  const physicalAddress = paragraphWith(physicalA3, 'w:name="AmplasamentA3"')
+  const physicalAddressIndex = physicalA3.indexOf(physicalAddress)
+  const physicalAddressLine = /<w:p\b[^>]*>[\s\S]*?<\/w:p>/.exec(physicalA3.slice(physicalAddressIndex + physicalAddress.length))?.[0] || ''
+  assert.match(visibleText(physicalAddressLine), /str\. FLORILOR nr\. 42/)
+  assert.equal((visibleText(physicalAddressLine).match(/nr\./g) || []).length, 1)
+
+  const a3TemplateXml = new PizZip(await fs.readFile('assets/bransamente/a3-template.docx')).file('word/document.xml')!.asText()
+  for (const [beneficiary, address, number] of [
+    ['BENEFICIAR TEST', 'județul TEST, - ORAȘ TEST, str. FLORILOR, nr. 42', '42'],
+    ['SOCIETATE EXEMPLU PENTRU TEST SRL', 'județul TEST, - ORAȘ TEST, sat SAT TEST, nr. 7', '7'],
+  ]) {
+    const a3Fields = {
+      ...defaultConnectionFields(), Beneficiar: beneficiary, ATR: '123456789/05.06.2026',
+      AmplasamentA3: address, Nrloc: number, NrContract: '10', DATA: '06.06.2026',
+    }
+    const a3Xml = new PizZip(await generateConnectionDocx(a3Fields, 'a3')).file('word/document.xml')!.asText()
+    assert.equal(XMLValidator.validate(a3Xml), true)
+    const paragraphs = [...a3Xml.matchAll(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g)].map((match) => match[0])
+    const templateParagraphs = [...a3TemplateXml.matchAll(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g)].map((match) => match[0])
+    assert.equal(paragraphs.length, templateParagraphs.length + 2, 'A3 adaugă exact liniile pentru data ATR și amplasament')
+    assert.equal((a3Xml.match(/<w:pict\b/g) || []).length, (a3TemplateXml.match(/<w:pict\b/g) || []).length,
+      'Grafica formularului A3 rămâne neschimbată')
+    assert.equal((a3Xml.match(/<w:sectPr\b/g) || []).length, (a3TemplateXml.match(/<w:sectPr\b/g) || []).length)
+    const atrIndex = paragraphs.findIndex((paragraph) => paragraph.includes('w:name="ATR"'))
+    assert.ok(atrIndex >= 0)
+    assert.equal(visibleText(paragraphs[atrIndex]).trim(), '123456789')
+    assert.equal(visibleText(paragraphs[atrIndex + 1]).trim(), '05.06.2026')
+    assert.match(paragraphs[atrIndex + 1], /<w:bookmarkEnd\b(?=[^>]*w:id="3")/)
+    assert.equal(firstTextRunStyle(paragraphs[atrIndex]), firstTextRunStyle(paragraphWith(a3TemplateXml, 'w:name="ATR"')))
+    assert.equal(firstTextRunStyle(paragraphs[atrIndex + 1]), firstTextRunStyle(paragraphs[atrIndex]))
+    const addressIndex = paragraphs.findIndex((paragraph) => paragraph.includes('w:name="AmplasamentA3"'))
+    assert.ok(addressIndex >= 0)
+    assert.match(visibleText(paragraphs[addressIndex]), /județul TEST, - ORAȘ TEST,/)
+    assert.match(visibleText(paragraphs[addressIndex + 1]), /(?:str\. FLORILOR|sat SAT TEST).*nr\.\s*(?:42|7)/)
+    assert.match(paragraphs[addressIndex + 1], /<w:bookmarkEnd\b(?=[^>]*w:id="5")/)
+    assert.match(paragraphs[addressIndex + 1], /<w:bookmarkStart\b(?=[^>]*w:name="Nrloc")/)
+    assert.equal((visibleText(paragraphs[addressIndex + 1]).match(new RegExp(`\\b${number}\\b`, 'g')) || []).length, 1,
+      'Numărul locului de consum apare o singură dată')
+    assert.equal(firstTextRunStyle(paragraphs[addressIndex]), firstTextRunStyle(paragraphWith(a3TemplateXml, 'w:name="AmplasamentA3"')))
+    assert.equal(firstTextRunStyle(paragraphs[addressIndex + 1]), firstTextRunStyle(paragraphs[addressIndex]))
+    assert.ok(!/<w:br\b(?=[^>]*w:type="page")/.test(paragraphs[atrIndex] + paragraphs[atrIndex + 1] + paragraphs[addressIndex] + paragraphs[addressIndex + 1]))
+    assert.match(visibleText(paragraphWith(a3Xml, 'w:name="Beneficiar"')), new RegExp(beneficiary))
+  }
   console.log('Pachet complet și DEER, PF/PJ în contract/notificare/memoriu, salt de pagină, sumă în litere, A3: OK')
 }
 

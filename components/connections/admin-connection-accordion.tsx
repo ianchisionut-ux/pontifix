@@ -5,6 +5,7 @@ import { ChevronDown, Download, Search } from 'lucide-react'
 import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, getConnectionBeneficiaryType, isConnectionFieldVisibleForBeneficiary, type ConnectionCaseDto } from '@/lib/connection-fields'
 import { CONNECTION_STATUS_META } from '@/lib/connection-status'
 import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
+import { ConnectionDocumentButtons } from '@/components/connections/connection-document-buttons'
 
 export function AdminConnectionAccordion({ items, query, onQueryChange }: { items: ConnectionCaseDto[]; query: string; onQueryChange: (value: string) => void }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -28,7 +29,7 @@ export function AdminConnectionAccordion({ items, query, onQueryChange }: { item
           <div className="mb-5 flex flex-wrap items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/70 p-3">
             <span className="mr-1 text-xs font-black uppercase tracking-[.08em] text-[#0d5d8b]">Documente dosar</span>
             {item.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${item.id}/atr`} title={`ATR · ${item.fields.Beneficiar || item.nib}`}>ATR</SecurePdfViewerButton>}
-            <a href={`/api/bransamente/${item.id}/document?type=contract`} className="btn-secondary inline-flex items-center gap-2"><Download size={15}/> Contract + notificare + memoriu + cerere</a>
+            <ConnectionDocumentButtons id={item.id}/>
             <a href={`/api/bransamente/${item.id}/document?type=a3`} className="btn-secondary inline-flex items-center gap-2"><Download size={15}/> Dosar A3</a>
             {!item.atrPathname && <span className="text-xs font-semibold text-slate-500">ATR neîncărcat</span>}
           </div>
