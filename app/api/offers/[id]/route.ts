@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { prisma } from '@/lib/prisma'
 import { ensureQuoteStorage } from '@/lib/ensure-quote-storage'
 import { getOfferAccess } from '@/lib/offer-access'
-import { defaultConnectionFields } from '@/lib/connection-fields'
+import { defaultConnectionFields, getConnectionBeneficiaryType, normalizeConnectionBeneficiaryFields } from '@/lib/connection-fields'
 import { connectionIdentityFromContract, createConnectionCase } from '@/lib/connection-store'
 import { sendBusinessEmail } from '@/lib/email-settings'
 import { parseRomanianAddress } from '@/lib/romanian-address'
@@ -40,7 +40,13 @@ async function findExistingConnection(businessId: string, quoteRequestId: string
   if (customerId.length < 6) return null
   const atrNumber = digits(ocr.atrNumber)
   const matches = await prisma.$queryRawUnsafe<ExistingConnection[]>(
-    'SELECT "id", "nib", "quoteRequestId" FROM "ConnectionCase" WHERE "businessId"=$1 AND "quoteRequestId" IS NULL AND regexp_replace(COALESCE("fields"->>\'CnpCif\', \'\'), \'[^0-9]\', \'\', \'g\')=$2 AND ($3=\'\' OR POSITION($3 IN regexp_replace(COALESCE("fields"->>\'ATR\', \'\'), \'[^0-9]\', \'\', \'g\')) > 0) ORDER BY "updatedAt" DESC LIMIT 2',
+    `SELECT "id", "nib", "quoteRequestId" FROM "ConnectionCase"
+     WHERE "businessId"=$1 AND "quoteRequestId" IS NULL
+       AND regexp_replace(COALESCE(NULLIF(CASE "fields"->>'TipBeneficiar'
+         WHEN 'PF' THEN "fields"->>'CNP' WHEN 'PJ' THEN "fields"->>'CUI'
+         ELSE COALESCE(NULLIF("fields"->>'CNP',''), "fields"->>'CUI') END,''), "fields"->>'CnpCif',''), '[^0-9]', '', 'g')=$2
+       AND ($3='' OR POSITION($3 IN regexp_replace(COALESCE("fields"->>'ATR', ''), '[^0-9]', '', 'g')) > 0)
+     ORDER BY "updatedAt" DESC LIMIT 2`,
     businessId, customerId, atrNumber,
   )
   return matches.length === 1 ? matches[0] : null
@@ -107,7 +113,12 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     fields.NrContract = contractNumber || fields.NrContract
     fields.Beneficiar = String(offer.customerName || ocr.customerName || quote.name || '')
     fields.Telefon = String(offer.customerPhone || ocr.customerPhone || quote.phone || '')
-    fields.CnpCif = String(ocr.customerId || '')
+    const customerIdentifier = String(ocr.customerId || '').trim()
+    const customerDigits = digits(customerIdentifier)
+    fields.TipBeneficiar = customerDigits.length === 13 ? 'PF' : customerDigits ? 'PJ' : getConnectionBeneficiaryType({ Beneficiar: fields.Beneficiar })
+    if (fields.TipBeneficiar === 'PF') fields.CNP = customerIdentifier
+    else fields.CUI = customerIdentifier
+    fields.CnpCif = customerIdentifier
     fields.Amplasament = String(offer.workLocation || ocr.workAddress || quote.location || '')
     fields.AmplasamentA3 = fields.Amplasament || fields.AmplasamentA3
     fields.ATR = [ocr.atrNumber && `nr. ${ocr.atrNumber}`, ocr.atrDate && `din ${ocr.atrDate}`].filter(Boolean).join(' ')
@@ -125,7 +136,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     let created: Awaited<ReturnType<typeof createConnectionCase>>
     try {
       created = await createConnectionCase({
-        businessId: access.businessId, fields, atrPathname: quote.atrPathname, atrName: quote.atrName,
+        businessId: access.businessId, fields: normalizeConnectionBeneficiaryFields(fields), atrPathname: quote.atrPathname, atrName: quote.atrName,
         createdByEmail: access.session?.user?.email || null, quoteRequestId: id,
       })
     } catch (error) {

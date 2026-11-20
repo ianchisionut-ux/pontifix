@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { uploadPresigned } from '@vercel/blob/client'
 import { Archive, ClipboardList, CreditCard, Download, Eye, FileText, FileUp, LayoutGrid, List, Loader2, Mail, MessageCircle, MessageSquareText, Plus, Save, Search, ShieldCheck, Trash2, WandSparkles, X } from 'lucide-react'
-import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, connectionFieldsSchema, defaultConnectionFields, type ConnectionCaseDto, type ConnectionFields } from '@/lib/connection-fields'
+import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, connectionFieldsSchema, defaultConnectionFields, getConnectionBeneficiaryType, normalizeConnectionBeneficiaryFields, type ConnectionBeneficiaryType, type ConnectionCaseDto, type ConnectionFields } from '@/lib/connection-fields'
 import { CONNECTION_STATUSES, CONNECTION_STATUS_META, type ConnectionStatus } from '@/lib/connection-status'
 import { AdminConnectionAccordion } from '@/components/connections/admin-connection-accordion'
 import { CONNECTION_WHATSAPP_TEMPLATES, renderConnectionWhatsAppTemplate, type ConnectionWhatsAppTemplateKey } from '@/lib/connection-whatsapp-templates'
@@ -42,12 +42,57 @@ function deerActionHistory(item: ConnectionCaseDto): DeerActionHistoryEntry[] {
     : []
 }
 
+type IdentificationField = 'Beneficiar' | 'CNP' | 'CUI' | 'Telefon' | 'Entitate' | 'NrRegCom' | 'ReprezentantLegal' | 'FunctieReprezentant'
+
+function IdentificationFields({
+  fields, canEdit, onTypeChange, onFieldChange, onClear,
+}: {
+  fields: ConnectionFields
+  canEdit: boolean
+  onTypeChange: (type: ConnectionBeneficiaryType) => void
+  onFieldChange: (field: IdentificationField, value: string) => void
+  onClear: () => void
+}) {
+  const type = getConnectionBeneficiaryType(fields)
+  const inputs: { field: IdentificationField; label: string; inputMode?: 'numeric' | 'tel'; maxLength?: number }[] = [
+    { field: 'Beneficiar', label: type === 'PF' ? 'Nume și prenume' : 'Denumire persoană juridică' },
+    type === 'PF'
+      ? { field: 'CNP', label: 'CNP', inputMode: 'numeric', maxLength: 13 }
+      : { field: 'CUI', label: 'CUI / CIF', maxLength: 20 },
+    { field: 'Telefon', label: 'Telefon', inputMode: 'tel' },
+    { field: 'Entitate', label: 'Entitate / UAT' },
+    ...(type === 'PJ' ? [
+      { field: 'NrRegCom' as const, label: 'Nr. Registrul Comerțului (dacă există)' },
+      { field: 'ReprezentantLegal' as const, label: 'Reprezentant legal (opțional)' },
+      { field: 'FunctieReprezentant' as const, label: 'Funcția reprezentantului (opțional)' },
+    ] : []),
+  ]
+
+  return <fieldset>
+    <div className="mb-3 flex items-center justify-between">
+      <legend className="text-sm font-black uppercase tracking-[.08em] text-[#0d5d8b]">Identificare</legend>
+      {canEdit && <button type="button" onClick={onClear} className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-500"><X size={13}/> Golește secțiunea</button>}
+    </div>
+    <div className="mb-3 inline-flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1" role="group" aria-label="Tip beneficiar">
+      {([{ type: 'PF', label: 'Persoană fizică' }, { type: 'PJ', label: 'Persoană juridică' }] as const).map((option) => <button
+        key={option.type} type="button" disabled={!canEdit} aria-pressed={type === option.type}
+        onClick={() => onTypeChange(option.type)}
+        className={`rounded-lg px-4 py-2 text-sm font-bold transition disabled:cursor-default ${type === option.type ? 'bg-[#0d5d8b] text-white shadow-sm' : 'text-slate-600 hover:bg-white'}`}
+      >{option.label}</button>)}
+    </div>
+    <p className="mb-3 text-xs text-slate-500">Contractul și notificarea completează automat rubrica pentru {type === 'PF' ? 'persoană fizică' : 'persoană juridică'}.</p>
+    <div className="grid gap-3 md:grid-cols-2">{inputs.map(({ field, label, inputMode, maxLength }) => <label key={field} className="text-xs font-bold text-slate-500">
+      {label}<input disabled={!canEdit} value={fields[field]} onChange={(event) => onFieldChange(field, event.target.value)} inputMode={inputMode} maxLength={maxLength} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/>
+    </label>)}</div>
+  </fieldset>
+}
+
 
 export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }: { initialCases: ConnectionCaseDto[]; canManage: boolean; canEditDeerDate: boolean }) {
   const [items, setItems] = useState(initialCases)
   const [selectedId, setSelectedId] = useState(initialCases[0]?.id || '')
   const selected = items.find((item) => item.id === selectedId) || null
-  const [draft, setDraft] = useState<ConnectionFields>(selected?.fields || defaultConnectionFields())
+  const [draft, setDraft] = useState<ConnectionFields>(normalizeConnectionBeneficiaryFields(selected?.fields || defaultConnectionFields()))
   const [saveProgress, setSaveProgress] = useState<SaveProgress | null>(null)
   const pendingSaveRef = useRef(new Map<string, { id: string; fields: ConnectionFields; manual: boolean }>())
   const saveRunningRef = useRef(false)
@@ -90,7 +135,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       const local = readSessionDraft(next.id)
       if (local) return local
       if (previous?.id === next.id && !fieldsEqual(current, previous.fields)) return current
-      return { ...defaultConnectionFields(), ...next.fields }
+      return normalizeConnectionBeneficiaryFields(next.fields)
     })
   }, [initialCases])
 
@@ -120,7 +165,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     if (item.id === selectedId) return
     if (selected && !fieldsEqual(draft, selected.fields)) queueSave(selected.id, draft, false)
     setSelectedId(item.id)
-    setDraft(readSessionDraft(item.id) || { ...defaultConnectionFields(), ...item.fields })
+    setDraft(readSessionDraft(item.id) || normalizeConnectionBeneficiaryFields(item.fields))
     setSaveProgress(null)
     setNotice('')
     setCiOpen(false)
@@ -140,7 +185,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     setNotice(existing ? `Actualizez ${existing.nib} din ATR-ul nou…` : file ? 'Citesc ATR-ul…' : 'Creez fișa…')
     try {
       const fields: ConnectionFields = existing
-        ? { ...defaultConnectionFields(), ...existing.fields }
+        ? normalizeConnectionBeneficiaryFields(existing.fields)
         : defaultConnectionFields()
       fields.NrContract = contractNumber
       let atrPathname: string | null = null
@@ -151,8 +196,15 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
           const ocr = await analyzeAtrInBrowser(file, setNotice)
           const hints = parseRomanianAddress(ocr.customerAddress || ocr.workAddress)
           if (ocr.customerName) fields.Beneficiar = ocr.customerName
+          if (!existing && ocr.customerName && !ocr.customerId) fields.TipBeneficiar = getConnectionBeneficiaryType({ Beneficiar: ocr.customerName })
           if (ocr.customerPhone) fields.Telefon = ocr.customerPhone
-          if (ocr.customerId) fields.CnpCif = ocr.customerId
+          if (ocr.customerId) {
+            const beneficiaryType = getConnectionBeneficiaryType({ Beneficiar: ocr.customerName || fields.Beneficiar, CnpCif: ocr.customerId })
+            fields.TipBeneficiar = beneficiaryType
+            fields.CnpCif = ocr.customerId
+            if (beneficiaryType === 'PF') fields.CNP = ocr.customerId
+            else fields.CUI = ocr.customerId
+          }
           if (ocr.workAddress) {
             fields.Amplasament = ocr.workAddress
             fields.AmplasamentA3 = ocr.workAddress
@@ -179,7 +231,7 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
       const response = await fetch('/api/bransamente', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields, atrPathname, atrName, overwriteExisting: Boolean(file) }),
+        body: JSON.stringify({ fields: normalizeConnectionBeneficiaryFields(fields), atrPathname, atrName, overwriteExisting: Boolean(file) }),
       })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.error || 'Fișa nu a putut fi creată.')
@@ -467,7 +519,36 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
     const remaining = items.filter((item) => item.id !== selected.id)
     setItems(remaining)
     setSelectedId(remaining[0]?.id || '')
-    setDraft(remaining[0]?.fields || defaultConnectionFields())
+    setDraft(normalizeConnectionBeneficiaryFields(remaining[0]?.fields || defaultConnectionFields()))
+  }
+
+  function changeBeneficiaryType(type: ConnectionBeneficiaryType) {
+    if (!canManage) return
+    setDraft((current) => normalizeConnectionBeneficiaryFields({
+      ...current,
+      TipBeneficiar: type,
+      CnpCif: type === 'PF' ? current.CNP : current.CUI,
+    }))
+    if (type === 'PJ') setCiOpen(false)
+  }
+
+  function changeIdentificationField(field: IdentificationField, value: string) {
+    if (!canManage) return
+    setDraft((current) => normalizeConnectionBeneficiaryFields({
+      ...current,
+      [field]: value,
+      ...(field === (getConnectionBeneficiaryType(current) === 'PF' ? 'CNP' : 'CUI') ? { CnpCif: value } : {}),
+    }))
+  }
+
+  function clearIdentification() {
+    if (!canManage) return
+    setDraft((current) => ({
+      ...current,
+      TipBeneficiar: 'PF', Beneficiar: '', CNP: '', CUI: '', CnpCif: '', Telefon: '', Entitate: '',
+      NrRegCom: '', ReprezentantLegal: '', FunctieReprezentant: '',
+    }))
+    setCiOpen(false)
   }
 
   function clearGroup(fields: readonly string[]) {
@@ -519,11 +600,11 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
         <div className={viewMode === 'grid' ? 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'space-y-2 xl:max-h-[620px] xl:overflow-y-auto xl:pr-1'}>{visible.map((item) => <button key={item.id} onClick={() => select(item)} className={`w-full rounded-2xl border p-3 text-left transition ${item.id === selectedId ? 'border-[#78bfe1] bg-white shadow-sm' : 'border-transparent bg-[#e9f1f8] hover:border-slate-200 hover:bg-white'}`}><div className="mb-1 flex items-center justify-between gap-2"><span className="text-[10px] font-black text-[#197fb5]">#{item.sequenceNumber} / {item.nib}</span><span className="h-2 w-2 rounded-full" style={{ backgroundColor: CONNECTION_STATUS_META[item.status].color }}/></div><p className="truncate text-sm font-black text-[#082b4d]">{item.fields.Beneficiar || 'Beneficiar necompletat'}</p><p className="mt-1 truncate text-xs text-slate-500">{item.fields.ATR || item.atrName || 'Fișă fără ATR'}</p>{viewMode === 'grid' && <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-200/70 pt-3"><span className="truncate text-xs font-semibold text-slate-500">{item.fields.Telefon || 'Telefon necompletat'}</span><span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white" style={{ backgroundColor: CONNECTION_STATUS_META[item.status].color }}>{CONNECTION_STATUS_META[item.status].label}</span></div>}<p className="mt-1 text-[11px] text-slate-400">{new Date(item.updatedAt).toLocaleString('ro-RO', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Bucharest' })}</p></button>)}{!visible.length && <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">Niciun dosar găsit.</p>}</div>
       </aside>
       <section className="min-w-0 p-5 lg:p-7">{selected ? <>
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5"><div><div className="flex items-center gap-2"><WandSparkles size={20} className="text-[#197fb5]"/><h2 className="text-xl font-bold text-[#082b4d]">{draft.Beneficiar || 'Fișă branșament'}</h2></div><div className="mt-2 flex flex-wrap items-center gap-2"><strong className="rounded-lg bg-[#edf7fc] px-2.5 py-1 text-xs text-[#0d5d8b]">{selected.nib}</strong><span className="rounded-lg px-2.5 py-1 text-xs font-bold text-white" style={{ backgroundColor: CONNECTION_STATUS_META[selected.status].color }}>{CONNECTION_STATUS_META[selected.status].label} · {CONNECTION_STATUS_META[selected.status].progress}%</span></div><p className="mt-1 text-xs text-slate-500">Creat de {selected.createdByEmail || 'administrator'} · actualizat {new Date(selected.updatedAt).toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' })}</p>{notice && <p className="mt-2 text-sm font-semibold text-emerald-600">{notice}</p>}</div><div className="flex flex-wrap gap-2">{canManage && <select value={selected.status} disabled={busy === 'status'} onChange={(event) => changeStatus(event.target.value as ConnectionStatus)} className="input-field min-w-[210px] bg-white text-sm font-bold">{CONNECTION_STATUSES.map((status) => <option key={status} value={status}>{CONNECTION_STATUS_META[status].label}</option>)}</select>}<button type="button" onClick={()=>setCiOpen((value)=>!value)} className={`btn-secondary inline-flex items-center gap-2 ${ciOpen ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`}><CreditCard size={16}/> CI{(draft.CnpCif || draft.CiSerie || draft.CiNumar) && <span className="h-2 w-2 rounded-full bg-emerald-500"/>}</button><button type="button" onClick={()=>setDeerOpen(true)} className="btn-secondary inline-flex items-center gap-2"><ShieldCheck size={16}/> Depunere DEER<span className="h-2 w-2 rounded-full" style={{backgroundColor:DEER_STATUS_META[selected.deerSubmission.status].color}}/></button>{selected.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${selected.id}/atr`} title={`ATR · ${draft.Beneficiar || selected.nib}`}>ATR</SecurePdfViewerButton>}<a href={`/api/bransamente/${selected.id}/document?type=contract`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Contract + notificare + memoriu + cerere</a><a href={`/api/bransamente/${selected.id}/document?type=a3`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Dosar A3</a>{canManage && <><button onClick={()=>openWhatsAppCenter('PROGRAMMED')} disabled={!!busy || !draft.Telefon.trim()} className="btn-secondary inline-flex items-center gap-2" title="Mesaje predefinite pentru beneficiar">{busy === 'whatsapp' ? <Loader2 size={16} className="animate-spin"/> : <MessageCircle size={16}/>} Mesaje WhatsApp / SMS</button><button onClick={save} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează</button><button onClick={remove} disabled={!!busy} className="round-action text-rose-500" title="Șterge dosarul"><Trash2 size={17}/></button></>}</div></div>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5"><div><div className="flex items-center gap-2"><WandSparkles size={20} className="text-[#197fb5]"/><h2 className="text-xl font-bold text-[#082b4d]">{draft.Beneficiar || 'Fișă branșament'}</h2></div><div className="mt-2 flex flex-wrap items-center gap-2"><strong className="rounded-lg bg-[#edf7fc] px-2.5 py-1 text-xs text-[#0d5d8b]">{selected.nib}</strong><span className="rounded-lg px-2.5 py-1 text-xs font-bold text-white" style={{ backgroundColor: CONNECTION_STATUS_META[selected.status].color }}>{CONNECTION_STATUS_META[selected.status].label} · {CONNECTION_STATUS_META[selected.status].progress}%</span></div><p className="mt-1 text-xs text-slate-500">Creat de {selected.createdByEmail || 'administrator'} · actualizat {new Date(selected.updatedAt).toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' })}</p>{notice && <p className="mt-2 text-sm font-semibold text-emerald-600">{notice}</p>}</div><div className="flex flex-wrap gap-2">{canManage && <select value={selected.status} disabled={busy === 'status'} onChange={(event) => changeStatus(event.target.value as ConnectionStatus)} className="input-field min-w-[210px] bg-white text-sm font-bold">{CONNECTION_STATUSES.map((status) => <option key={status} value={status}>{CONNECTION_STATUS_META[status].label}</option>)}</select>}{getConnectionBeneficiaryType(draft) === 'PF' && <button type="button" onClick={()=>setCiOpen((value)=>!value)} className={`btn-secondary inline-flex items-center gap-2 ${ciOpen ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`}><CreditCard size={16}/> CI{(draft.CNP || draft.CiSerie || draft.CiNumar) && <span className="h-2 w-2 rounded-full bg-emerald-500"/>}</button>}<button type="button" onClick={()=>setDeerOpen(true)} className="btn-secondary inline-flex items-center gap-2"><ShieldCheck size={16}/> Depunere DEER<span className="h-2 w-2 rounded-full" style={{backgroundColor:DEER_STATUS_META[selected.deerSubmission.status].color}}/></button>{selected.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${selected.id}/atr`} title={`ATR · ${draft.Beneficiar || selected.nib}`}>ATR</SecurePdfViewerButton>}<a href={`/api/bransamente/${selected.id}/document?type=contract`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Contract + notificare + memoriu + cerere</a><a href={`/api/bransamente/${selected.id}/document?type=a3`} className="btn-secondary inline-flex items-center gap-2"><Download size={16}/> Dosar A3</a>{canManage && <><button onClick={()=>openWhatsAppCenter('PROGRAMMED')} disabled={!!busy || !draft.Telefon.trim()} className="btn-secondary inline-flex items-center gap-2" title="Mesaje predefinite pentru beneficiar">{busy === 'whatsapp' ? <Loader2 size={16} className="animate-spin"/> : <MessageCircle size={16}/>} Mesaje WhatsApp / SMS</button><button onClick={save} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează</button><button onClick={remove} disabled={!!busy} className="round-action text-rose-500" title="Șterge dosarul"><Trash2 size={17}/></button></>}</div></div>
         {canManage && saveProgress?.id === selected.id && <p role={saveProgress.status === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-xl px-3 py-2 text-sm font-semibold ${saveProgress.status === 'error' ? 'bg-rose-50 text-rose-700' : saveProgress.status === 'saved' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{saveProgress.status === 'error' ? `Salvarea a eșuat: ${saveProgress.error} Modificările sunt păstrate în această sesiune. Apasă Salvează pentru a reîncerca.` : saveProgress.status === 'saving' ? 'Se salvează modificările…' : saveProgress.status === 'saved' ? 'Toate modificările sunt salvate.' : 'Modificări în așteptare; salvare automată în câteva secunde.'}</p>}
-        {ciOpen && <div className="mb-6"><IdentityCardScanner key={selected.id} records={[]} connections={[]} canEdit={canManage} hideSavedRecords onEmbeddedSave={save} embeddedSaving={saveProgress?.id === selected.id && saveProgress.status === 'saving'} embeddedValue={{ fullName: draft.Beneficiar, cnp: draft.CnpCif, series: draft.CiSerie, number: draft.CiNumar, domicile: draft.CiDomiciliu, issuedBy: draft.CiEmisaDe, validFrom: draft.CiValabilaDeLa, validUntil: draft.CiValabilaPanaLa }} onEmbeddedChange={(data)=>setDraft((current)=>({ ...current, Beneficiar:data.fullName, CnpCif:data.cnp, CiSerie:data.series, CiNumar:data.number, CiDomiciliu:data.domicile, CiEmisaDe:data.issuedBy, CiValabilaDeLa:data.validFrom, CiValabilaPanaLa:data.validUntil, NrSX:[data.series, data.number].filter(Boolean).join(' '), DataSX:data.validFrom, DataExpirareSX:data.validUntil }))}/></div>}
+        {ciOpen && getConnectionBeneficiaryType(draft) === 'PF' && <div className="mb-6"><IdentityCardScanner key={selected.id} records={[]} connections={[]} canEdit={canManage} hideSavedRecords onEmbeddedSave={save} embeddedSaving={saveProgress?.id === selected.id && saveProgress.status === 'saving'} embeddedValue={{ fullName: draft.Beneficiar, cnp: draft.CNP, series: draft.CiSerie, number: draft.CiNumar, domicile: draft.CiDomiciliu, issuedBy: draft.CiEmisaDe, validFrom: draft.CiValabilaDeLa, validUntil: draft.CiValabilaPanaLa }} onEmbeddedChange={(data)=>setDraft((current)=>({ ...current, Beneficiar:data.fullName, TipBeneficiar:'PF', CNP:data.cnp, CnpCif:data.cnp, CiSerie:data.series, CiNumar:data.number, CiDomiciliu:data.domicile, CiEmisaDe:data.issuedBy, CiValabilaDeLa:data.validFrom, CiValabilaPanaLa:data.validUntil, NrSX:[data.series, data.number].filter(Boolean).join(' '), DataSX:data.validFrom, DataExpirareSX:data.validUntil }))}/></div>}
         {!canManage && <div className="mb-5 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800"><ShieldCheck size={18}/> Date protejate. Poți consulta și descărca documentele dosarului; modificările rămân rezervate Super Adminului.</div>}
-        <div className="space-y-7">{CONNECTION_FIELD_GROUPS.map((group) => <fieldset key={group.title}><div className="mb-3 flex items-center justify-between"><legend className="text-sm font-black uppercase tracking-[.08em] text-[#0d5d8b]">{group.title}</legend>{canManage && <button onClick={() => clearGroup(group.fields)} className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-500"><X size={13}/> Golește secțiunea</button>}</div><div className={`grid gap-3 ${group.title === 'Adresă' || group.title === 'Puteri' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>{group.fields.map((field) => { const large = field === 'Solutia' || field === 'Amplasament' || field === 'AmplasamentA3'; return <label key={field} className={`text-xs font-bold text-slate-500 ${large ? 'md:col-span-full' : ''}`}>{CONNECTION_FIELD_LABELS[field] || field}{large ? <textarea disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 min-h-20 w-full resize-y bg-white disabled:bg-slate-50 disabled:text-slate-700"/> : <input disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/>}</label>})}</div></fieldset>)}</div>
+        <div className="space-y-7"><IdentificationFields fields={draft} canEdit={canManage} onTypeChange={changeBeneficiaryType} onFieldChange={changeIdentificationField} onClear={clearIdentification}/>{CONNECTION_FIELD_GROUPS.filter((group) => group.title !== 'Identificare').map((group) => <fieldset key={group.title}><div className="mb-3 flex items-center justify-between"><legend className="text-sm font-black uppercase tracking-[.08em] text-[#0d5d8b]">{group.title}</legend>{canManage && <button onClick={() => clearGroup(group.fields)} className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-500"><X size={13}/> Golește secțiunea</button>}</div><div className={`grid gap-3 ${group.title === 'Adresă' || group.title === 'Puteri' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>{group.fields.map((field) => { const large = field === 'Solutia' || field === 'Amplasament' || field === 'AmplasamentA3'; return <label key={field} className={`text-xs font-bold text-slate-500 ${large ? 'md:col-span-full' : ''}`}>{CONNECTION_FIELD_LABELS[field] || field}{large ? <textarea disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 min-h-20 w-full resize-y bg-white disabled:bg-slate-50 disabled:text-slate-700"/> : <input disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/>}</label>})}</div></fieldset>)}</div>
       </> : <div className="flex min-h-[600px] flex-col items-center justify-center text-center"><div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#edf7fc] text-[#197fb5]"><FileText size={30}/></div><h2 className="text-xl font-bold text-[#082b4d]">Niciun dosar selectat</h2><p className="mt-2 max-w-md text-sm text-slate-500">{canManage ? 'Încarcă un ATR sau creează o fișă goală. Datele rămân în istoric și documentele Word se generează oricând.' : 'Nu există încă dosare de branșament disponibile pentru consultare.'}</p></div>}</section>
     </div>}
     {deerOpen && selected && <ConnectionDeerPanel item={selected} fields={draft} canEdit={canEditDeerDate} onClose={()=>setDeerOpen(false)} onSaved={(deerSubmission, deerSubmittedAt)=>setItems((current)=>current.map((entry)=>entry.id===selected.id?{...entry,deerSubmission,deerSubmittedAt,updatedAt:new Date().toISOString()}:entry))}/>}

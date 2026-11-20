@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { accountingApi } from "@/lib/accounting/access";
 import { getConnectionAccess } from "@/lib/connection-access";
-import { connectionFieldsSchema } from "@/lib/connection-fields";
+import { connectionFieldsSchema, getConnectionBeneficiaryType } from "@/lib/connection-fields";
 import { ensureConnectionStorage } from "@/lib/ensure-connection-storage";
 import { syncClientFromConnection } from "@/lib/accounting/repo";
 
 type ConnectionRow = { id: string; nib: string; fields: unknown; createdAt: Date };
 
 function composeAddress(fields: ReturnType<typeof connectionFieldsSchema.parse>) {
-  if (fields.CiDomiciliu?.trim()) return fields.CiDomiciliu.trim();
+  if (getConnectionBeneficiaryType(fields) === "PF" && fields.CiDomiciliu?.trim()) return fields.CiDomiciliu.trim();
   if (fields.Amplasament?.trim()) return fields.Amplasament.trim();
   return [
     fields.Judet && `Jud. ${fields.Judet}`,
@@ -37,11 +37,13 @@ async function GETHandler() {
   const rows = await rowsForBusiness(access.businessId);
   return NextResponse.json(rows.map((row) => {
     const fields = connectionFieldsSchema.parse(row.fields);
+    const clientType = getConnectionBeneficiaryType(fields);
     return {
       id: row.id,
       nib: row.nib,
       beneficiary: fields.Beneficiar,
-      identifier: fields.CnpCif,
+      identifier: clientType === "PF" ? fields.CNP : fields.CUI,
+      clientType,
       phone: fields.Telefon,
       address: composeAddress(fields),
       judet: fields.Judet,
@@ -60,6 +62,7 @@ async function POSTHandler(req: NextRequest) {
   const row = (await rowsForBusiness(access.businessId)).find((item) => item.id === connectionId);
   if (!row) return NextResponse.json({ error: "Branșamentul nu a fost găsit." }, { status: 404 });
   const fields = connectionFieldsSchema.parse(row.fields);
+  const clientType = getConnectionBeneficiaryType(fields);
   if (!fields.Beneficiar.trim()) {
     return NextResponse.json({ error: "Branșamentul nu are beneficiarul completat." }, { status: 400 });
   }
@@ -67,7 +70,10 @@ async function POSTHandler(req: NextRequest) {
     connectionId: row.id,
     nib: row.nib,
     name: fields.Beneficiar,
-    identifier: fields.CnpCif,
+    clientType,
+    cnp: fields.CNP,
+    cif: fields.CUI,
+    regCom: fields.NrRegCom,
     address: composeAddress(fields),
     judet: fields.Judet,
     city: fields.Sat || fields.Oras,

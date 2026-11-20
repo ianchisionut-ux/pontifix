@@ -333,7 +333,10 @@ export async function syncClientFromConnection(data: {
   connectionId: string;
   nib: string;
   name: string;
-  identifier: string;
+  clientType: "PF" | "PJ";
+  cnp: string;
+  cif: string;
+  regCom: string;
   address: string;
   judet: string;
   city: string;
@@ -342,10 +345,10 @@ export async function syncClientFromConnection(data: {
   ciNumber: string;
 }): Promise<number> {
   const pool = await ready();
-  const digits = data.identifier.replace(/\D/g, "");
-  const clientType: "PF" | "PJ" = digits.length === 13 ? "PF" : "PJ";
-  const cnp = clientType === "PF" ? digits : "";
-  const cif = clientType === "PJ" ? data.identifier.trim() : "";
+  const clientType = data.clientType;
+  const cnp = clientType === "PF" ? data.cnp.replace(/\D/g, "") : "";
+  const cif = clientType === "PJ" ? data.cif.trim() : "";
+  const regCom = clientType === "PJ" ? data.regCom.trim() : "";
   const existing = await pool.query(
     `SELECT id FROM clients WHERE "sourceConnectionId"=$1 OR ($2<>'' AND cnp=$2) OR ($3<>'' AND cif=$3) ORDER BY ("sourceConnectionId"=$1) DESC LIMIT 1`,
     [data.connectionId, cnp, cif],
@@ -354,17 +357,20 @@ export async function syncClientFromConnection(data: {
     const id = Number(existing.rows[0].id);
     await pool.query(
       `UPDATE clients SET name=COALESCE(NULLIF($1,''),name), "clientType"=$2,
-       cif=CASE WHEN $2='PJ' THEN COALESCE(NULLIF($3,''),cif) ELSE cif END,
-       cnp=CASE WHEN $2='PF' THEN COALESCE(NULLIF($4,''),cnp) ELSE cnp END,
-       address=COALESCE(NULLIF($5,''),address), judet=COALESCE(NULLIF($6,''),judet),
-       city=COALESCE(NULLIF($7,''),city), phone=COALESCE(NULLIF($8,''),phone),
-       "ciSeries"=COALESCE(NULLIF($9,''),"ciSeries"), "ciNumber"=COALESCE(NULLIF($10,''),"ciNumber"),
-       "sourceConnectionId"=$11, "sourceNib"=$12 WHERE id=$13`,
+       cif=CASE WHEN $2='PJ' THEN COALESCE(NULLIF($3,''), CASE WHEN "clientType"='PJ' THEN cif ELSE '' END) ELSE '' END,
+       cnp=CASE WHEN $2='PF' THEN COALESCE(NULLIF($4,''), CASE WHEN "clientType"='PF' THEN cnp ELSE '' END) ELSE '' END,
+       "regCom"=CASE WHEN $2='PJ' THEN COALESCE(NULLIF($5,''), CASE WHEN "clientType"='PJ' THEN "regCom" ELSE '' END) ELSE '' END,
+       address=COALESCE(NULLIF($6,''),address), judet=COALESCE(NULLIF($7,''),judet),
+       city=COALESCE(NULLIF($8,''),city), phone=COALESCE(NULLIF($9,''),phone),
+       "ciSeries"=CASE WHEN $2='PF' THEN COALESCE(NULLIF($10,''),CASE WHEN "clientType"='PF' THEN "ciSeries" ELSE '' END) ELSE '' END,
+       "ciNumber"=CASE WHEN $2='PF' THEN COALESCE(NULLIF($11,''),CASE WHEN "clientType"='PF' THEN "ciNumber" ELSE '' END) ELSE '' END,
+       "sourceConnectionId"=$12, "sourceNib"=$13 WHERE id=$14`,
       [
         data.name,
         clientType,
         cif,
         cnp,
+        regCom,
         data.address,
         data.judet,
         data.city,
@@ -381,7 +387,7 @@ export async function syncClientFromConnection(data: {
   return createClient({
     name: data.name || `Beneficiar ${data.nib}`,
     clientType,
-    regCom: "",
+    regCom,
     cif,
     cnp,
     address: data.address,
@@ -389,8 +395,8 @@ export async function syncClientFromConnection(data: {
     city: data.city,
     phone: data.phone,
     email: "",
-    ciSeries: data.ciSeries,
-    ciNumber: data.ciNumber,
+    ciSeries: clientType === "PF" ? data.ciSeries : "",
+    ciNumber: clientType === "PF" ? data.ciNumber : "",
     vatPayer: 0,
     countryCode: "RO",
     postalCode: "",

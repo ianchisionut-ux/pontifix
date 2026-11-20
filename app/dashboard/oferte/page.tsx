@@ -22,7 +22,9 @@ export default async function OffersPage() {
         c."quoteRequestId"=q."id" OR (
           c."quoteRequestId" IS NULL
           AND LENGTH(regexp_replace(COALESCE(q."atrOcrData"->>'customerId', ''), '[^0-9]', '', 'g')) >= 6
-          AND regexp_replace(COALESCE(c."fields"->>'CnpCif', ''), '[^0-9]', '', 'g')=regexp_replace(COALESCE(q."atrOcrData"->>'customerId', ''), '[^0-9]', '', 'g')
+          AND regexp_replace(COALESCE(NULLIF(CASE c."fields"->>'TipBeneficiar'
+            WHEN 'PF' THEN c."fields"->>'CNP' WHEN 'PJ' THEN c."fields"->>'CUI'
+            ELSE COALESCE(NULLIF(c."fields"->>'CNP',''), c."fields"->>'CUI') END,''), c."fields"->>'CnpCif',''), '[^0-9]', '', 'g')=regexp_replace(COALESCE(q."atrOcrData"->>'customerId', ''), '[^0-9]', '', 'g')
           AND (
             regexp_replace(COALESCE(q."atrOcrData"->>'atrNumber', ''), '[^0-9]', '', 'g')=''
             OR POSITION(regexp_replace(COALESCE(q."atrOcrData"->>'atrNumber', ''), '[^0-9]', '', 'g') IN regexp_replace(COALESCE(c."fields"->>'ATR', ''), '[^0-9]', '', 'g')) > 0

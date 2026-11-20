@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { ChevronDown, Download, Search } from 'lucide-react'
-import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, type ConnectionCaseDto } from '@/lib/connection-fields'
+import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, getConnectionBeneficiaryType, type ConnectionCaseDto } from '@/lib/connection-fields'
 import { CONNECTION_STATUS_META } from '@/lib/connection-status'
 import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
 
@@ -34,9 +34,10 @@ export function AdminConnectionAccordion({ items, query, onQueryChange }: { item
           </div>
           <div className="mb-5"><div className="flex items-center justify-between text-xs font-bold"><span className="text-slate-500">Stadiu branșament</span><span style={{ color: meta.color }}>{meta.label} · {meta.progress}%</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full" style={{ width: `${meta.progress}%`, backgroundColor: meta.color }}/></div></div>
           <div className="grid gap-6 xl:grid-cols-2">{CONNECTION_FIELD_GROUPS.map((group) => {
-            const fields = group.fields.filter((field) => item.fields[field])
+            const beneficiaryType = getConnectionBeneficiaryType(item.fields)
+            const fields = group.fields.filter((field) => item.fields[field] && !(field === 'CNP' && beneficiaryType === 'PJ') && !(field === 'CUI' && beneficiaryType === 'PF'))
             if (!fields.length) return null
-            return <section key={group.title} className="rounded-2xl border border-slate-100 bg-white p-4"><h3 className="mb-3 text-xs font-black uppercase tracking-[.08em] text-[#0d5d8b]">{group.title}</h3><dl className="grid gap-3 sm:grid-cols-2">{fields.map((field) => <div key={field} className={field === 'Solutia' || field === 'Amplasament' || field === 'AmplasamentA3' ? 'sm:col-span-2' : ''}><dt className="text-[11px] font-bold text-slate-400">{CONNECTION_FIELD_LABELS[field] || field}</dt><dd className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">{item.fields[field]}</dd></div>)}</dl></section>
+            return <section key={group.title} className="rounded-2xl border border-slate-100 bg-white p-4"><h3 className="mb-3 text-xs font-black uppercase tracking-[.08em] text-[#0d5d8b]">{group.title}</h3><dl className="grid gap-3 sm:grid-cols-2">{fields.map((field) => <div key={field} className={field === 'Solutia' || field === 'Amplasament' || field === 'AmplasamentA3' ? 'sm:col-span-2' : ''}><dt className="text-[11px] font-bold text-slate-400">{CONNECTION_FIELD_LABELS[field] || field}</dt><dd className="mt-1 whitespace-pre-wrap text-sm font-semibold text-slate-700">{field === 'TipBeneficiar' ? beneficiaryType === 'PJ' ? 'Persoană juridică' : 'Persoană fizică' : item.fields[field]}</dd></div>)}</dl></section>
 })}</div>
         </div>}
       </article>

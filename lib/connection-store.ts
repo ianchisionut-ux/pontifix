@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { ensureConnectionStorage } from '@/lib/ensure-connection-storage'
-import type { ConnectionFields } from '@/lib/connection-fields'
+import { connectionFieldsSchema, normalizeConnectionBeneficiaryFields, type ConnectionFields } from '@/lib/connection-fields'
 
 export function connectionIdentityFromContract(contractNumber: string, year = new Date().getFullYear()) {
   const match = contractNumber.trim().match(/\d+/)
@@ -37,13 +37,17 @@ export async function createConnectionCase(input: {
     `
     if (duplicate[0]) {
       if (!input.overwriteExisting) throw new Error(`Numărul de contract ${input.fields.NrContract} este deja folosit (${nib}).`)
-      const mergedFields = { ...duplicate[0].fields } as ConnectionFields
+      const mergedFields = connectionFieldsSchema.parse(duplicate[0].fields)
       for (const [key, value] of Object.entries(input.fields)) {
+        // A new ATR may have no beneficiary identifier. Do not replace a saved
+        // juridical beneficiary with the empty form's default physical type.
+        if (key === 'TipBeneficiar' && !input.fields.CNP.trim() && !input.fields.CUI.trim() && !input.fields.CnpCif.trim()) continue
         if (typeof value === 'string' && value.trim()) mergedFields[key as keyof ConnectionFields] = value
       }
+      const normalizedFields = normalizeConnectionBeneficiaryFields(mergedFields)
       await tx.$executeRaw`
         UPDATE "ConnectionCase"
-        SET "fields"=${JSON.stringify(mergedFields)}::jsonb,
+        SET "fields"=${JSON.stringify(normalizedFields)}::jsonb,
             "atrPathname"=${input.atrPathname || null},
             "atrName"=${input.atrName || null},
             "updatedAt"=NOW()
@@ -54,7 +58,7 @@ export async function createConnectionCase(input: {
     const id = crypto.randomUUID()
     await tx.$executeRaw`
       INSERT INTO "ConnectionCase" ("id", "businessId", "sequenceNumber", "nib", "status", "quoteRequestId", "fields", "atrPathname", "atrName", "createdByEmail")
-      VALUES (${id}, ${input.businessId}, ${sequenceNumber}, ${nib}, 'DOSAR_APROBAT', ${input.quoteRequestId || null}, ${JSON.stringify(input.fields)}::jsonb, ${input.atrPathname || null}, ${input.atrName || null}, ${input.createdByEmail || null})
+      VALUES (${id}, ${input.businessId}, ${sequenceNumber}, ${nib}, 'DOSAR_APROBAT', ${input.quoteRequestId || null}, ${JSON.stringify(normalizeConnectionBeneficiaryFields(input.fields))}::jsonb, ${input.atrPathname || null}, ${input.atrName || null}, ${input.createdByEmail || null})
     `
     return { id, nib, created: true, updated: false, previousAtrPathname: null as string | null }
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable })
