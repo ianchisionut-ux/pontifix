@@ -188,7 +188,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultSource, c
   const caseDocument = caseDocumentKind && (sourceId.startsWith('connection:') || sourceId.startsWith('project:'))
     ? borderouri.find((item) => (sourceId.startsWith('connection:') ? item.connectionId === sourceId.slice(11) : item.projectId === sourceId.slice(8)) && item.documentKind === caseDocumentKind) : undefined
   const documentUrl = connectionDocumentType
-    ? sourceId.startsWith('connection:') ? `/api/bransamente/${encodeURIComponent(sourceId.slice(11))}/document?type=${connectionDocumentType}&format=pdf&v=${documentVersion}` : ''
+    ? sourceId.startsWith('connection:') ? `/api/bransamente/${encodeURIComponent(sourceId.slice(11))}/document?type=${connectionDocumentType}&format=pdf&part=contract-notification&v=${documentVersion}` : ''
     : caseDocumentKind
     ? caseDocument ? `/api/formulare/borderou/${caseDocument.id}/document?v=${documentVersion}` : ''
     : `/api/formulare/${encodeURIComponent(template.id)}/document?v=${documentVersion}`

@@ -79,7 +79,9 @@ function money(value: number) {
   return (Math.round((value + Number.EPSILON) * 100) / 100).toFixed(2)
 }
 
-export async function generateConnectionDocx(fields: ConnectionFields, type: 'contract' | 'a3') {
+export type ConnectionContractPart = 'full' | 'contract-notification'
+
+export async function generateConnectionDocx(fields: ConnectionFields, type: 'contract' | 'a3', part: ConnectionContractPart = 'full') {
   const filename = type === 'a3' ? 'a3-template.docx' : 'contract-template.docx'
   const buffer = await fs.readFile(path.join(process.cwd(), 'assets', 'bransamente', filename))
   const zip = new PizZip(buffer)
@@ -102,13 +104,13 @@ export async function generateConnectionDocx(fields: ConnectionFields, type: 'co
       xml = replaceFormulaResult(xml, '=SUM\\s*\\(\\s*SumaFaraTVA', money(amount * 1.21))
       xml = replaceFormulaResult(xml, '=PRODUCT\\s*\\(\\s*SumaFaraTVA', money(amount * .21))
     }
-    if (type === 'contract' && name === 'word/document.xml') xml = keepContractAndNotification(xml)
+    if (type === 'contract' && part === 'contract-notification' && name === 'word/document.xml') xml = keepContractAndNotification(xml)
     zip.file(name, xml)
   }
   return zip.generate({ type: 'nodebuffer', compression: 'DEFLATE' })
 }
 
-export function connectionDocumentName(fields: ConnectionFields, type: 'contract' | 'a3') {
+export function connectionDocumentName(fields: ConnectionFields, type: 'contract' | 'a3', part: ConnectionContractPart = 'full') {
   const beneficiary = (fields.Beneficiar || 'beneficiar').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '')
-  return type === 'a3' ? `Dosar-A3-${beneficiary}.docx` : `Contract-Notificare-${beneficiary}.docx`
+  return type === 'a3' ? `Dosar-A3-${beneficiary}.docx` : part === 'contract-notification' ? `Contract-Notificare-${beneficiary}.docx` : `Contract-Notificare-Memoriu-Cerere-${beneficiary}.docx`
 }

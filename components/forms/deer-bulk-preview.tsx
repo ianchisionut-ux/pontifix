@@ -72,7 +72,7 @@ export function DeerBulkPreview({ templates, submissions, connection, project, s
           const kind = deerDocumentKindForTemplate(template)
           const caseDocumentId = kind ? caseDocumentIds[kind] : undefined
           const documentUrl = template.documentPathname.startsWith('connection-document:')
-            ? connection ? `/api/bransamente/${encodeURIComponent(connection.id)}/document?type=${encodeURIComponent(template.documentPathname.slice('connection-document:'.length))}&format=pdf` : ''
+            ? connection ? `/api/bransamente/${encodeURIComponent(connection.id)}/document?type=${encodeURIComponent(template.documentPathname.slice('connection-document:'.length))}&format=pdf&part=contract-notification` : ''
             : kind && caseDocumentId
             ? `/api/formulare/borderou/${encodeURIComponent(caseDocumentId)}/document`
             : `/api/formulare/${encodeURIComponent(template.id)}/document`

@@ -44,7 +44,7 @@ export async function buildDeerSigningBundle(templates: FormTemplateDto[], submi
     const kind = deerDocumentKindForTemplate(template)
     const caseDocumentId = kind ? caseDocumentIds[kind] : undefined
     const documentUrl = template.documentPathname.startsWith('connection-document:')
-      ? source.connection ? `/api/bransamente/${encodeURIComponent(source.connection.id)}/document?type=${encodeURIComponent(template.documentPathname.slice('connection-document:'.length))}&format=pdf` : ''
+      ? source.connection ? `/api/bransamente/${encodeURIComponent(source.connection.id)}/document?type=${encodeURIComponent(template.documentPathname.slice('connection-document:'.length))}&format=pdf&part=contract-notification` : ''
       : kind && caseDocumentId ? `/api/formulare/borderou/${encodeURIComponent(caseDocumentId)}/document`
       : `/api/formulare/${encodeURIComponent(template.id)}/document`
     const response = await fetch(documentUrl, { cache: 'no-store' })

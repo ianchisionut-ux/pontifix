@@ -12,6 +12,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const access = await getConnectionAccess()
   if (!access) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
   const type = request.nextUrl.searchParams.get('type') === 'a3' ? 'a3' : 'contract'
+  const part = request.nextUrl.searchParams.get('part') === 'contract-notification' ? 'contract-notification' : 'full'
   await ensureConnectionStorage()
   const { id } = await params
   const rows = await prisma.$queryRaw<Array<{ fields: unknown }>>`
@@ -20,8 +21,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   if (!rows[0]) return NextResponse.json({ error: 'Branșament inexistent.' }, { status: 404 })
   const parsed = connectionFieldsSchema.safeParse(rows[0].fields)
   if (!parsed.success) return NextResponse.json({ error: 'Datele documentului sunt invalide.' }, { status: 500 })
-  const buffer = await generateConnectionDocx(parsed.data, type)
-  const filename = connectionDocumentName(parsed.data, type)
+  const buffer = await generateConnectionDocx(parsed.data, type, part)
+  const filename = connectionDocumentName(parsed.data, type, part)
   if (request.nextUrl.searchParams.get('format') === 'pdf') {
     const serviceUrl = process.env.SOFTJ_INTERNAL_URL
     if (!serviceUrl) return NextResponse.json({ error: 'Conversia PDF nu este configurată pe server.' }, { status: 503 })

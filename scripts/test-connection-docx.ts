@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import PizZip from 'pizzip'
 import { XMLValidator } from 'fast-xml-parser'
 import { connectionAmountToWordsRO } from '../lib/connection-amount-words'
-import { generateConnectionDocx, parseConnectionMoney } from '../lib/connection-docx'
+import { connectionDocumentName, generateConnectionDocx, parseConnectionMoney } from '../lib/connection-docx'
 import { defaultConnectionFields } from '../lib/connection-fields'
 
 function paragraphWith(xml: string, marker: string) {
@@ -38,12 +38,22 @@ async function main() {
   const price = visibleText(paragraphWith(xml, 'w:name="SumaFaraTVA"'))
   assert.match(price, /2430\.00\s+lei\s+\(două mii patru sute treizeci, 00\)\s+lei/)
   assert.ok(xml.includes('NOTIFICARE ÎNCHEIERE CONTRACT'))
-  assert.ok(!xml.includes('MEMORIU  TEHNIC'))
-  assert.ok(!xml.includes('CEREREA PENTRU ELIBERAREA AUTORIZATIEI'))
+  assert.ok(xml.includes('MEMORIU  TEHNIC'))
+  assert.ok(xml.includes('CEREREA PENTRU ELIBERAREA AUTORIZATIEI'))
+  assert.equal(connectionDocumentName(fields, 'contract'), 'Contract-Notificare-Memoriu-Cerere-PETKES-JULIA-CSILLA.docx')
+
+  const signing = new PizZip(await generateConnectionDocx(fields, 'contract', 'contract-notification'))
+  const signingXml = signing.file('word/document.xml')!.asText()
+  assert.equal(XMLValidator.validate(signingXml), true)
+  assert.match(visibleText(paragraphWith(signingXml, 'w:name="SumaFaraTVA"')), /2430\.00\s+lei\s+\(două mii patru sute treizeci, 00\)\s+lei/)
+  assert.ok(signingXml.includes('NOTIFICARE ÎNCHEIERE CONTRACT'))
+  assert.ok(!signingXml.includes('MEMORIU  TEHNIC'))
+  assert.ok(!signingXml.includes('CEREREA PENTRU ELIBERAREA AUTORIZATIEI'))
+  assert.equal(connectionDocumentName(fields, 'contract', 'contract-notification'), 'Contract-Notificare-PETKES-JULIA-CSILLA.docx')
 
   const a3 = new PizZip(await generateConnectionDocx(fields, 'a3'))
   assert.ok(a3.file('word/document.xml')!.asText().length > 0)
-  console.log('Contractul și notificarea, suma în litere și dosarul A3: OK')
+  console.log('Pachetul complet, varianta DEER, suma în litere și dosarul A3: OK')
 }
 
 main().catch((error) => { console.error(error); process.exitCode = 1 })
