@@ -140,6 +140,21 @@ function foldText(value: string) {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
 }
 
+// A few runs in the original notification template still use Times New Roman.
+// Keep the document's existing sizes and emphasis, but make those runs Arial.
+function restoreNotificationArial(paragraph: string) {
+  return paragraph.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, (run) => {
+    if (!/<w:t\b/.test(run)) return run
+    return run.replace(/<w:rPr\b[^>]*>[\s\S]*?<\/w:rPr>/, (properties) => {
+      const fonts = /<w:rFonts\b[^>]*\/>/.exec(properties)?.[0]
+      if (!fonts || !fonts.includes('Times New Roman')) return properties
+      let result = properties.replace(fonts, fonts.replace(/Times New Roman/g, 'Arial'))
+      if (!/<w:sz\b/.test(result)) result = result.replace('</w:rPr>', '<w:sz w:val="20"/></w:rPr>')
+      return result
+    })
+  })
+}
+
 // Replace only the visible paragraph content. The legal-person sections in the
 // source Word template are plain text, without bookmarks or REF fields.
 function setParagraphText(paragraph: string, value: string) {
@@ -274,7 +289,8 @@ function routeBeneficiarySections(xml: string, fields: ConnectionFields) {
   const physicalNotification = find('•PERSOANA FIZICA', legalNotification + 1)
   const notificationBody = find('VA ADUCE LA CUNOSTINTA', physicalNotification + 1)
   const notificationAddress = find('CATRE DISTRIBUTIE', contractEnd + 1)
-  if ([physicalHeading, legalHeading, contractEnd, legalNotification, physicalNotification, notificationBody, notificationAddress].some((index) => index < 0)) {
+  const notificationEnd = paragraphs.findIndex((paragraph) => /<w:bookmarkStart\b(?=[^>]*w:name="SigningEnd")/.test(paragraph))
+  if ([physicalHeading, legalHeading, contractEnd, legalNotification, physicalNotification, notificationBody, notificationAddress, notificationEnd].some((index) => index < 0)) {
     throw new Error('Șablonul nu conține toate secțiunile beneficiarului din contract și notificare.')
   }
 
@@ -327,7 +343,9 @@ function routeBeneficiarySections(xml: string, fields: ConnectionFields) {
       [applicantValue, valueOrDots(fields.Sat)], [applicant[6], ', cod poștal ........,'],
     ]))
     const applicantAddress = textRuns(paragraphs[legalNotification + 1])
-    const addressValue = boldItalicRun(paragraphs[legalNotification + 1])
+    // The only bold-italic run on this source line is a Times New Roman space.
+    // Use the Arial 10 pt value style from the applicant line above instead.
+    const addressValue = applicantValue
     changes.set(legalNotification + 1, styledParagraph(paragraphs[legalNotification + 1], [
       [applicantAddress[0], 'str. '], [addressValue, valueOrDots(fields.Strada)],
       [applicantAddress[0], ', nr. '], [addressValue, valueOrDots(fields.Nr)],
@@ -357,7 +375,9 @@ function routeBeneficiarySections(xml: string, fields: ConnectionFields) {
   let output = ''
   for (let index = 0; index < matches.length; index++) {
     const match = matches[index]
-    output += xml.slice(cursor, match.index) + (changes.get(index) ?? match[0])
+    const paragraph = changes.get(index) ?? match[0]
+    output += xml.slice(cursor, match.index)
+      + (index >= notificationAddress && index < notificationEnd ? restoreNotificationArial(paragraph) : paragraph)
     cursor = match.index! + match[0].length
   }
   return output + xml.slice(cursor)

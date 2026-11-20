@@ -75,6 +75,8 @@ export async function sendBusinessEmail(businessId: string | null | undefined, m
   to: string
   subject: string
   html: string
+  text?: string
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string; cid: string }>
 }) {
   const transport = await getEmailTransport(businessId)
   if (!transport) throw new Error('Yahoo Mail nu este configurat sau este dezactivat.')

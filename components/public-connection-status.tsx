@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { ArrowRight, CheckCircle2, Loader2, Search, ShieldCheck } from 'lucide-react'
+import { nibFromPublicConnectionSearch } from '@/lib/public-connection-status-url'
 
 type Result = { nib: string; label: string; progress: number; color: string; updatedAt: string }
 
@@ -10,13 +11,40 @@ export function PublicConnectionStatus() {
   const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const initialized = useRef(false)
 
-  async function verify(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setError(''); setResult(null)
-    const response = await fetch('/api/public/connection-status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nib }) })
-    const body = await response.json().catch(() => ({})); setBusy(false)
-    if (!response.ok) return setError(body.error || 'Verificarea nu a putut fi făcută.')
-    setResult(body)
+  const checkStatus = useCallback(async (value: string) => {
+    setBusy(true)
+    setError('')
+    setResult(null)
+    try {
+      const response = await fetch('/api/public/connection-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nib: value }),
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.error || 'Verificarea nu a putut fi făcută.')
+      setResult(body as Result)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Verificarea nu a putut fi făcută.')
+    } finally {
+      setBusy(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (initialized.current) return
+    initialized.current = true
+    const linkedNib = nibFromPublicConnectionSearch(window.location.search)
+    if (!linkedNib) return
+    setNib(linkedNib)
+    void checkStatus(linkedNib)
+  }, [checkStatus])
+
+  function verify(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    void checkStatus(nib)
   }
 
   return <section id="verifica-bransament" className="relative -mt-8 z-30 px-5 pb-16 lg:px-10">

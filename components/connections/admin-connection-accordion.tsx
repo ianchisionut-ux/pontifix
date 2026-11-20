@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import { ChevronDown, Download, Search } from 'lucide-react'
+import { ChevronDown, Search } from 'lucide-react'
 import { CONNECTION_FIELD_GROUPS, CONNECTION_FIELD_LABELS, getConnectionBeneficiaryType, isConnectionFieldVisibleForBeneficiary, type ConnectionCaseDto } from '@/lib/connection-fields'
 import { CONNECTION_STATUS_META } from '@/lib/connection-status'
 import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
-import { ConnectionDocumentButtons } from '@/components/connections/connection-document-buttons'
+import { ConnectionA3DownloadButtons, ConnectionDocumentButtons } from '@/components/connections/connection-document-buttons'
 
 export function AdminConnectionAccordion({ items, query, onQueryChange }: { items: ConnectionCaseDto[]; query: string; onQueryChange: (value: string) => void }) {
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -30,7 +30,7 @@ export function AdminConnectionAccordion({ items, query, onQueryChange }: { item
             <span className="mr-1 text-xs font-black uppercase tracking-[.08em] text-[#0d5d8b]">Documente dosar</span>
             {item.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${item.id}/atr`} title={`ATR · ${item.fields.Beneficiar || item.nib}`}>ATR</SecurePdfViewerButton>}
             <ConnectionDocumentButtons id={item.id}/>
-            <a href={`/api/bransamente/${item.id}/document?type=a3`} className="btn-secondary inline-flex items-center gap-2"><Download size={15}/> Dosar A3</a>
+            <ConnectionA3DownloadButtons id={item.id}/>
             {!item.atrPathname && <span className="text-xs font-semibold text-slate-500">ATR neîncărcat</span>}
           </div>
           <div className="mb-5"><div className="flex items-center justify-between text-xs font-bold"><span className="text-slate-500">Stadiu branșament</span><span style={{ color: meta.color }}>{meta.label} · {meta.progress}%</span></div><div className="mt-2 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full" style={{ width: `${meta.progress}%`, backgroundColor: meta.color }}/></div></div>

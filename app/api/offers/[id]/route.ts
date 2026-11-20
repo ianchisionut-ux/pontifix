@@ -8,6 +8,8 @@ import { defaultConnectionFields, getConnectionBeneficiaryType, normalizeConnect
 import { connectionIdentityFromContract, createConnectionCase } from '@/lib/connection-store'
 import { sendBusinessEmail } from '@/lib/email-settings'
 import { parseRomanianAddress } from '@/lib/romanian-address'
+import { connectionTypeFromOffer, shouldReplaceGenericConnectionType } from '@/lib/offer-connection-type'
+import { connectionApprovalEmail, loadApprovalLogo } from '@/lib/connection-approval-email'
 
 const updateSchema = z.object({
   status: z.enum(['NEW', 'REVIEWING', 'QUOTED', 'ACCEPTED', 'REJECTED', 'ARCHIVED']).optional(),
@@ -18,12 +20,12 @@ const updateSchema = z.object({
 
 type QuoteRow = {
   status: string; internalNotes: string | null; estimatedValue: number | null
-  name: string; email: string; phone: string; location: string | null
+  name: string; email: string; phone: string; location: string | null; serviceType: string
   atrPathname: string | null; atrName: string | null; atrOcrData: Record<string, unknown> | null
   offerData: Record<string, unknown> | null
 }
 
-type ExistingConnection = { id: string; nib: string; quoteRequestId: string | null }
+type ExistingConnection = { id: string; nib: string; quoteRequestId: string | null; fields: Record<string, string> }
 
 function digits(value: unknown) {
   return String(value || '').replace(/\D/g, '')
@@ -31,7 +33,7 @@ function digits(value: unknown) {
 
 async function findExistingConnection(businessId: string, quoteRequestId: string, ocr: Record<string, unknown>) {
   const linked = await prisma.$queryRawUnsafe<ExistingConnection[]>(
-    'SELECT "id", "nib", "quoteRequestId" FROM "ConnectionCase" WHERE "businessId"=$1 AND "quoteRequestId"=$2 LIMIT 1',
+    'SELECT "id", "nib", "quoteRequestId", "fields" FROM "ConnectionCase" WHERE "businessId"=$1 AND "quoteRequestId"=$2 LIMIT 1',
     businessId, quoteRequestId,
   )
   if (linked[0]) return linked[0]
@@ -40,7 +42,7 @@ async function findExistingConnection(businessId: string, quoteRequestId: string
   if (customerId.length < 6) return null
   const atrNumber = digits(ocr.atrNumber)
   const matches = await prisma.$queryRawUnsafe<ExistingConnection[]>(
-    `SELECT "id", "nib", "quoteRequestId" FROM "ConnectionCase"
+    `SELECT "id", "nib", "quoteRequestId", "fields" FROM "ConnectionCase"
      WHERE "businessId"=$1 AND "quoteRequestId" IS NULL
        AND regexp_replace(COALESCE(NULLIF(CASE "fields"->>'TipBeneficiar'
          WHEN 'PF' THEN "fields"->>'CNP' WHEN 'PJ' THEN "fields"->>'CUI'
@@ -55,7 +57,7 @@ async function findExistingConnection(businessId: string, quoteRequestId: string
 async function findConnectionByContract(businessId: string, contractNumber: string) {
   const { nib } = connectionIdentityFromContract(contractNumber)
   const matches = await prisma.$queryRawUnsafe<ExistingConnection[]>(
-    'SELECT "id", "nib", "quoteRequestId" FROM "ConnectionCase" WHERE "businessId"=$1 AND "nib"=$2 LIMIT 1',
+    'SELECT "id", "nib", "quoteRequestId", "fields" FROM "ConnectionCase" WHERE "businessId"=$1 AND "nib"=$2 LIMIT 1',
     businessId, nib,
   )
   return matches[0] || null
@@ -70,7 +72,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   await ensureQuoteStorage()
   const { id } = await params
   const current = await prisma.$queryRaw<QuoteRow[]>`
-    SELECT "status", "internalNotes", "estimatedValue", "name", "email", "phone", "location",
+    SELECT "status", "internalNotes", "estimatedValue", "name", "email", "phone", "location", "serviceType",
       "atrPathname", "atrName", "atrOcrData", "offerData"
     FROM "QuoteRequest" WHERE "id"=${id} AND ("businessId"=${access.businessId} OR "businessId" IS NULL) LIMIT 1
   `
@@ -98,6 +100,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   let nib: string | null = null
   let notificationSent = false
   if (next.status === 'ACCEPTED') {
+    const completeConnectionType = connectionTypeFromOffer(quote.offerData, quote.serviceType, quote.atrOcrData?.connectionType)
     if (existingConnection) {
       nib = existingConnection.nib
       if (!existingConnection.quoteRequestId) {
@@ -105,6 +108,16 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
           'UPDATE "ConnectionCase" SET "quoteRequestId"=$1, "updatedAt"=NOW() WHERE "id"=$2 AND "businessId"=$3 AND "quoteRequestId" IS NULL',
           id, existingConnection.id, access.businessId,
         )
+      }
+      const currentConnectionType = existingConnection.fields?.TipBransament || ''
+      if (shouldReplaceGenericConnectionType(currentConnectionType, completeConnectionType)) {
+        await prisma.$executeRaw`
+          UPDATE "ConnectionCase"
+          SET "fields"=jsonb_set("fields", '{TipBransament}', to_jsonb(${completeConnectionType}::text), true),
+              "updatedAt"=NOW()
+          WHERE "id"=${existingConnection.id} AND "businessId"=${access.businessId}
+            AND COALESCE("fields"->>'TipBransament', '')=${currentConnectionType}
+        `
       }
     } else {
     const ocr = quote.atrOcrData || {}
@@ -124,7 +137,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     fields.ATR = [ocr.atrNumber && `nr. ${ocr.atrNumber}`, ocr.atrDate && `din ${ocr.atrDate}`].filter(Boolean).join(' ')
     fields.PTA = String(ocr.pta || '')
     fields.Solutia = String(ocr.solution || '')
-    fields.TipBransament = String(offer.connectionType || fields.TipBransament)
+    if (completeConnectionType) fields.TipBransament = completeConnectionType
     const address = parseRomanianAddress(String(ocr.customerAddress || ocr.workAddress || ''))
     fields.Judet = address.county
     fields.Oras = address.city
@@ -144,11 +157,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
     nib = created.nib
     if (created.created && quote.email) {
-      const appUrl = (process.env.APP_URL || 'https://elmontz.vercel.app').replace(/\/$/, '')
+      const email = connectionApprovalEmail({ beneficiary: fields.Beneficiar, nib }, await loadApprovalLogo())
       notificationSent = await sendBusinessEmail(access.businessId, {
         to: quote.email,
         subject: `Dosarul branșamentului a fost aprobat – ${nib}`,
-        html: `<div style="font-family:Arial,sans-serif;line-height:1.6;color:#082b4d"><h2>Oferta a fost acceptată</h2><p>Bună ziua, <strong>${fields.Beneficiar}</strong>,</p><p>Dosarul branșamentului dumneavoastră a fost aprobat și a primit numărul de identificare:</p><p style="font-size:24px;font-weight:800;color:#197fb5">${nib}</p><p>Păstrați acest număr. Puteți verifica oricând stadiul branșamentului pe site-ul Elmont:</p><p><a href="${appUrl}/#verifica-bransament" style="display:inline-block;background:#0d5d8b;color:white;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:bold">Verifică stadiul</a></p><p>Cu stimă,<br><strong>Elmont S.A.</strong></p></div>`,
+        ...email,
       }).then(() => true).catch(() => false)
     }
     }

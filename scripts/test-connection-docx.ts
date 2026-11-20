@@ -70,6 +70,31 @@ function assertBoldItalicValue(paragraph: string, value: string) {
   assert.match(run, /<w:i(?:\s|\/|>)/, `Valoarea ${value} trebuie să fie italic`)
 }
 
+function assertArialTenValue(paragraph: string, value: string) {
+  const run = [...paragraph.matchAll(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g)]
+    .map((match) => match[0]).find((item) => visibleText(item).includes(value))
+  assert.ok(run, `Lipsește valoarea ${value} din notificare`)
+  assert.match(run, /<w:rFonts\b[^>]*w:ascii="Arial"/, `${value} trebuie să fie Arial`)
+  assert.match(run, /<w:sz\b[^>]*w:val="20"/, `${value} trebuie să aibă 10 pt`)
+}
+
+function assertNotificationHasNoTimes(xml: string) {
+  const address = xml.indexOf('Către Distribuție Energie')
+  const start = xml.lastIndexOf('<w:p ', address)
+  const boundary = xml.indexOf('w:name="SigningEnd"', address)
+  const end = boundary >= 0 ? boundary : xml.indexOf('</w:body>', address)
+  assert.ok(start >= 0 && end > start, 'Notificarea trebuie să aibă limitele din șablon')
+  const notification = xml.slice(start, end)
+  const runs = [...notification.matchAll(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g)]
+    .map((match) => match[0]).filter((run) => visibleText(run).trim())
+  assert.ok(runs.length > 0)
+  for (const run of runs) {
+    assert.doesNotMatch(run, /<w:rFonts\b[^>]*Times New Roman/, `Notificarea conține Times New Roman: ${visibleText(run)}`)
+    assert.match(run, /<w:rFonts\b[^>]*w:ascii="Arial(?: Narrow)?"[^>]*w:hAnsi="Arial(?: Narrow)?"/,
+      `Notificarea are un font diferit de șablonul Arial: ${visibleText(run)}`)
+  }
+}
+
 async function main() {
   const templateXml = new PizZip(await fs.readFile('assets/bransamente/contract-template.docx')).file('word/document.xml')!.asText()
   for (const [input, expected] of [
@@ -114,6 +139,7 @@ async function main() {
   for (const value of [fields.Beneficiar, fields.Oras, fields.Strada, fields.Nr, fields.Telefon, fields.CNP]) {
     assertBoldItalicValue(physicalNotificationParagraph, value)
   }
+  assertArialTenValue(physicalNotificationParagraph, fields.Strada)
   const physicalIdentity = paragraphWithVisibleText(xml, 'având C.I. seria')
   for (const value of [fields.CiSerie, fields.CiNumar, fields.CiEmisaDe, fields.CiValabilaDeLa]) {
     assertBoldItalicValue(physicalIdentity, value)
@@ -127,6 +153,7 @@ async function main() {
   assert.ok(visibleText(xml).includes('•PERSOANĂ JURIDICĂ'), 'Rubrica juridică rămâne în structura originală')
   assert.ok(!xml.includes('NEJUR MIRCEA'))
   assertSingleBreakBeforeNotification(xml)
+  assertNotificationHasNoTimes(xml)
   assert.equal(connectionDocumentName(fields, 'contract'), 'Contract-Notificare-Memoriu-Cerere-PETKES-JULIA-CSILLA.docx')
 
   const signing = new PizZip(await generateConnectionDocx(fields, 'contract', 'contract-notification'))
@@ -137,6 +164,7 @@ async function main() {
   assert.ok(!signingXml.includes('MEMORIU  TEHNIC'))
   assert.ok(!signingXml.includes('CEREREA PENTRU ELIBERAREA AUTORIZATIEI'))
   assertSingleBreakBeforeNotification(signingXml)
+  assertNotificationHasNoTimes(signingXml)
   assert.equal(connectionDocumentName(fields, 'contract', 'contract-notification'), 'Contract-Notificare-PETKES-JULIA-CSILLA.docx')
 
   for (const [part, present, absent, filename] of [
@@ -154,6 +182,7 @@ async function main() {
     assert.ok(!/<w:instrText\b[^>]*>[^<]*=\s*(?:SUM|PRODUCT)\b/i.test(singleXml),
       `${part} păstrează rezultatul formulelor fără trimiteri către alt document`)
     assert.equal(connectionDocumentName(fields, 'contract', part), filename)
+    if (part === 'notification-only') assertNotificationHasNoTimes(singleXml)
     const firstBody = singleXml.slice(singleXml.indexOf('<w:body>') + 8, singleXml.indexOf('</w:body>'))
     const firstParagraph = /<w:p\b[^>]*>[\s\S]*?<\/w:p>/.exec(firstBody)?.[0] || ''
     assert.ok(!/<w:br\b(?=[^>]*w:type="page")/.test(firstParagraph), `${part} nu începe cu pagină goală`)
@@ -202,7 +231,9 @@ async function main() {
     const legalAddress = paragraphWithVisibleText(legalXml, 'str. PRINCIPALĂ, nr. 119, județ')
     for (const value of [legalFields.Strada, legalFields.Nr, legalFields.Judet, legalFields.Telefon, legalFields.CUI]) {
       assertBoldItalicValue(legalAddress, value)
+      assertArialTenValue(legalAddress, value)
     }
+    assertNotificationHasNoTimes(legalXml)
     assert.ok(!legalXml.includes('J31/123/2026'), 'Un nr. Registrul Comerțului necunoscut nu trebuie inventat')
     assert.ok(!renderedText(legalXml).includes('SX-VECHI-99'), 'Un act PJ nu include numărul SX moștenit')
     assert.ok(!renderedText(legalXml).includes('01.01.2000'), 'Un act PJ nu include data SX moștenită')
@@ -256,6 +287,7 @@ async function main() {
         'Contractul PJ nu completează rubrica PF')
     }
     if (part === 'notification-only') {
+      assertNotificationHasNoTimes(legalSingle)
       assert.ok(!renderedText(paragraphWithVisibleText(legalSingle, '• PERSOANĂ FIZICĂ')).includes(legalFields.Beneficiar),
         'Notificarea PJ nu completează rubrica PF')
       assertBoldItalicValue(paragraphWithVisibleText(legalSingle, '•PERSOANĂ JURIDICĂ'), legalFields.Beneficiar)

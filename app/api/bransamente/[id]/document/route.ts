@@ -40,13 +40,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       })
       const converted = await response.json().catch(() => ({}))
       if (!response.ok || !converted.ok || !converted.pdfBase64) {
-        return NextResponse.json({ error: converted.error || 'Contractul nu a putut fi convertit în PDF.' }, { status: response.status >= 400 ? response.status : 502 })
+        return NextResponse.json({ error: converted.error || 'Documentul nu a putut fi convertit în PDF.' }, { status: response.status >= 400 ? response.status : 502 })
       }
       const pdf = Buffer.from(converted.pdfBase64, 'base64')
       if (pdf.subarray(0, 5).toString() !== '%PDF-') throw new Error('Serviciul a returnat un PDF invalid.')
       return new Response(new Uint8Array(pdf), { headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `inline; filename="${filename.replace(/\.docx$/i, '.pdf')}"`,
+        'Content-Disposition': `${type === 'a3' ? 'attachment' : 'inline'}; filename="${filename.replace(/\.docx$/i, '.pdf')}"`,
         'Cache-Control': 'private, no-store',
       } })
     } catch (cause) {

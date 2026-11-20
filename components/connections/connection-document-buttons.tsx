@@ -15,3 +15,15 @@ export function ConnectionDocumentButtons({ id }: { id: string }) {
     download
   ><Download size={16}/>{label}</a>)}</>
 }
+
+export function ConnectionA3DownloadButtons({ id }: { id: string }) {
+  const baseUrl = `/api/bransamente/${encodeURIComponent(id)}/document?type=a3`
+  return <>
+    <a href={baseUrl} className="btn-secondary inline-flex items-center gap-2 whitespace-nowrap" download>
+      <Download size={16}/> Dosar A3 DOCX
+    </a>
+    <a href={`${baseUrl}&format=pdf`} className="btn-secondary inline-flex items-center gap-2 whitespace-nowrap" download>
+      <Download size={16}/> Dosar A3 PDF
+    </a>
+  </>
+}
