@@ -39,8 +39,8 @@ export default async function FormsPage() {
         ORDER BY "updatedAt" DESC`
 
   const [formRows, submissionRows, connectionRows, projectRows, identityCards, borderouRows] = await Promise.all([
-    prisma.$queryRaw<Array<Omit<FormTemplateDto, 'updatedAt'> & { updatedAt: Date }>>`
-      SELECT "id", "title", "category", "documentPathname", "documentName", "deerDocumentKind", "sortOrder", "fieldSchema", "stampSchema", "updatedAt"
+    prisma.$queryRaw<Array<Omit<FormTemplateDto, 'updatedAt' | 'deletedAt'> & { updatedAt: Date; deletedAt: Date | null }>>`
+      SELECT "id", "title", "category", "documentPathname", "documentName", "deerDocumentKind", "sortOrder", "fieldSchema", "stampSchema", "updatedAt", "deletedAt"
       FROM "FormTemplate" WHERE "businessId"=${businessId} ORDER BY "category", "sortOrder", "createdAt"`,
     submissionRowsPromise,
     prisma.$queryRaw<Array<{ id: string; nib: string; sequenceNumber: number; status: string; deerSubmittedAt: Date | null; createdAt: Date; fields: Record<string, string> }>>`
@@ -50,7 +50,7 @@ export default async function FormsPage() {
     listDeerBorderouri(businessId),
   ])
 
-  const forms: FormTemplateDto[] = formRows.map((row) => ({ ...row, fieldSchema: Array.isArray(row.fieldSchema) ? row.fieldSchema : [], stampSchema: Array.isArray(row.stampSchema) ? row.stampSchema : [], updatedAt: row.updatedAt.toISOString() }))
+  const forms: FormTemplateDto[] = formRows.map((row) => ({ ...row, fieldSchema: Array.isArray(row.fieldSchema) ? row.fieldSchema : [], stampSchema: Array.isArray(row.stampSchema) ? row.stampSchema : [], updatedAt: row.updatedAt.toISOString(), deletedAt: row.deletedAt?.toISOString() || null }))
   const submissions: FormSubmissionDto[] = submissionRows.map((row) => ({
     ...row,
     sourceType: canAccessIdentityData ? row.sourceType : null,

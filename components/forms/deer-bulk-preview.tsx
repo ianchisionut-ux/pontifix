@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Download, Loader2, Printer, X } from 'lucide-react'
 import type { FormField, FormSubmissionDto, FormTemplateDto, StampPlacement } from '@/lib/ensure-form-storage'
 import { beneficiarySignatureImage, boundValue, loadImage, transparentStamp, type ConnectionFormOption, type ProjectFormOption } from './pdf-request-editor'
@@ -54,6 +54,12 @@ export function DeerBulkPreview({ templates, submissions, connection, project, s
   const [error, setError] = useState('')
   const [current, setCurrent] = useState('')
   const [pageCount, setPageCount] = useState(0)
+  const printFrame = useRef<HTMLIFrameElement | null>(null)
+
+  useEffect(() => () => {
+    printFrame.current?.remove()
+    printFrame.current = null
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -136,13 +142,17 @@ export function DeerBulkPreview({ templates, submissions, connection, project, s
 
   function printAll() {
     if (!previewUrl) return
+    printFrame.current?.remove()
     const frame = document.createElement('iframe')
+    printFrame.current = frame
     frame.style.cssText = 'position:fixed;width:1px;height:1px;opacity:0;right:0;bottom:0'
     frame.src = previewUrl
+    let printed = false
     frame.onload = () => {
+      if (printed) return
+      printed = true
       try { frame.contentWindow?.focus(); frame.contentWindow?.print() }
       catch { window.open(previewUrl, '_blank', 'noopener,noreferrer') }
-      setTimeout(() => frame.remove(), 15000)
     }
     document.body.appendChild(frame)
   }

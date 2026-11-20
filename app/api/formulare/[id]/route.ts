@@ -33,7 +33,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!parsed.success) return NextResponse.json({ error: 'Datele modelului sunt invalide.' }, { status: 400 })
   await ensureFormStorage(businessId)
   const { id } = await params
-  const exists = await prisma.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "FormTemplate" WHERE "id"=${id} AND "businessId"=${businessId} LIMIT 1`
+  const exists = await prisma.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "FormTemplate" WHERE "id"=${id} AND "businessId"=${businessId} AND "deletedAt" IS NULL LIMIT 1`
   if (!exists[0]) return NextResponse.json({ error: 'Model inexistent.' }, { status: 404 })
   if (parsed.data.title) {
     await prisma.$executeRaw`UPDATE "FormTemplate" SET "title"=${parsed.data.title}, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${businessId} AND "category"='DEER'`
@@ -47,6 +47,25 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (parsed.data.stampSchema) {
     await prisma.$executeRaw`UPDATE "FormTemplate" SET "stampSchema"=${JSON.stringify(parsed.data.stampSchema)}::jsonb, "updatedAt"=CURRENT_TIMESTAMP WHERE "id"=${id} AND "businessId"=${businessId}`
   }
+  revalidatePath('/dashboard/formulare')
+  return NextResponse.json({ success: true })
+}
+
+export async function DELETE(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const session = await auth()
+  const businessId = (session as any)?.businessId as string | undefined
+  if (!businessId) return NextResponse.json({ error: 'Neautorizat.' }, { status: 401 })
+  if ((session as any)?.role !== 'SUPER_ADMIN') return NextResponse.json({ error: 'Doar Super Adminul poate șterge șabloane.' }, { status: 403 })
+
+  await ensureFormStorage(businessId)
+  const { id } = await params
+  // Keep the template and its PDF for saved completions and already issued signing links.
+  // The row also stops the built-in DEER templates from being recreated on the next load.
+  const changed = Number(await prisma.$executeRaw`
+    UPDATE "FormTemplate" SET "deletedAt"=CURRENT_TIMESTAMP, "updatedAt"=CURRENT_TIMESTAMP
+    WHERE "id"=${id} AND "businessId"=${businessId} AND "category"='DEER' AND "deletedAt" IS NULL
+  `)
+  if (!changed) return NextResponse.json({ error: 'Șablon DEER inexistent.' }, { status: 404 })
   revalidatePath('/dashboard/formulare')
   return NextResponse.json({ success: true })
 }

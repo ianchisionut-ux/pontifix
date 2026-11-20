@@ -4,6 +4,7 @@ import { PDFDocument } from 'pdf-lib'
 import { Prisma } from '@prisma/client'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { ensureFormStorage } from '@/lib/ensure-form-storage'
 import { ensureDeerSigningStorage, newSigningId, newSigningToken, sha256, signingTokenHash, type SigningRequestRow } from '@/lib/deer-signing'
 import type { SigningDocument } from '@/lib/deer-signing-bundle'
 
@@ -51,9 +52,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Pachetul de documente este invalid.' }, { status: 400 })
   }
   try {
-    await ensureDeerSigningStorage()
+    await Promise.all([ensureDeerSigningStorage(), ensureFormStorage(user.businessId)])
     const templates = await prisma.$queryRaw<Array<{ id: string }>>`
-      SELECT "id" FROM "FormTemplate" WHERE "businessId"=${user.businessId} AND "category"='DEER' AND "id" IN (${Prisma.join(documents.map((item) => item.id))})`
+      SELECT "id" FROM "FormTemplate" WHERE "businessId"=${user.businessId} AND "category"='DEER' AND "deletedAt" IS NULL AND "id" IN (${Prisma.join(documents.map((item) => item.id))})`
     if (templates.length !== documents.length || new Set(documents.map((item) => item.id)).size !== documents.length) throw new Error('Lista documentelor nu corespunde șabloanelor DEER.')
     const source = await get(pathname, { access: 'private' })
     if (!source?.stream) throw new Error('PDF-ul încărcat nu este disponibil.')

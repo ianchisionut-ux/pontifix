@@ -53,7 +53,7 @@ async function ensureTable() {
       const [schema] = await prisma.$queryRaw<{ ready: boolean }[]>`
         SELECT to_regclass('"FormTemplate"') IS NOT NULL
           AND (SELECT COUNT(*) FROM pg_attribute WHERE attrelid = to_regclass('"FormTemplate"')
-            AND attname IN ('fieldSchema', 'stampSchema', 'deerDocumentKind') AND attnum > 0 AND NOT attisdropped) = 3
+            AND attname IN ('fieldSchema', 'stampSchema', 'deerDocumentKind', 'deletedAt') AND attnum > 0 AND NOT attisdropped) = 4
           AND to_regclass('"FormTemplate_businessId_category_sortOrder_idx"') IS NOT NULL
           AND to_regclass('"FormSubmission"') IS NOT NULL
           AND to_regclass('"FormSubmission_businessId_updatedAt_idx"') IS NOT NULL
@@ -73,6 +73,7 @@ async function ensureTable() {
       await prisma.$executeRawUnsafe(`ALTER TABLE "FormTemplate" ADD COLUMN IF NOT EXISTS "fieldSchema" JSONB NOT NULL DEFAULT '[]'::jsonb`)
       await prisma.$executeRawUnsafe(`ALTER TABLE "FormTemplate" ADD COLUMN IF NOT EXISTS "stampSchema" JSONB NOT NULL DEFAULT '[]'::jsonb`)
       await prisma.$executeRawUnsafe(`ALTER TABLE "FormTemplate" ADD COLUMN IF NOT EXISTS "deerDocumentKind" TEXT`)
+      await prisma.$executeRawUnsafe(`ALTER TABLE "FormTemplate" ADD COLUMN IF NOT EXISTS "deletedAt" TIMESTAMP(3)`)
       await prisma.$executeRawUnsafe(`UPDATE "FormTemplate" SET "deerDocumentKind"=CASE
         WHEN "title" ~* 'borderou' OR "documentName" ~* '(borderou|DINV900)' THEN 'BORDEROU'
         WHEN "title" ~* 'predare.?primire' OR "documentName" ~* '(predare.?primire|DINV901)' THEN 'PV_PREDARE_PRIMIRE'
@@ -126,7 +127,7 @@ export type FormTemplateDto = {
   id: string; title: string; category: 'FORMULAR' | 'CERERE' | 'SEMNARE' | 'DEER'
   documentPathname: string; documentName: string; sortOrder: number
   deerDocumentKind?: DeerDocumentKind | null
-  fieldSchema: FormField[]; stampSchema: StampPlacement[]; updatedAt: string
+  fieldSchema: FormField[]; stampSchema: StampPlacement[]; updatedAt: string; deletedAt?: string | null
 }
 export type FormSubmissionDto = {
   id: string; formTemplateId: string; title: string; sourceType: string | null; sourceId: string | null
