@@ -54,6 +54,14 @@ function replaceReferences(xml: string, field: string, value: string) {
   return xml.replace(pattern, (_match, before: string, result: string, after: string) => `${before}${replaceTextInRange(result, value)}${after}`)
 }
 
+function preserveReferenceResultStyles(xml: string) {
+  return xml.replace(/(<w:instrText\b[^>]*>)([^<]*\bREF\s+[A-Za-z][^<]*)(<\/w:instrText>)/gi,
+    (match, opening: string, instruction: string, closing: string) => {
+      if (/\\\*\s*(?:MERGEFORMAT|CHARFORMAT)/i.test(instruction)) return match
+      return `${opening}${instruction} \\* MERGEFORMAT ${closing}`
+    })
+}
+
 function replaceFormulaResult(xml: string, formulaStart: string, value: string) {
   const pattern = new RegExp(`(<w:fldChar\\b[^>]*w:fldCharType="begin"[^>]*/>[\\s\\S]{0,1800}?<w:instrText\\b[^>]*>\\s*${formulaStart}[^<]*<\\/w:instrText>[\\s\\S]{0,900}?<w:fldChar\\b[^>]*w:fldCharType="separate"[^>]*/>)([\\s\\S]*?)(<w:fldChar\\b[^>]*w:fldCharType="end"[^>]*/>)`, 'gi')
   return xml.replace(pattern, (_match, before: string, result: string, after: string) => `${before}${replaceTextInRange(result, value)}${after}`)
@@ -84,6 +92,15 @@ function runLike(run: string, value: string) {
   return `${opening}${properties}<w:t xml:space="preserve">${xmlEscape(value)}</w:t></w:r>`
 }
 
+function replaceTextRuns(paragraph: string, replacements: Record<number, string>) {
+  let textRun = 0
+  return paragraph.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, (run) => {
+    if (!/<w:t\b/.test(run)) return run
+    const replacement = replacements[textRun++]
+    return replacement === undefined ? run : runLike(run, replacement)
+  })
+}
+
 function setNotificationApplicant(paragraph: string, name: string, suffix: string, physical: boolean) {
   const opening = /^<w:p\b[^>]*>/.exec(paragraph)?.[0]
   const properties = /<w:pPr\b[\s\S]*?<\/w:pPr>/.exec(paragraph)?.[0] || ''
@@ -104,19 +121,23 @@ function appendParagraphText(paragraph: string, value: string) {
   return paragraph.replace(/<\/w:p>$/, `<w:r>${runProperties}<w:t xml:space="preserve">${xmlEscape(value)}</w:t></w:r></w:p>`)
 }
 
-// The Beneficiar/address/Telefon bookmarks live inside the original PF box.
-// Keep them in a non-rendered paragraph for PJ documents: Word REF fields in
-// the notification and memoriu must still have a live source after refresh.
-function hiddenBookmarkSources(paragraphs: string[]) {
-  const contents = paragraphs.map((paragraph) => paragraph
-    .replace(/^<w:p\b[^>]*>/, '')
-    .replace(/<w:pPr\b[\s\S]*?<\/w:pPr>/, '')
-    .replace(/<\/w:p>$/, '')).join('')
-  const hiddenRuns = contents.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, (run) => {
-    if (/<w:rPr\b/.test(run)) return run.replace(/<w:rPr\b[^>]*>/, (opening) => `${opening}<w:vanish/>`)
-    return run.replace(/^<w:r\b[^>]*>/, (opening) => `${opening}<w:rPr><w:vanish/></w:rPr>`)
-  })
-  return `<w:p><w:pPr><w:spacing w:before="0" w:after="0" w:line="1" w:lineRule="exact"/></w:pPr>${hiddenRuns}</w:p>`
+// The REF sources live inside the PF box. Keep them hidden in their original
+// paragraphs for PJ documents, so the surrounding paragraph and shape anchors
+// retain their exact position while Word can still refresh the REF fields.
+function inactivePhysicalParagraph(paragraph: string, label: string) {
+  const sources = [...paragraph.matchAll(/<w:bookmarkStart\b[^>]*\/>/g)].map((match) => {
+    const id = /w:id="([^"]+)"/.exec(match[0])?.[1]
+    if (!id) return ''
+    const end = new RegExp(`<w:bookmarkEnd\\b(?=[^>]*w:id="${regexEscape(id)}")[^>]*/>`).exec(paragraph.slice(match.index! + match[0].length))
+    if (!end) return ''
+    const range = paragraph.slice(match.index! + match[0].length, match.index! + match[0].length + end.index)
+    const hidden = range.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, (run) => {
+      if (/<w:rPr\b/.test(run)) return run.replace(/<w:rPr\b[^>]*>/, (opening) => `${opening}<w:vanish/>`)
+      return run.replace(/^<w:r\b[^>]*>/, (opening) => `${opening}<w:rPr><w:vanish/></w:rPr>`)
+    })
+    return `${match[0]}${hidden}${end[0]}`
+  }).join('')
+  return setParagraphText(paragraph, label).replace(/<\/w:p>$/, `${sources}</w:p>`)
 }
 
 function joinLocation(fields: ConnectionFields) {
@@ -149,7 +170,6 @@ function routeBeneficiarySections(xml: string, fields: ConnectionFields) {
   }
 
   const changes = new Map<number, string>()
-  const remove = (start: number, end: number) => { for (let index = start; index < end; index++) changes.set(index, '') }
   // The original template places an explicit page break in the same paragraph
   // as the section break before the notification, producing an empty page.
   const boundary = paragraphs[notificationAddress - 1]
@@ -158,12 +178,9 @@ function routeBeneficiarySections(xml: string, fields: ConnectionFields) {
   }
   changes.set(notificationAddress - 1, boundary.replace(/<w:br\b(?=[^>]*w:type="page")[^>]*\/>/, ''))
   if (getConnectionBeneficiaryType(fields) === 'PJ') {
-    // Keep the two labeled boxes from the template. The inactive PF box stays
-    // blank, while its bookmark values move into the otherwise empty spacer.
-    changes.set(physicalHeading + 1, setParagraphText(paragraphs[physicalHeading + 1], 'NUME ȘI PRENUME –'))
-    changes.set(physicalHeading + 2, setParagraphText(paragraphs[physicalHeading + 2], 'ADRESA DE DOMICILIU –'))
-    changes.set(physicalHeading + 3, setParagraphText(paragraphs[physicalHeading + 3], 'Telefon –'))
-    changes.set(physicalHeading + 4, hiddenBookmarkSources(paragraphs.slice(physicalHeading + 1, physicalHeading + 4)))
+    changes.set(physicalHeading + 1, inactivePhysicalParagraph(paragraphs[physicalHeading + 1], 'NUME SI PRENUME –'))
+    changes.set(physicalHeading + 2, inactivePhysicalParagraph(paragraphs[physicalHeading + 2], 'ADRESA DE DOMICILIU -'))
+    changes.set(physicalHeading + 3, inactivePhysicalParagraph(paragraphs[physicalHeading + 3], 'Telefon –'))
     changes.set(legalHeading + 1, setParagraphText(paragraphs[legalHeading + 1], `DENUMIRE – ${fields.Beneficiar.trim()}`))
     changes.set(legalHeading + 2, setParagraphText(paragraphs[legalHeading + 2], `ADRESA SEDIULUI – ${joinLocation(fields)}`))
     changes.set(legalHeading + 3, setParagraphText(paragraphs[legalHeading + 3], [joinStreet(fields), fields.Judet.trim() && `jud. ${fields.Judet.trim()}`].filter(Boolean).join(', ')))
@@ -176,35 +193,40 @@ function routeBeneficiarySections(xml: string, fields: ConnectionFields) {
       fields.ReprezentantLegal.trim() && `Reprezentant legal ${fields.ReprezentantLegal.trim()}`,
       fields.FunctieReprezentant.trim() && `Funcția ${fields.FunctieReprezentant.trim()}`,
     ].filter(Boolean).join(' · ')))
-    changes.set(legalNotification, setNotificationApplicant(
-      paragraphs[legalNotification], fields.Beneficiar.trim(),
-      joinLocation(fields) ? `, cu sediul în ${joinLocation(fields)}` : '', false,
+    // Preserve the original applicant paragraphs and their spacing. The
+    // notification's borders are Word shapes anchored to nearby paragraphs.
+    changes.set(legalNotification, replaceTextRuns(paragraphs[legalNotification], {
+      2: `:  ${fields.Beneficiar.trim()}, din ${fields.Oras.trim() || '........'}`,
+      6: ` ${fields.Sat.trim() || '........'}, cod poștal ........,`,
+    }))
+    changes.set(legalNotification + 1, replaceTextRuns(paragraphs[legalNotification + 1], {
+      0: `str. ${fields.Strada.trim() || '........'}`,
+      2: `, nr. ${fields.Nr.trim() || '........'}, județ ${fields.Judet.trim() || '........'}`,
+      4: `, telefon ${fields.Telefon.trim() || '........'}, fax ........, e-mail ........, cod fiscal ${fields.CUI.trim() || '........'}`,
+      6: `, cont nr. ........, deschis la ........, filiala ........, nr. înreg. ${fields.NrRegCom.trim() || '........'}, reprezentată prin ${fields.ReprezentantLegal.trim() || '........'}, funcția ${fields.FunctieReprezentant.trim() || '........'},`,
+    }))
+    changes.set(physicalNotification, setNotificationApplicant(
+      paragraphs[physicalNotification], '........................',
+      ', domiciliat(ă) în ........, cod poștal ........, sat ........, str. ........, nr. ...., bl. ...., ap. ...., telefon ........, fax ........, e-mail ........,', true,
     ))
-    changes.set(legalNotification + 1, setParagraphText(paragraphs[legalNotification + 1], [
-      joinStreet(fields), fields.Judet.trim() && `jud. ${fields.Judet.trim()}`,
-      fields.CUI.trim() && `C.U.I./C.I.F. ${fields.CUI.trim()}`,
-      fields.NrRegCom.trim() && `nr. înreg. ${fields.NrRegCom.trim()}`,
-      fields.Telefon.trim() && `telefon ${fields.Telefon.trim()}`,
-      fields.ReprezentantLegal.trim() && `reprezentată prin ${fields.ReprezentantLegal.trim()}`,
-      fields.FunctieReprezentant.trim() && `funcția ${fields.FunctieReprezentant.trim()}`,
-    ].filter(Boolean).join(', ')))
-    remove(physicalNotification, notificationBody)
+    changes.set(physicalNotification + 1, setParagraphText(paragraphs[physicalNotification + 1],
+      'având C.I. seria ........, nr. ........, eliberată de ........, la data de ........, cont nr. ........, deschis la ........, filiala ........'))
   } else {
     if (fields.CNP.trim()) changes.set(physicalHeading + 3, appendParagraphText(paragraphs[physicalHeading + 3], ` · CNP ${fields.CNP.trim()}`))
-    remove(legalNotification, physicalNotification)
     const address = [joinLocation(fields), joinStreet(fields), fields.Judet.trim() && `jud. ${fields.Judet.trim()}`].filter(Boolean).join(', ')
     changes.set(physicalNotification, setNotificationApplicant(paragraphs[physicalNotification], fields.Beneficiar.trim(), [
       address && `domiciliat(ă) în ${address}`,
       fields.CNP.trim() && `CNP ${fields.CNP.trim()}`,
       fields.Telefon.trim() && `telefon ${fields.Telefon.trim()}`,
-    ].filter(Boolean).map((part) => `, ${part}`).join(''), true))
+    ].filter(Boolean).map((part) => `, ${part}`).join('') + ', fax ........, e-mail ........,', true))
     const identity = [
       fields.CiSerie.trim() && `C.I. seria ${fields.CiSerie.trim()}`,
       fields.CiNumar.trim() && `nr. ${fields.CiNumar.trim()}`,
       fields.CiEmisaDe.trim() && `eliberată de ${fields.CiEmisaDe.trim()}`,
       fields.CiValabilaDeLa.trim() && `la data de ${fields.CiValabilaDeLa.trim()}`,
     ].filter(Boolean).join(', ')
-    changes.set(physicalNotification + 1, identity ? setParagraphText(paragraphs[physicalNotification + 1], identity) : '')
+    changes.set(physicalNotification + 1, setParagraphText(paragraphs[physicalNotification + 1],
+      `${identity || 'având C.I. seria ........, nr. ........, eliberată de ........, la data de ........'}, cont nr. ........, deschis la ........, filiala ........`))
   }
 
   let cursor = 0
@@ -245,6 +267,13 @@ export async function generateConnectionDocx(fields: ConnectionFields, type: 'co
   const zip = new PizZip(buffer)
   const amount = parseConnectionMoney(fields.SumaFaraTVA)
   const documentFields = { ...fields, SumaFaraTVA: amount === null ? fields.SumaFaraTVA : money(amount) }
+  if (getConnectionBeneficiaryType(fields) === 'PJ') {
+    // These identify a natural person and must not leak from older PJ dossiers.
+    for (const field of ['CNP', 'NrSX', 'DataSX', 'DataExpirareSX', 'CiSerie', 'CiNumar',
+      'CiDomiciliu', 'CiEmisaDe', 'CiValabilaDeLa', 'CiValabilaPanaLa'] as const) {
+      documentFields[field] = ''
+    }
+  }
   const xmlFiles = Object.keys(zip.files).filter((name) => /^word\/(document|header\d*|footer\d*)\.xml$/.test(name))
   for (const name of xmlFiles) {
     let xml = zip.file(name)?.asText() || ''
@@ -252,6 +281,7 @@ export async function generateConnectionDocx(fields: ConnectionFields, type: 'co
       xml = replaceBookmark(xml, field, documentFields[field] || '')
       xml = replaceReferences(xml, field, documentFields[field] || '')
     }
+    if (getConnectionBeneficiaryType(fields) === 'PJ') xml = preserveReferenceResultStyles(xml)
     if (type === 'contract') {
       if (name === 'word/document.xml' && !xml.includes('w:name="SumaFaraTVALitere"')) {
         throw new Error('Șablonul contractului nu conține câmpul sumei în litere.')

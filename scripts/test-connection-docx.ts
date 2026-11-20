@@ -22,6 +22,23 @@ function visibleText(xml: string) {
   return [...xml.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)].map((match) => match[1]).join('')
 }
 
+function renderedText(xml: string) {
+  return [...xml.matchAll(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g)]
+    .filter((match) => !/<w:vanish\b/.test(match[0]))
+    .map((match) => visibleText(match[0])).join('')
+}
+
+function assertFullTemplateStructure(template: string, output: string) {
+  assert.equal((output.match(/<w:p\b/g) || []).length, (template.match(/<w:p\b/g) || []).length,
+    'Numărul și poziția paragrafelor trebuie păstrate în pachetul complet')
+  for (const marker of [/<w:tbl\b/g, /<w:sectPr\b/g, /<w:pict\b/g]) {
+    assert.equal((output.match(marker) || []).length, (template.match(marker) || []).length,
+      `Structura ${marker.source} trebuie păstrată din șablon`)
+  }
+  assert.deepEqual(output.match(/<v:rect\b[^>]*>/g) || [], template.match(/<v:rect\b[^>]*>/g) || [],
+    'Chenarele VML și ancorele lor trebuie păstrate din șablon')
+}
+
 function precedingParagraph(xml: string, marker: string) {
   const at = xml.indexOf(marker)
   assert.ok(at >= 0, `Lipsește ${marker}`)
@@ -70,6 +87,7 @@ async function main() {
   assert.ok(xml.includes('NOTIFICARE ÎNCHEIERE CONTRACT'))
   assert.ok(xml.includes('MEMORIU  TEHNIC'))
   assert.ok(xml.includes('CEREREA PENTRU ELIBERAREA AUTORIZATIEI'))
+  assertFullTemplateStructure(templateXml, xml)
   assert.match(visibleText(paragraphWith(xml, 'w:name="Telefon"')), /CNP 2880719314012/)
   assert.equal(
     textRunStyles(paragraphWith(xml, 'w:name="Telefon"')).at(-1),
@@ -82,7 +100,7 @@ async function main() {
   const physicalOutputStyles = textRunStyles(physicalNotificationParagraph)
   assert.deepEqual(physicalOutputStyles.slice(0, 3), physicalSourceStyles.slice(0, 3), 'Păstrează stilul bulinei, al titlului subliniat și al separatorului PF')
   assert.equal(physicalOutputStyles[4], physicalSourceStyles[5], 'Numele PF păstrează stilul valorii din șablon')
-  assert.ok(!visibleText(xml).includes('• PERSOANĂ JURIDICĂ'))
+  assert.ok(visibleText(xml).includes('•PERSOANĂ JURIDICĂ'), 'Rubrica juridică rămâne în structura originală')
   assert.ok(!xml.includes('NEJUR MIRCEA'))
   assertSingleBreakBeforeNotification(xml)
   assert.equal(connectionDocumentName(fields, 'contract'), 'Contract-Notificare-Memoriu-Cerere-PETKES-JULIA-CSILLA.docx')
@@ -101,6 +119,7 @@ async function main() {
     ...defaultConnectionFields(), TipBeneficiar: 'PJ', Beneficiar: 'PAROHIA REFORMATA VALEA POMILOR',
     CUI: '4289964', Oras: 'ȘAMȘUD', Sat: 'VALEA POMILOR', Judet: 'SĂLAJ',
     Strada: 'PRINCIPALĂ', Nr: '119', Telefon: '0749393854', SumaFaraTVA: '2420.00',
+    NrSX: 'SX-VECHI-99', DataSX: '01.01.2000', DataExpirareSX: '01.01.2005',
   }
   for (const part of ['full', 'contract-notification'] as const) {
     const legalBuffer = await generateConnectionDocx(legalFields, 'contract', part)
@@ -109,16 +128,30 @@ async function main() {
     assert.equal(XMLValidator.validate(legalXml), true)
     assert.equal((legalXml.match(/w:name="Beneficiar"/g) || []).length, 1, 'Sursa REF Beneficiar trebuie păstrată')
     assert.ok(paragraphWith(legalXml, 'w:name="Beneficiar"').includes('<w:vanish/>'), 'Bookmarkul PF trebuie ascuns în actul PJ')
-    assert.ok(!visibleText(paragraphWith(legalXml, 'NUME ȘI PRENUME')).includes('PAROHIA'), 'Blocul PF trebuie să rămână necompletat')
+    assert.ok(!renderedText(paragraphWith(legalXml, 'NUME SI PRENUME')).includes('PAROHIA'), 'Blocul PF trebuie să rămână necompletat')
+    assert.equal(renderedText(paragraphWithVisibleText(legalXml, 'NUME SI PRENUME')).trim(), 'NUME SI PRENUME –')
+    assert.ok(!renderedText(paragraphWithVisibleText(legalXml, 'ADRESA DE DOMICILIU')).includes('VALEA POMILOR'))
+    assert.equal(renderedText(paragraphWithVisibleText(legalXml, 'Telefon –')).trim(), 'Telefon –')
+    const legalParagraphs = [...legalXml.matchAll(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g)].map((match) => match[0])
+    assert.equal(visibleText(legalParagraphs[13]), '', 'Separatorul original dintre casetele PF/PJ rămâne gol')
+    assert.ok(!legalParagraphs[13].includes('<w:bookmarkStart'), 'Bookmarkurile nu se mută în separator')
     assert.match(visibleText(paragraphWith(legalXml, 'DENUMIRE –')), /PAROHIA REFORMATA VALEA POMILOR/)
     assert.match(visibleText(paragraphWith(legalXml, 'C.U.I.\/C.I.F.')), /4289964/)
-    const legalNotificationParagraph = paragraphWithVisibleText(legalXml, '• PERSOANĂ JURIDICĂ')
+    const legalNotificationParagraph = paragraphWithVisibleText(legalXml, '•PERSOANĂ JURIDICĂ')
     assert.match(visibleText(legalNotificationParagraph), /PAROHIA REFORMATA VALEA POMILOR.*ȘAMȘUD/)
     const legalSourceStyles = textRunStyles(paragraphWithVisibleText(templateXml, '•PERSOANĂ JURIDICĂ'))
     const legalOutputStyles = textRunStyles(legalNotificationParagraph)
     assert.deepEqual(legalOutputStyles.slice(0, 3), legalSourceStyles.slice(0, 3), 'Păstrează stilul bulinei, al titlului subliniat și al separatorului PJ')
-    assert.equal(legalOutputStyles[4], legalSourceStyles[2], 'Numele PJ păstrează stilul locului din șablon')
+    assert.deepEqual(legalOutputStyles, legalSourceStyles, 'Rubrica PJ păstrează stilurile tuturor segmentelor originale')
     assert.ok(!legalXml.includes('J31/123/2026'), 'Un nr. Registrul Comerțului necunoscut nu trebuie inventat')
+    assert.ok(!renderedText(legalXml).includes('SX-VECHI-99'), 'Un act PJ nu include numărul SX moștenit')
+    assert.ok(!renderedText(legalXml).includes('01.01.2000'), 'Un act PJ nu include data SX moștenită')
+    assert.ok(!renderedText(legalXml).includes('01.01.2005'), 'Un act PJ nu include data expirării SX moștenită')
+    const referenceInstructions = [...legalXml.matchAll(/<w:instrText\b[^>]*>([^<]*\bREF\s+[A-Za-z][^<]*)<\/w:instrText>/gi)]
+      .map((match) => match[1])
+    assert.ok(referenceInstructions.length > 0)
+    assert.ok(referenceInstructions.every((instruction) => /\\\*\s*(?:MERGEFORMAT|CHARFORMAT)/i.test(instruction)),
+      'REF păstrează formatul rezultatului când Word actualizează bookmarkurile ascunse')
     assert.equal(firstTextRunStyle(paragraphWith(legalXml, 'DENUMIRE –')), firstTextRunStyle(paragraphWithVisibleText(templateXml, 'DENUMIRE')))
     for (const [generated, source] of [
       ['ADRESA SEDIULUI –', 'ADRESA SEDIULUI'],
@@ -132,9 +165,11 @@ async function main() {
       firstTextRunStyle(paragraphWithVisibleText(templateXml, 'C.I.F')))
     assert.equal(firstTextRunStyle(paragraphWithVisibleText(legalXml, 'telefon 0749393854')),
       firstTextRunStyle(paragraphWithVisibleText(templateXml, 'reprezentată prin Director')))
-    assert.ok(!visibleText(legalXml).includes('• PERSOANĂ FIZICĂ'))
+    assert.ok(visibleText(legalXml).includes('• PERSOANĂ FIZICĂ'), 'Rubrica PF rămâne în poziția originală')
+    assert.ok(!renderedText(paragraphWithVisibleText(legalXml, '• PERSOANĂ FIZICĂ')).includes('PAROHIA'))
     assertSingleBreakBeforeNotification(legalXml)
     if (part === 'full') {
+      assertFullTemplateStructure(templateXml, legalXml)
       assert.ok(legalXml.includes('MEMORIU  TEHNIC'))
       assert.ok(legalXml.includes('CEREREA PENTRU ELIBERAREA AUTORIZATIEI'))
       assert.match(visibleText(paragraphWithVisibleText(legalXml, 'Denumirea lucrarii')), /PAROHIA REFORMATA VALEA POMILOR/)

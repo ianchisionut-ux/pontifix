@@ -29,6 +29,12 @@ export const CONNECTION_FIELDS = [...CONNECTION_FIELD_GROUPS.flatMap((group) => 
 export type ConnectionFields = Record<(typeof CONNECTION_FIELDS)[number], string>
 export type ConnectionBeneficiaryType = 'PF' | 'PJ'
 
+export const CONNECTION_PHYSICAL_ONLY_FIELDS = ['NrSX', 'DataSX', 'DataExpirareSX'] as const
+
+export function isConnectionFieldVisibleForBeneficiary(field: string, type: ConnectionBeneficiaryType) {
+  return type === 'PF' || !CONNECTION_PHYSICAL_ONLY_FIELDS.some((physicalField) => physicalField === field)
+}
+
 const legalBeneficiaryName = /^(?:S\.?C\.?\s|S\.?R\.?L\.?\b|S\.?A\.?\b|PFA\b|II\b|IF\b|PAROHIA\b|BISERICA\b|COMUNA\b|MUNICIPIUL\b|ORASUL\b|ORAȘUL\b|PRIMARIA\b|PRIMĂRIA\b|ASOCIATIA\b|ASOCIAȚIA\b|FUNDATIA\b|FUNDAȚIA\b|SCOALA\b|ȘCOALA\b|LICEUL\b|SPITALUL\b|UNIVERSITATEA\b|COMPANIA\b|REGIA\b)/i
 
 function identifierType(value: string): ConnectionBeneficiaryType | null {
