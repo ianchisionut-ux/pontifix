@@ -8,6 +8,7 @@ import type { ConnectionFormOption, ProjectFormOption } from '@/components/forms
 import { listIdentityCards } from '@/lib/identity-card-storage'
 import { listDeerBorderouri } from '@/lib/deer-borderou'
 import type { DeerBorderouDto } from '@/lib/deer-borderou-shared'
+import { listProjectDeerRegistry } from '@/lib/project-deer-registry'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,7 +39,7 @@ export default async function FormsPage() {
           AND COALESCE(UPPER(BTRIM("sourceType")), '') <> 'CI'
         ORDER BY "updatedAt" DESC`
 
-  const [formRows, submissionRows, connectionRows, projectRows, identityCards, borderouRows] = await Promise.all([
+  const [formRows, submissionRows, connectionRows, projectRows, identityCards, borderouRows, projectDeerRegistry] = await Promise.all([
     prisma.$queryRaw<Array<Omit<FormTemplateDto, 'updatedAt' | 'deletedAt'> & { updatedAt: Date; deletedAt: Date | null }>>`
       SELECT "id", "title", "category", "documentPathname", "documentName", "deerDocumentKind", "sortOrder", "fieldSchema", "stampSchema", "updatedAt", "deletedAt"
       FROM "FormTemplate" WHERE "businessId"=${businessId} ORDER BY "category", "sortOrder", "createdAt"`,
@@ -48,6 +49,7 @@ export default async function FormsPage() {
     prisma.project.findMany({ where: { businessId }, orderBy: { createdAt: 'desc' }, select: { id: true, name: true, beneficiary: true, beneficiaryPhone: true, address: true, certificateNumber: true, certificateDate: true } }),
     canAccessIdentityData ? listIdentityCards(businessId) : Promise.resolve([]),
     listDeerBorderouri(businessId),
+    listProjectDeerRegistry(businessId),
   ])
 
   const forms: FormTemplateDto[] = formRows.map((row) => ({ ...row, fieldSchema: Array.isArray(row.fieldSchema) ? row.fieldSchema : [], stampSchema: Array.isArray(row.stampSchema) ? row.stampSchema : [], updatedAt: row.updatedAt.toISOString(), deletedAt: row.deletedAt?.toISOString() || null }))
@@ -65,5 +67,5 @@ export default async function FormsPage() {
   const projects: ProjectFormOption[] = projectRows.map((row) => ({ id: row.id, name: row.name, beneficiary: row.beneficiary || '', beneficiaryPhone: row.beneficiaryPhone || '', address: row.address || '', certificateNumber: row.certificateNumber || '', certificateDate: row.certificateDate?.toLocaleDateString('ro-RO') || '' }))
   const borderouri: DeerBorderouDto[] = borderouRows.map(({ documentPathname: _pathname, ...row }) => ({ ...row, receivedAt: row.receivedAt.toISOString() }))
 
-  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><FormsManager initialForms={forms} initialSubmissions={submissions} connections={connections} projects={projects} identityCards={identityCards} borderouri={borderouri} canManage={(session as any)?.role === 'SUPER_ADMIN'} canEdit={(session as any)?.role !== 'STAFF'}/></div>
+  return <div className="mx-auto max-w-[1800px] p-4 lg:p-8"><FormsManager initialForms={forms} initialSubmissions={submissions} connections={connections} projects={projects} projectDeerRegistry={projectDeerRegistry} identityCards={identityCards} borderouri={borderouri} canManage={(session as any)?.role === 'SUPER_ADMIN'} canEdit={(session as any)?.role !== 'STAFF'} canEditDeerRegistry={['SUPER_ADMIN', 'OWNER'].includes((session as any)?.role)}/></div>
 }

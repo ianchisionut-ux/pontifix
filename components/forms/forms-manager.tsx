@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { uploadPresigned } from '@vercel/blob/client'
 import { useRouter } from 'next/navigation'
-import { Edit3, FilePlus2, FileText, History, Loader2, PenLine, Plus, Printer, RefreshCw, Stamp, Trash2, X } from 'lucide-react'
+import { ClipboardList, Edit3, FilePlus2, FileText, History, Loader2, PenLine, Plus, Printer, RefreshCw, Stamp, Trash2, X } from 'lucide-react'
 import { useLanguage } from '@/components/language-provider'
 import type { FormSubmissionDto, FormTemplateDto } from '@/lib/ensure-form-storage'
 import { PdfRequestEditor, type ConnectionFormOption, type ProjectFormOption } from './pdf-request-editor'
@@ -11,6 +11,8 @@ import { PdfStampEditor } from './pdf-stamp-editor'
 import { DeerBulkPreview } from './deer-bulk-preview'
 import { BeneficiarySignatureCapture } from './beneficiary-signature-capture'
 import { DeerSigningManager } from './deer-signing-manager'
+import { ProjectDeerRegistryPanel } from './project-deer-registry-panel'
+import type { ProjectDeerRegistryEntry } from '@/lib/project-deer-registry'
 import { beneficiarySigned } from './form-stamps'
 import { IdentityCardScanner } from '@/components/identity-cards/identity-card-scanner'
 import type { IdentityCardRecord } from '@/lib/identity-card-storage'
@@ -18,15 +20,17 @@ import { DEER_DOCUMENT_KINDS, DEER_DOCUMENT_LABELS, deerDocumentKindForTemplate,
 
 type Category = 'FORMULAR' | 'CERERE' | 'DEER' | 'SEMNARE' | 'CI'
 
-export function FormsManager({ initialForms, initialSubmissions, connections, projects, identityCards, borderouri, canManage, canEdit }: {
+export function FormsManager({ initialForms, initialSubmissions, connections, projects, projectDeerRegistry, identityCards, borderouri, canManage, canEdit, canEditDeerRegistry }: {
   initialForms: FormTemplateDto[]
   initialSubmissions: FormSubmissionDto[]
   connections: ConnectionFormOption[]
   projects: ProjectFormOption[]
+  projectDeerRegistry: ProjectDeerRegistryEntry[]
   identityCards: IdentityCardRecord[]
   borderouri: DeerBorderouDto[]
   canManage: boolean
   canEdit: boolean
+  canEditDeerRegistry: boolean
 }) {
   const { tr } = useLanguage()
   const router = useRouter()
@@ -39,11 +43,16 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
     const caseId = params.get('case')
     if (caseId && connections.some((connection) => connection.id === caseId)) setDeerSource(`connection:${caseId}`)
     const projectId = params.get('project')
-    if (projectId && projects.some((project) => project.id === projectId)) setDeerSource(`project:${projectId}`)
+    if (projectId && projects.some((project) => project.id === projectId)) {
+      setDeerSource(`project:${projectId}`)
+      if (params.get('register') === '1') setProjectRegistryOpen(true)
+    }
   }, [connections, projects])
   const [deerBulkOpen, setDeerBulkOpen] = useState(false)
   const [signatureOpen, setSignatureOpen] = useState(false)
   const [signingLinkOpen, setSigningLinkOpen] = useState(false)
+  const [projectRegistryOpen, setProjectRegistryOpen] = useState(false)
+  const [projectRegistry, setProjectRegistry] = useState(projectDeerRegistry)
   const [signatureVersion, setSignatureVersion] = useState(0)
   const [previewId, setPreviewId] = useState<string | null>(null)
   const [modalOpen, setModalOpen] = useState(false)
@@ -61,6 +70,7 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
   const [sourceType, sourceId] = deerSource.split(':') as ['connection' | 'project', string]
   const selectedDeerConnection = sourceType === 'connection' ? connections.find((connection) => connection.id === sourceId) : undefined
   const selectedDeerProject = sourceType === 'project' ? projects.find((project) => project.id === sourceId) : undefined
+  const selectedProjectRegistry = selectedDeerProject ? projectRegistry.find((entry) => entry.projectId === selectedDeerProject.id) : undefined
   const selectedDeerName = selectedDeerConnection?.fields.Beneficiar || selectedDeerProject?.beneficiary || selectedDeerProject?.name || ''
   const selectedDeerLabel = selectedDeerConnection?.nib || selectedDeerProject?.name || ''
   const savedSubmissions = initialSubmissions.filter((saved) => initialForms.some((item) => item.id === saved.formTemplateId && item.category === category) && (category !== 'DEER' || (!!sourceId && saved.sourceType === sourceType.toUpperCase() && saved.sourceId === sourceId)))
@@ -234,6 +244,7 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
           </label>
           {canEdit && <button type="button" className="btn-secondary inline-flex w-full items-center justify-center gap-2 !py-2 text-sm sm:w-auto" disabled={!sourceId} onClick={() => setSignatureOpen(true)}><PenLine size={16}/> Semnătura beneficiarului</button>}
           {canManage && <button type="button" className="btn-secondary inline-flex w-full items-center justify-center gap-2 !py-2 text-sm sm:w-auto" disabled={!sourceId} onClick={() => setSigningLinkOpen(true)}><FileText size={16}/> Link de semnare</button>}
+          {selectedDeerProject && <button type="button" className="btn-secondary inline-flex w-full items-center justify-center gap-2 !py-2 text-sm sm:w-auto" onClick={() => setProjectRegistryOpen(true)}><ClipboardList size={16}/> Registru DEER{selectedProjectRegistry?.deerSubmittedAt ? ' · depus' : ''}</button>}
           <button type="button" className="btn-primary inline-flex w-full items-center justify-center gap-2 !py-2 text-sm sm:w-auto" disabled={!sourceId || !bulkTemplates.length} onClick={() => setDeerBulkOpen(true)}><FileText size={16}/> Previzualizează toate</button>
         </div>
       </div>}
@@ -259,6 +270,7 @@ export function FormsManager({ initialForms, initialSubmissions, connections, pr
     {deerBulkOpen && sourceId && <DeerBulkPreview key={`${deerSource}:${signatureVersion}`} templates={bulkTemplates} submissions={initialSubmissions} connection={selectedDeerConnection} project={selectedDeerProject} sourceType={sourceType} sourceId={sourceId} caseDocumentIds={Object.fromEntries(DEER_DOCUMENT_KINDS.map((kind) => [kind, caseDocument(kind)?.id]))} onClose={() => setDeerBulkOpen(false)}/>}
     {signatureOpen && sourceId && <BeneficiarySignatureCapture sourceType={sourceType} sourceId={sourceId} beneficiary={selectedDeerName || selectedDeerLabel} onClose={() => setSignatureOpen(false)} onSaved={() => setSignatureVersion((value) => value + 1)}/>}
     {signingLinkOpen && sourceId && <DeerSigningManager connection={selectedDeerConnection} project={selectedDeerProject} sourceType={sourceType} sourceId={sourceId} templates={bulkTemplates} submissions={initialSubmissions} caseDocumentIds={Object.fromEntries(DEER_DOCUMENT_KINDS.map((kind) => [kind, caseDocument(kind)?.id]))} onClose={() => setSigningLinkOpen(false)}/>}
-    {canEdit&&editor && <PdfRequestEditor template={editor.template} initialSubmission={editor.submission} defaultSource={editor.template.category === 'DEER' ? deerSource : undefined} connections={connections} projects={projects} identityCards={identityCards} borderouri={borderouri} canManage={canManage && !editor.template.deletedAt} onClose={() => { setEditor(null); router.refresh() }}/>}
+    {projectRegistryOpen && selectedDeerProject && <ProjectDeerRegistryPanel key={selectedDeerProject.id} project={selectedDeerProject} entry={selectedProjectRegistry} canEdit={canEditDeerRegistry} onClose={() => setProjectRegistryOpen(false)} onSaved={(entry) => setProjectRegistry((current) => [...current.filter((item) => item.projectId !== entry.projectId), entry])}/>}
+    {canEdit&&editor && <PdfRequestEditor template={editor.template} initialSubmission={editor.submission} defaultSource={editor.template.category === 'DEER' ? deerSource : undefined} connections={connections} projects={projects} identityCards={identityCards} borderouri={borderouri} canManage={canManage && !editor.template.deletedAt} onOpenProjectRegistry={() => setProjectRegistryOpen(true)} onClose={() => { setEditor(null); router.refresh() }}/>}
   </div>
 }

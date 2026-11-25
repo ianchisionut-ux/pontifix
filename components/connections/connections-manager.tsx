@@ -13,6 +13,7 @@ import { ConnectionDeerPanel } from '@/components/connections/connection-deer-pa
 import { ConnectionA3DownloadButtons, ConnectionDocumentButtons } from '@/components/connections/connection-document-buttons'
 import { DEER_ACTIONS, DEER_STATUS_META } from '@/lib/deer-submission'
 import { SecurePdfViewerButton } from '@/components/secure-pdf-viewer-button'
+import type { ProjectDeerRegisterRow } from '@/lib/project-deer-registry'
 
 type MunicipalityEmail = { id: string; label: string; email: string }
 type DtacDraft = { subject: string; to: string; body: string; html: string }
@@ -89,7 +90,7 @@ function IdentificationFields({
 }
 
 
-export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }: { initialCases: ConnectionCaseDto[]; canManage: boolean; canEditDeerDate: boolean }) {
+export function ConnectionsManager({ initialCases, projectRegisterRows, canManage, canEditDeerDate }: { initialCases: ConnectionCaseDto[]; projectRegisterRows: ProjectDeerRegisterRow[]; canManage: boolean; canEditDeerDate: boolean }) {
   const [items, setItems] = useState(initialCases)
   const [selectedId, setSelectedId] = useState(initialCases[0]?.id || '')
   const selected = items.find((item) => item.id === selectedId) || null
@@ -593,6 +594,8 @@ export function ConnectionsManager({ initialCases, canManage, canEditDeerDate }:
           })}</tbody>
         </table>
       </div>
+      <div className="border-t border-slate-200 px-5 py-4"><h3 className="font-bold text-[#082b4d]">Proiecte în registrul DEER</h3><p className="text-xs text-slate-500">Deschide proiectul pentru a înregistra acțiunile depuse și datele lor.</p></div>
+      <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Proiect</th><th className="px-4 py-3">Beneficiar</th><th className="px-4 py-3">Nr. dosar / ATR</th><th className="px-4 py-3">Ultima depunere</th><th className="px-4 py-3">Acțiuni DEER</th><th className="px-4 py-3">Deschide</th></tr></thead><tbody>{projectRegisterRows.map((project) => <tr key={project.id} className="border-t border-slate-100 align-top"><td className="px-4 py-3 font-bold text-[#082b4d]">{project.name}</td><td className="px-4 py-3">{project.beneficiary || '—'}</td><td className="px-4 py-3">{project.entry?.deerSubmission.dossierNumber || '—'}</td><td className="whitespace-nowrap px-4 py-3">{project.entry?.deerSubmittedAt ? new Date(`${project.entry.deerSubmittedAt}T00:00:00`).toLocaleDateString('ro-RO') : 'Nepredat'}</td><td className="px-4 py-3 text-xs">{project.entry?.deerSubmission.actionHistory.length ? project.entry.deerSubmission.actionHistory.map((action) => `${DEER_ACTIONS.find(([value]) => value === action.action)?.[1] || action.action} (${new Date(`${action.submittedAt}T00:00:00`).toLocaleDateString('ro-RO')})`).join(' · ') : 'Nicio acțiune depusă'}</td><td className="px-4 py-3"><a className="btn-secondary whitespace-nowrap !px-3 !py-1 text-xs" href={`/dashboard/formulare?tab=DEER&project=${encodeURIComponent(project.id)}&register=1`}>Registru DEER</a></td></tr>)}{!projectRegisterRows.length && <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-400">Nu există proiecte.</td></tr>}</tbody></table></div>
     </section>}
     {!canManage && viewMode === 'list' ? <AdminConnectionAccordion items={visible} query={query} onQueryChange={setQuery}/> : <div className={`grid min-h-[720px] overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-sm ${viewMode === 'list' ? 'xl:grid-cols-[300px_minmax(0,1fr)]' : 'grid-cols-1'}`}>
       <aside className={`border-b border-slate-200 bg-[#f5f9fc] p-4 ${viewMode === 'list' ? 'xl:border-b-0 xl:border-r' : ''}`}>

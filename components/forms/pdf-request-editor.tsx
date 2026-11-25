@@ -143,7 +143,7 @@ function PdfCanvas({ pdf, pageNumber }: { pdf: any; pageNumber: number }) {
   return <canvas ref={ref} className="block h-auto w-full bg-white" />
 }
 
-export function PdfRequestEditor({ template, initialSubmission, defaultSource, connections, projects, identityCards, borderouri, canManage, onClose }: {
+export function PdfRequestEditor({ template, initialSubmission, defaultSource, connections, projects, identityCards, borderouri, canManage, onOpenProjectRegistry, onClose }: {
   template: FormTemplateDto
   initialSubmission?: FormSubmissionDto
   defaultSource?: string
@@ -152,6 +152,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultSource, c
   identityCards: IdentityCardRecord[]
   borderouri: DeerBorderouDto[]
   canManage: boolean
+  onOpenProjectRegistry?: () => void
   onClose: () => void
 }) {
   const router = useRouter()
@@ -173,6 +174,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultSource, c
     return { ...saved, ...Object.fromEntries((initialSubmission?.fieldSchema?.length ? initialSubmission.fieldSchema : template.fieldSchema).map((field) => [field.id, saved[field.id] ?? (field.binding === 'system.today' ? todayInBucharest() : boundValue(field.binding, defaultConnection, defaultProject) || field.defaultValue || '')])) }
   })
   const [sourceId, setSourceId] = useState(initialSubmission?.sourceId ? `${initialSubmission.sourceType?.toLowerCase()}:${initialSubmission.sourceId}` : defaultSource || '')
+  const hasDeerSource = sourceId.startsWith('connection:') || sourceId.startsWith('project:')
   const [submissionId, setSubmissionId] = useState(initialSubmission?.id || '')
   const [title, setTitle] = useState(initialSubmission?.title || (defaultConnection ? `${template.title} - ${defaultConnection.fields.Beneficiar || defaultConnection.nib}` : defaultProject ? `${template.title} - ${defaultProject.beneficiary || defaultProject.name}` : template.title))
   const [layoutMode, setLayoutMode] = useState(false)
@@ -217,7 +219,7 @@ export function PdfRequestEditor({ template, initialSubmission, defaultSource, c
 
   useEffect(() => {
     setPdf(null); setPageCount(0); setError('')
-    if (!documentUrl) { setError('Nu există un borderou PDF pentru branșamentul ales.'); return }
+    if (!documentUrl) { setError('Nu există un PDF asociat dosarului ales.'); return }
     let cancelled = false
     ;(async () => {
       try {
@@ -520,16 +522,17 @@ export function PdfRequestEditor({ template, initialSubmission, defaultSource, c
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addField}><Plus size={16}/> {tr('Câmp')}</button>}
       {canManage && <button className="btn-secondary inline-flex items-center gap-2 !py-2" onClick={addTodayField}><Plus size={16}/> Data de azi</button>}
       {canManage && isDeer && <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy} onClick={saveModel} title="Păstrează câmpurile și ștampilele pentru toate completările viitoare">{busy === 'model' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează șablonul</button>}
+      {isDeer && sourceId.startsWith('project:') && onOpenProjectRegistry && <button type="button" className="btn-secondary !py-2" onClick={onOpenProjectRegistry}>Registru DEER</button>}
       {isDeer && <><select className="input-field !w-auto !py-2" aria-label="Alege semnătura sau ștampila" value={stampKey} onChange={(event) => setStampKey(event.target.value)}>{DEER_STAMPS.map((stamp) => <option key={stamp.key} value={stamp.key}>{stamp.label}</option>)}</select><select className="input-field !w-auto !py-2" aria-label="Pagina pe care adaugi semnătura" value={activePage} onChange={(event) => showPage(Number(event.target.value))}>{Array.from({ length: pageCount }, (_, index) => <option key={index + 1} value={index + 1}>Semnătură: pagina {index + 1}</option>)}</select><button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf} onClick={addStamp}><Stamp size={16}/> Adaugă semnătură / ștampilă</button></>}
-      <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || (isDeer && !sourceId.startsWith('connection:'))} onClick={() => saveSubmission()}>{busy === 'save' ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} {isDeer ? 'Salvează completarea' : tr('Salvează')}</button>
-      <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf || (isDeer && !sourceId.startsWith('connection:'))} onClick={() => downloadOrPrint(false)}><Download size={16}/> PDF</button>
+      <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || (isDeer && !hasDeerSource)} onClick={() => saveSubmission()}>{busy === 'save' ? <Loader2 className="animate-spin" size={16}/> : <Save size={16}/>} {isDeer ? 'Salvează completarea' : tr('Salvează')}</button>
+      <button className="btn-secondary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf || (isDeer && !hasDeerSource)} onClick={() => downloadOrPrint(false)}><Download size={16}/> PDF</button>
       <select className="input-field !w-auto !py-2" aria-label={tr('Pagina pentru print')} value={printPage} onChange={(event) => setPrintPage(Number(event.target.value))}>
         {Array.from({ length: pageCount }, (_, index) => <option key={index + 1} value={index + 1}>{tr('Pagina')} {index + 1}</option>)}
         {pageCount > 1 && <option value={0}>{tr('Toate paginile')}</option>}
       </select>
-      <button className="btn-primary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf || (isDeer && !sourceId.startsWith('connection:'))} onClick={() => downloadOrPrint(true)}>{busy === 'print' ? <Loader2 className="animate-spin" size={16}/> : <Printer size={16}/>} {tr('Printează')}</button>
+      <button className="btn-primary inline-flex items-center gap-2 !py-2" disabled={!!busy || !pdf || (isDeer && !hasDeerSource)} onClick={() => downloadOrPrint(true)}>{busy === 'print' ? <Loader2 className="animate-spin" size={16}/> : <Printer size={16}/>} {tr('Printează')}</button>
     </header>
-    {isDeer && <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 px-5 py-2 text-xs font-medium text-[#0d5d8b]"><span>Poziționează semnătura unde trebuie și salvează șablonul. Bifa de mai jos se salvează automat pentru acest document și branșament.</span><label className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold"><input type="checkbox" checked={beneficiarySigned(values)} disabled={!!busy} onChange={(event) => saveSubmission({ ...values, [BENEFICIARY_SIGNED_KEY]: event.target.checked ? 'yes' : 'no' }, true)}/> {busy === 'signature' ? 'Salvez alegerea…' : 'Beneficiarul a semnat acest document'}</label></div>}
+    {isDeer && <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-50 px-5 py-2 text-xs font-medium text-[#0d5d8b]"><span>Poziționează semnătura unde trebuie și salvează șablonul. Bifa de mai jos se salvează automat pentru acest document și dosar.</span><label className="flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-bold"><input type="checkbox" checked={beneficiarySigned(values)} disabled={!!busy} onChange={(event) => saveSubmission({ ...values, [BENEFICIARY_SIGNED_KEY]: event.target.checked ? 'yes' : 'no' }, true)}/> {busy === 'signature' ? 'Salvez alegerea…' : 'Beneficiarul a semnat acest document'}</label></div>}
     {saveNotice && <div role="status" className="bg-emerald-50 px-5 py-2 text-sm font-semibold text-emerald-800">{saveNotice}</div>}
     {error && <div className="bg-red-50 px-5 py-2 text-sm font-semibold text-red-700">{error}</div>}
     <div className="flex min-h-0 flex-1">
