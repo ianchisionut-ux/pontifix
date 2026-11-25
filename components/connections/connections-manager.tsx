@@ -19,21 +19,10 @@ type MunicipalityEmail = { id: string; label: string; email: string }
 type DtacDraft = { subject: string; to: string; body: string; html: string }
 type SaveProgress = { id: string; status: 'idle' | 'saving' | 'saved' | 'error'; error?: string }
 
-const draftStorageKey = (id: string) => `elmont:bransament-draft:${id}`
-const fieldsEqual = (a: ConnectionFields, b: ConnectionFields) => JSON.stringify(a) === JSON.stringify(b)
-
-function readSessionDraft(id: string): ConnectionFields | null {
-  try {
-    const raw = sessionStorage.getItem(draftStorageKey(id))
-    if (!raw) return null
-    const parsed = connectionFieldsSchema.safeParse(JSON.parse(raw))
-    return parsed.success ? parsed.data : null
-  } catch { return null }
-}
-
-function writeSessionDraft(id: string, fields: ConnectionFields) {
-  try { sessionStorage.setItem(draftStorageKey(id), JSON.stringify(fields)) } catch { /* Private browsing may disable storage. */ }
-}
+// Legacy dossiers may omit newer CI fields. Compare their effective values so
+// opening an old dossier does not trigger an unnecessary write to the server.
+const fieldsEqual = (a: ConnectionFields, b: ConnectionFields) =>
+  JSON.stringify(normalizeConnectionBeneficiaryFields(a)) === JSON.stringify(normalizeConnectionBeneficiaryFields(b))
 
 type DeerActionHistoryEntry = ConnectionCaseDto['deerSubmission']['actionHistory'][number]
 
@@ -96,7 +85,10 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
   const selected = items.find((item) => item.id === selectedId) || null
   const [draft, setDraft] = useState<ConnectionFields>(normalizeConnectionBeneficiaryFields(selected?.fields || defaultConnectionFields()))
   const [saveProgress, setSaveProgress] = useState<SaveProgress | null>(null)
+  const localDraftsRef = useRef(new Map<string, ConnectionFields>())
   const pendingSaveRef = useRef(new Map<string, { id: string; fields: ConnectionFields; manual: boolean }>())
+  const activeSaveRef = useRef<{ id: string; fields: ConnectionFields; manual: boolean } | null>(null)
+  const saveWaitersRef = useRef(new Map<string, Array<{ fields: ConnectionFields; resolve: () => void; reject: (error: Error) => void }>>())
   const saveRunningRef = useRef(false)
   const draftRef = useRef(draft)
   const selectedIdRef = useRef(selectedId)
@@ -128,13 +120,30 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
   useEffect(() => { setDtacDraft(null); setDtacCopied(false); setDtacSaved(false) }, [messageConnectionId, municipalityEmail])
 
   useEffect(() => {
+    // Move drafts written by older releases into memory and remove identity data
+    // from browser storage. New edits remain in memory until saved to the server.
+    for (const item of initialCases) {
+      try {
+        const key = `elmont:bransament-draft:${item.id}`
+        const raw = sessionStorage.getItem(key)
+        if (!raw) continue
+        const parsed = connectionFieldsSchema.safeParse(JSON.parse(raw))
+        if (parsed.success && !fieldsEqual(parsed.data, item.fields)) localDraftsRef.current.set(item.id, parsed.data)
+        sessionStorage.removeItem(key)
+      } catch { /* Ignore unavailable or invalid legacy browser storage. */ }
+    }
+  // Only migrate data present when this editor opens.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     const previous = itemsRef.current.find((item) => item.id === selectedId)
     setItems(initialCases)
     const next = initialCases.find((item) => item.id === selectedId) || initialCases[0]
     setSelectedId(next?.id || '')
     setDraft((current) => {
       if (!next) return defaultConnectionFields()
-      const local = readSessionDraft(next.id)
+      const local = localDraftsRef.current.get(next.id)
       if (local) return local
       if (previous?.id === next.id && !fieldsEqual(current, previous.fields)) return current
       return normalizeConnectionBeneficiaryFields(next.fields)
@@ -144,12 +153,36 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
   useEffect(() => {
     if (!canManage || !selectedId) return
     const currentCase = items.find((item) => item.id === selectedId)
-    if (!currentCase || fieldsEqual(draft, currentCase.fields)) return
-    writeSessionDraft(selectedId, draft)
-    setSaveProgress((current) => current?.id === selectedId && current.status === 'error' ? current : { id: selectedId, status: 'idle' })
-    const timer = window.setTimeout(() => queueSave(selectedId, draft, false), 1200)
+    if (!currentCase) return
+    if (fieldsEqual(draft, currentCase.fields)) {
+      const active = activeSaveRef.current
+      if (active?.id === selectedId && !fieldsEqual(active.fields, draft)) {
+        localDraftsRef.current.set(selectedId, { ...draft })
+        pendingSaveRef.current.set(selectedId, { id: selectedId, fields: { ...draft }, manual: false })
+        return
+      }
+      localDraftsRef.current.delete(selectedId)
+      pendingSaveRef.current.delete(selectedId)
+      return
+    }
+    localDraftsRef.current.set(selectedId, { ...draft })
+    setSaveProgress((current) => current?.id === selectedId && (current.status === 'error' || current.status === 'saving') ? current : { id: selectedId, status: 'idle' })
+    const timer = window.setTimeout(() => queueSave(selectedId, draft, false), 25_000)
     return () => window.clearTimeout(timer)
   }, [draft, selectedId, items, canManage])
+
+  useEffect(() => {
+    if (!canManage) return
+    const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
+      const currentCase = itemsRef.current.find((item) => item.id === selectedIdRef.current)
+      const currentIsDirty = currentCase && !fieldsEqual(draftRef.current, currentCase.fields)
+      if (!currentIsDirty && !localDraftsRef.current.size && !pendingSaveRef.current.size && !activeSaveRef.current) return
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', warnAboutUnsavedChanges)
+    return () => window.removeEventListener('beforeunload', warnAboutUnsavedChanges)
+  }, [canManage])
 
   useEffect(() => {
     fetch('/api/bransamente/municipality-emails')
@@ -165,9 +198,12 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
 
   function select(item: ConnectionCaseDto) {
     if (item.id === selectedId) return
-    if (selected && !fieldsEqual(draft, selected.fields)) queueSave(selected.id, draft, false)
+    if (selected && !fieldsEqual(draft, selected.fields)) {
+      localDraftsRef.current.set(selected.id, { ...draft })
+      queueSave(selected.id, draft, false)
+    }
     setSelectedId(item.id)
-    setDraft(readSessionDraft(item.id) || normalizeConnectionBeneficiaryFields(item.fields))
+    setDraft(localDraftsRef.current.get(item.id) || normalizeConnectionBeneficiaryFields(item.fields))
     setSaveProgress(null)
     setNotice('')
     setCiOpen(false)
@@ -244,9 +280,39 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
       setNotice('')
     }
   }
+  function settleSaveWaiters(id: string, fields: ConnectionFields, error?: Error) {
+    const waiters = saveWaitersRef.current.get(id) || []
+    const remaining = waiters.filter((waiter) => {
+      if (!fieldsEqual(waiter.fields, fields)) return true
+      if (error) waiter.reject(error)
+      else waiter.resolve()
+      return false
+    })
+    if (remaining.length) saveWaitersRef.current.set(id, remaining)
+    else saveWaitersRef.current.delete(id)
+  }
+
   function queueSave(id: string, fields: ConnectionFields, manual: boolean) {
     if (!canManage) return
-    writeSessionDraft(id, fields)
+    const active = activeSaveRef.current
+    if (active?.id === id && fieldsEqual(active.fields, fields)) {
+      active.manual ||= manual
+      return
+    }
+    const currentCase = itemsRef.current.find((item) => item.id === id)
+    if (active?.id !== id && currentCase && fieldsEqual(currentCase.fields, fields)) {
+      pendingSaveRef.current.delete(id)
+      localDraftsRef.current.delete(id)
+      if (manual) setSaveProgress({ id, status: 'saved' })
+      settleSaveWaiters(id, fields)
+      return
+    }
+    const pending = pendingSaveRef.current.get(id)
+    if (pending && fieldsEqual(pending.fields, fields)) {
+      pending.manual ||= manual
+      return
+    }
+    localDraftsRef.current.set(id, { ...fields })
     pendingSaveRef.current.set(id, { id, fields: { ...fields }, manual })
     void flushQueuedSaves()
   }
@@ -258,6 +324,7 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
       while (pendingSaveRef.current.size) {
         const job = pendingSaveRef.current.values().next().value!
         pendingSaveRef.current.delete(job.id)
+        activeSaveRef.current = job
         setSaveProgress({ id: job.id, status: 'saving' })
         try {
           const response = await fetch(`/api/bransamente/${job.id}`, {
@@ -269,21 +336,21 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
             ...item, fields: job.fields, nib: body.nib || item.nib,
             sequenceNumber: body.sequenceNumber || item.sequenceNumber, updatedAt: new Date().toISOString(),
           } : item).sort((a, b) => b.sequenceNumber - a.sequenceNumber))
-          const local = readSessionDraft(job.id)
-          if (local && fieldsEqual(local, job.fields)) {
-            try { sessionStorage.removeItem(draftStorageKey(job.id)) } catch { /* Ignore disabled storage. */ }
-          }
+          const local = localDraftsRef.current.get(job.id)
+          if (local && fieldsEqual(local, job.fields)) localDraftsRef.current.delete(job.id)
+          settleSaveWaiters(job.id, job.fields)
           if (selectedIdRef.current === job.id) {
             setSaveProgress({ id: job.id, status: fieldsEqual(draftRef.current, job.fields) ? 'saved' : 'idle' })
             if (job.manual) setNotice(`Date salvate. Identificare actuală: ${body.nib || ''}.`)
           }
         } catch (error) {
+          settleSaveWaiters(job.id, job.fields, error instanceof Error ? error : new Error('Datele nu au putut fi salvate.'))
           if (selectedIdRef.current === job.id) {
             const message = error instanceof Error ? error.message : 'Datele nu au putut fi salvate.'
             setSaveProgress({ id: job.id, status: 'error', error: message })
             if (job.manual) setNotice(message)
           }
-        }
+        } finally { activeSaveRef.current = null }
       }
     } finally { saveRunningRef.current = false }
   }
@@ -291,6 +358,15 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
   function save() {
     if (!selected || !canManage) return
     queueSave(selected.id, draft, true)
+  }
+
+  function saveBeforeMessage(id: string, fields: ConnectionFields) {
+    return new Promise<void>((resolve, reject) => {
+      const waiters = saveWaitersRef.current.get(id) || []
+      waiters.push({ fields: { ...fields }, resolve, reject })
+      saveWaitersRef.current.set(id, waiters)
+      queueSave(id, fields, false)
+    })
   }
 
   async function changeStatus(status: ConnectionStatus) {
@@ -348,11 +424,8 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
     setBusy('whatsapp')
     setNotice('Trimit mesajul WhatsApp…')
     try {
-      if (selected?.id === item.id) {
-        const saveResponse = await fetch(`/api/bransamente/${item.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: draft }) })
-        const saveBody = await saveResponse.json().catch(() => ({}))
-        if (!saveResponse.ok) throw new Error(saveBody.error || 'Datele branșamentului nu au putut fi salvate înainte de trimitere.')
-        setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, fields: { ...draft }, updatedAt: new Date().toISOString() } : entry))
+      if (selected?.id === item.id && !fieldsEqual(draft, item.fields)) {
+        await saveBeforeMessage(item.id, draft)
       }
       const response = await fetch(`/api/bransamente/${item.id}/send-whatsapp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: messageText }) })
       const body = await response.json().catch(() => ({}))
@@ -377,11 +450,8 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
     setBusy('sms')
     setNotice('Trimit SMS-ul către telefonul gateway…')
     try {
-      if (selected?.id === item.id) {
-        const saveResponse = await fetch(`/api/bransamente/${item.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fields: draft }) })
-        const saveBody = await saveResponse.json().catch(() => ({}))
-        if (!saveResponse.ok) throw new Error(saveBody.error || 'Datele branșamentului nu au putut fi salvate înainte de trimitere.')
-        setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, fields: { ...draft }, updatedAt: new Date().toISOString() } : entry))
+      if (selected?.id === item.id && !fieldsEqual(draft, item.fields)) {
+        await saveBeforeMessage(item.id, draft)
       }
       const response = await fetch(`/api/bransamente/${item.id}/send-sms`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: messageText }) })
       const body = await response.json().catch(() => ({}))
@@ -518,6 +588,8 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
     const response = await fetch(`/api/bransamente/${selected.id}`, { method: 'DELETE' })
     setBusy('')
     if (!response.ok) return alert('Dosarul nu a putut fi șters.')
+    pendingSaveRef.current.delete(selected.id)
+    localDraftsRef.current.delete(selected.id)
     const remaining = items.filter((item) => item.id !== selected.id)
     setItems(remaining)
     setSelectedId(remaining[0]?.id || '')
@@ -543,6 +615,17 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
     }))
   }
 
+  function changeConnectionField(field: keyof ConnectionFields, value: string) {
+    if (!canManage) return
+    setDraft((current) => ({
+      ...current,
+      [field]: value,
+      ...(field === 'NrSX' ? { CiNumar: value } : {}),
+      ...(field === 'DataSX' ? { CiValabilaDeLa: value } : {}),
+      ...(field === 'DataExpirareSX' ? { CiValabilaPanaLa: value } : {}),
+    }))
+  }
+
   function clearIdentification() {
     if (!canManage) return
     setDraft((current) => ({
@@ -555,8 +638,14 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
 
   function clearGroup(fields: readonly string[]) {
     if (!canManage) return
-    setDraft((current) => ({ ...current, ...Object.fromEntries(fields.map((field) => [field, ''])) } as ConnectionFields))
+    const allFields = fields.includes('NrSX') ? [...fields, 'CiSerie', 'CiNumar', 'CiEmisaDe', 'CiValabilaDeLa', 'CiValabilaPanaLa'] : fields
+    setDraft((current) => ({ ...current, ...Object.fromEntries(allFields.map((field) => [field, ''])) } as ConnectionFields))
   }
+
+  const documentDirty = Boolean(canManage && selected && (
+    !fieldsEqual(draft, selected.fields)
+    || (saveProgress?.id === selected.id && saveProgress.status === 'saving')
+  ))
 
   return <div>
     <header className="mb-5 flex flex-wrap items-end justify-between gap-4">
@@ -604,11 +693,41 @@ export function ConnectionsManager({ initialCases, projectRegisterRows, canManag
         <div className={viewMode === 'grid' ? 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4' : 'space-y-2 xl:max-h-[620px] xl:overflow-y-auto xl:pr-1'}>{visible.map((item) => <button key={item.id} onClick={() => select(item)} className={`w-full rounded-2xl border p-3 text-left transition ${item.id === selectedId ? 'border-[#78bfe1] bg-white shadow-sm' : 'border-transparent bg-[#e9f1f8] hover:border-slate-200 hover:bg-white'}`}><div className="mb-1 flex items-center justify-between gap-2"><span className="text-[10px] font-black text-[#197fb5]">#{item.sequenceNumber} / {item.nib}</span><span className="h-2 w-2 rounded-full" style={{ backgroundColor: CONNECTION_STATUS_META[item.status].color }}/></div><p className="truncate text-sm font-black text-[#082b4d]">{item.fields.Beneficiar || 'Beneficiar necompletat'}</p><p className="mt-1 truncate text-xs text-slate-500">{item.fields.ATR || item.atrName || 'Fișă fără ATR'}</p>{viewMode === 'grid' && <div className="mt-3 flex items-center justify-between gap-2 border-t border-slate-200/70 pt-3"><span className="truncate text-xs font-semibold text-slate-500">{item.fields.Telefon || 'Telefon necompletat'}</span><span className="shrink-0 rounded-full px-2 py-1 text-[10px] font-black text-white" style={{ backgroundColor: CONNECTION_STATUS_META[item.status].color }}>{CONNECTION_STATUS_META[item.status].label}</span></div>}<p className="mt-1 text-[11px] text-slate-400">{new Date(item.updatedAt).toLocaleString('ro-RO', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Bucharest' })}</p></button>)}{!visible.length && <p className="rounded-2xl border border-dashed border-slate-300 p-5 text-center text-sm text-slate-500">Niciun dosar găsit.</p>}</div>
       </aside>
       <section className="min-w-0 p-5 lg:p-7">{selected ? <>
-        <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5"><div><div className="flex items-center gap-2"><WandSparkles size={20} className="text-[#197fb5]"/><h2 className="text-xl font-bold text-[#082b4d]">{draft.Beneficiar || 'Fișă branșament'}</h2></div><div className="mt-2 flex flex-wrap items-center gap-2"><strong className="rounded-lg bg-[#edf7fc] px-2.5 py-1 text-xs text-[#0d5d8b]">{selected.nib}</strong><span className="rounded-lg px-2.5 py-1 text-xs font-bold text-white" style={{ backgroundColor: CONNECTION_STATUS_META[selected.status].color }}>{CONNECTION_STATUS_META[selected.status].label} · {CONNECTION_STATUS_META[selected.status].progress}%</span></div><p className="mt-1 text-xs text-slate-500">Creat de {selected.createdByEmail || 'administrator'} · actualizat {new Date(selected.updatedAt).toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' })}</p>{notice && <p className="mt-2 text-sm font-semibold text-emerald-600">{notice}</p>}</div><div className="flex flex-wrap gap-2">{canManage && <select value={selected.status} disabled={busy === 'status'} onChange={(event) => changeStatus(event.target.value as ConnectionStatus)} className="input-field min-w-[210px] bg-white text-sm font-bold">{CONNECTION_STATUSES.map((status) => <option key={status} value={status}>{CONNECTION_STATUS_META[status].label}</option>)}</select>}{getConnectionBeneficiaryType(draft) === 'PF' && <button type="button" onClick={()=>setCiOpen((value)=>!value)} className={`btn-secondary inline-flex items-center gap-2 ${ciOpen ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`}><CreditCard size={16}/> CI{(draft.CNP || draft.CiSerie || draft.CiNumar) && <span className="h-2 w-2 rounded-full bg-emerald-500"/>}</button>}<button type="button" onClick={()=>setDeerOpen(true)} className="btn-secondary inline-flex items-center gap-2"><ShieldCheck size={16}/> Depunere DEER<span className="h-2 w-2 rounded-full" style={{backgroundColor:DEER_STATUS_META[selected.deerSubmission.status].color}}/></button>{selected.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${selected.id}/atr`} title={`ATR · ${draft.Beneficiar || selected.nib}`}>ATR</SecurePdfViewerButton>}<ConnectionDocumentButtons id={selected.id}/><ConnectionA3DownloadButtons id={selected.id}/>{canManage && <><button onClick={()=>openWhatsAppCenter('PROGRAMMED')} disabled={!!busy || !draft.Telefon.trim()} className="btn-secondary inline-flex items-center gap-2" title="Mesaje predefinite pentru beneficiar">{busy === 'whatsapp' ? <Loader2 size={16} className="animate-spin"/> : <MessageCircle size={16}/>} Mesaje WhatsApp / SMS</button><button onClick={save} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează</button><button onClick={remove} disabled={!!busy} className="round-action text-rose-500" title="Șterge dosarul"><Trash2 size={17}/></button></>}</div></div>
-        {canManage && saveProgress?.id === selected.id && <p role={saveProgress.status === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-xl px-3 py-2 text-sm font-semibold ${saveProgress.status === 'error' ? 'bg-rose-50 text-rose-700' : saveProgress.status === 'saved' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{saveProgress.status === 'error' ? `Salvarea a eșuat: ${saveProgress.error} Modificările sunt păstrate în această sesiune. Apasă Salvează pentru a reîncerca.` : saveProgress.status === 'saving' ? 'Se salvează modificările…' : saveProgress.status === 'saved' ? 'Toate modificările sunt salvate.' : 'Modificări în așteptare; salvare automată în câteva secunde.'}</p>}
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 pb-5"><div><div className="flex items-center gap-2"><WandSparkles size={20} className="text-[#197fb5]"/><h2 className="text-xl font-bold text-[#082b4d]">{draft.Beneficiar || 'Fișă branșament'}</h2></div><div className="mt-2 flex flex-wrap items-center gap-2"><strong className="rounded-lg bg-[#edf7fc] px-2.5 py-1 text-xs text-[#0d5d8b]">{selected.nib}</strong><span className="rounded-lg px-2.5 py-1 text-xs font-bold text-white" style={{ backgroundColor: CONNECTION_STATUS_META[selected.status].color }}>{CONNECTION_STATUS_META[selected.status].label} · {CONNECTION_STATUS_META[selected.status].progress}%</span></div><p className="mt-1 text-xs text-slate-500">Creat de {selected.createdByEmail || 'administrator'} · actualizat {new Date(selected.updatedAt).toLocaleString('ro-RO', { timeZone: 'Europe/Bucharest' })}</p>{notice && <p className="mt-2 text-sm font-semibold text-emerald-600">{notice}</p>}</div><div className="flex flex-wrap gap-2">{canManage && <select value={selected.status} disabled={busy === 'status'} onChange={(event) => changeStatus(event.target.value as ConnectionStatus)} className="input-field min-w-[210px] bg-white text-sm font-bold">{CONNECTION_STATUSES.map((status) => <option key={status} value={status}>{CONNECTION_STATUS_META[status].label}</option>)}</select>}{getConnectionBeneficiaryType(draft) === 'PF' && <button type="button" onClick={()=>setCiOpen((value)=>!value)} className={`btn-secondary inline-flex items-center gap-2 ${ciOpen ? '!border-[#197fb5] !bg-[#edf7fc]' : ''}`}><CreditCard size={16}/> CI{(draft.CNP || draft.CiSerie || draft.CiNumar) && <span className="h-2 w-2 rounded-full bg-emerald-500"/>}</button>}<button type="button" onClick={()=>setDeerOpen(true)} className="btn-secondary inline-flex items-center gap-2"><ShieldCheck size={16}/> Depunere DEER<span className="h-2 w-2 rounded-full" style={{backgroundColor:DEER_STATUS_META[selected.deerSubmission.status].color}}/></button>{selected.atrPathname && <SecurePdfViewerButton url={`/api/bransamente/${selected.id}/atr`} title={`ATR · ${draft.Beneficiar || selected.nib}`}>ATR</SecurePdfViewerButton>}<ConnectionDocumentButtons id={selected.id} disabled={documentDirty}/><ConnectionA3DownloadButtons id={selected.id} disabled={documentDirty}/>{canManage && <><button onClick={()=>openWhatsAppCenter('PROGRAMMED')} disabled={!!busy || !draft.Telefon.trim()} className="btn-secondary inline-flex items-center gap-2" title="Mesaje predefinite pentru beneficiar">{busy === 'whatsapp' ? <Loader2 size={16} className="animate-spin"/> : <MessageCircle size={16}/>} Mesaje WhatsApp / SMS</button><button onClick={save} disabled={!!busy} className="btn-primary inline-flex items-center gap-2">{busy === 'save' ? <Loader2 size={16} className="animate-spin"/> : <Save size={16}/>} Salvează</button><button onClick={remove} disabled={!!busy} className="round-action text-rose-500" title="Șterge dosarul"><Trash2 size={17}/></button></>}</div></div>
+        {canManage && saveProgress?.id === selected.id && <p role={saveProgress.status === 'error' ? 'alert' : 'status'} className={`mb-4 rounded-xl px-3 py-2 text-sm font-semibold ${saveProgress.status === 'error' ? 'bg-rose-50 text-rose-700' : saveProgress.status === 'saved' ? 'bg-emerald-50 text-emerald-700' : 'bg-blue-50 text-blue-700'}`}>{saveProgress.status === 'error' ? `Salvarea a eșuat: ${saveProgress.error} Modificările sunt păstrate în această pagină. Apasă Salvează pentru a reîncerca.` : saveProgress.status === 'saving' ? 'Se salvează modificările…' : saveProgress.status === 'saved' ? 'Toate modificările sunt salvate.' : 'Modificări nesalvate. Apasă Salvează sau așteaptă 25 de secunde fără editări.'}</p>}
         {ciOpen && getConnectionBeneficiaryType(draft) === 'PF' && <div className="mb-6"><IdentityCardScanner key={selected.id} records={[]} connections={[]} canEdit={canManage} hideSavedRecords onEmbeddedSave={save} embeddedSaving={saveProgress?.id === selected.id && saveProgress.status === 'saving'} embeddedValue={{ fullName: draft.Beneficiar, cnp: draft.CNP, series: draft.CiSerie, number: draft.CiNumar, domicile: draft.CiDomiciliu, issuedBy: draft.CiEmisaDe, validFrom: draft.CiValabilaDeLa, validUntil: draft.CiValabilaPanaLa }} onEmbeddedChange={(data)=>setDraft((current)=>({ ...current, Beneficiar:data.fullName, TipBeneficiar:'PF', CNP:data.cnp, CnpCif:data.cnp, CiSerie:data.series, CiNumar:data.number, CiDomiciliu:data.domicile, CiEmisaDe:data.issuedBy, CiValabilaDeLa:data.validFrom, CiValabilaPanaLa:data.validUntil, NrSX:[data.series, data.number].filter(Boolean).join(' '), DataSX:data.validFrom, DataExpirareSX:data.validUntil }))}/></div>}
         {!canManage && <div className="mb-5 flex items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800"><ShieldCheck size={18}/> Date protejate. Poți consulta și descărca documentele dosarului; modificările rămân rezervate Super Adminului.</div>}
-        <div className="space-y-7"><IdentificationFields fields={draft} canEdit={canManage} onTypeChange={changeBeneficiaryType} onFieldChange={changeIdentificationField} onClear={clearIdentification}/>{CONNECTION_FIELD_GROUPS.filter((group) => group.title !== 'Identificare').map((group) => <fieldset key={group.title}><div className="mb-3 flex items-center justify-between"><legend className="text-sm font-black uppercase tracking-[.08em] text-[#0d5d8b]">{group.title}</legend>{canManage && <button onClick={() => clearGroup(group.fields)} className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-500"><X size={13}/> Golește secțiunea</button>}</div><div className={`grid gap-3 ${group.title === 'Adresă' || group.title === 'Puteri' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>{group.fields.filter((field) => isConnectionFieldVisibleForBeneficiary(field, getConnectionBeneficiaryType(draft))).map((field) => { const large = field === 'Solutia' || field === 'Amplasament' || field === 'AmplasamentA3'; return <label key={field} className={`text-xs font-bold text-slate-500 ${large ? 'md:col-span-full' : ''}`}>{CONNECTION_FIELD_LABELS[field] || field}{large ? <textarea disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 min-h-20 w-full resize-y bg-white disabled:bg-slate-50 disabled:text-slate-700"/> : <input disabled={!canManage} value={draft[field]} onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/>}</label>})}</div></fieldset>)}</div>
+        <div className="space-y-7">
+          <IdentificationFields fields={draft} canEdit={canManage} onTypeChange={changeBeneficiaryType} onFieldChange={changeIdentificationField} onClear={clearIdentification}/>
+          {CONNECTION_FIELD_GROUPS.filter((group) => group.title !== 'Identificare').map((group) => <fieldset key={group.title}>
+            <div className="mb-3 flex items-center justify-between">
+              <legend className="text-sm font-black uppercase tracking-[.08em] text-[#0d5d8b]">{group.title}</legend>
+              {canManage && <button onClick={() => clearGroup(group.fields)} className="inline-flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-rose-500"><X size={13}/> Golește secțiunea</button>}
+            </div>
+            <div className={`grid gap-3 ${group.title === 'Adresă' || group.title === 'Puteri' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+              {group.title === 'Contract / Altele' && getConnectionBeneficiaryType(draft) === 'PF' && <>
+                <label className="text-xs font-bold text-slate-500">
+                  Serie CI
+                  <input disabled={!canManage} value={draft.CiSerie} onChange={(event) => changeConnectionField('CiSerie', event.target.value)} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/>
+                </label>
+                <label className="text-xs font-bold text-slate-500">
+                  Eliberată de (SPCLEP)
+                  <input disabled={!canManage} value={draft.CiEmisaDe} onChange={(event) => changeConnectionField('CiEmisaDe', event.target.value)} placeholder="SPCLEP Zalău" className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/>
+                </label>
+              </>}
+              {group.fields.filter((field) => isConnectionFieldVisibleForBeneficiary(field, getConnectionBeneficiaryType(draft))).map((field) => {
+                const large = field === 'Solutia' || field === 'Amplasament' || field === 'AmplasamentA3'
+                const value = field === 'NrSX' ? draft.CiNumar || draft.NrSX : field === 'DataSX' ? draft.CiValabilaDeLa || draft.DataSX : field === 'DataExpirareSX' ? draft.CiValabilaPanaLa || draft.DataExpirareSX : draft[field]
+                return <label key={field} className={`text-xs font-bold text-slate-500 ${large ? 'md:col-span-full' : ''}`}>
+                  {CONNECTION_FIELD_LABELS[field] || field}
+                  {large
+                    ? <textarea disabled={!canManage} value={value} onChange={(event) => changeConnectionField(field, event.target.value)} className="input-field mt-1.5 min-h-20 w-full resize-y bg-white disabled:bg-slate-50 disabled:text-slate-700"/>
+                    : <input disabled={!canManage} value={value} onChange={(event) => changeConnectionField(field, event.target.value)} className="input-field mt-1.5 w-full bg-white disabled:bg-slate-50 disabled:text-slate-700"/>}
+                </label>
+              })}
+            </div>
+          </fieldset>)}
+        </div>
       </> : <div className="flex min-h-[600px] flex-col items-center justify-center text-center"><div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#edf7fc] text-[#197fb5]"><FileText size={30}/></div><h2 className="text-xl font-bold text-[#082b4d]">Niciun dosar selectat</h2><p className="mt-2 max-w-md text-sm text-slate-500">{canManage ? 'Încarcă un ATR sau creează o fișă goală. Datele rămân în istoric și documentele Word se generează oricând.' : 'Nu există încă dosare de branșament disponibile pentru consultare.'}</p></div>}</section>
     </div>}
     {deerOpen && selected && <ConnectionDeerPanel item={selected} fields={draft} canEdit={canEditDeerDate} onClose={()=>setDeerOpen(false)} onSaved={(deerSubmission, deerSubmittedAt)=>setItems((current)=>current.map((entry)=>entry.id===selected.id?{...entry,deerSubmission,deerSubmittedAt,updatedAt:new Date().toISOString()}:entry))}/>}

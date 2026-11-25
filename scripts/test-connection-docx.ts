@@ -56,6 +56,10 @@ function firstTextRunStyle(paragraph: string) {
   return /<w:rPr\b[\s\S]*?<\/w:rPr>/.exec(run)?.[0] || ''
 }
 
+function withoutA3BaselineShift(style: string) {
+  return style.replace(/<w:position w:val="-\d+"\/>/g, '')
+}
+
 function textRunStyles(paragraph: string) {
   return [...paragraph.matchAll(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g)]
     .map((match) => match[0]).filter((run) => /<w:t\b/.test(run))
@@ -155,6 +159,20 @@ async function main() {
   assertSingleBreakBeforeNotification(xml)
   assertNotificationHasNoTimes(xml)
   assert.equal(connectionDocumentName(fields, 'contract'), 'Contract-Notificare-Memoriu-Cerere-PETKES-JULIA-CSILLA.docx')
+
+  // A dossier edited before the CI scanner existed only has the old SX fields.
+  // The notification must still use its saved number and issue date.
+  const legacyIdentity = {
+    ...fields, CiSerie: '', CiNumar: '', CiValabilaDeLa: '', CiValabilaPanaLa: '',
+    NrSX: '062978', DataSX: '18,10,18', DataExpirareSX: '20,10,2028',
+    CiEmisaDe: 'SPCLEP Tg. Mureș',
+  }
+  const legacyXml = new PizZip(await generateConnectionDocx(legacyIdentity, 'contract', 'notification-only'))
+    .file('word/document.xml')!.asText()
+  const legacyParagraph = paragraphWithVisibleText(legacyXml, 'având C.I. seria')
+  for (const value of ['062978', '18.10.2018', 'SPCLEP Tg. Mureș']) {
+    assertBoldItalicValue(legacyParagraph, value)
+  }
 
   const signing = new PizZip(await generateConnectionDocx(fields, 'contract', 'contract-notification'))
   const signingXml = signing.file('word/document.xml')!.asText()
@@ -345,8 +363,14 @@ async function main() {
     assert.equal(visibleText(paragraphs[atrIndex]).trim(), '123456789')
     assert.equal(visibleText(paragraphs[atrIndex + 1]).trim(), '05.06.2026')
     assert.match(paragraphs[atrIndex + 1], /<w:bookmarkEnd\b(?=[^>]*w:id="3")/)
-    assert.equal(firstTextRunStyle(paragraphs[atrIndex]), firstTextRunStyle(paragraphWith(a3TemplateXml, 'w:name="ATR"')))
-    assert.equal(firstTextRunStyle(paragraphs[atrIndex + 1]), firstTextRunStyle(paragraphs[atrIndex]))
+    assert.equal(withoutA3BaselineShift(firstTextRunStyle(paragraphs[atrIndex])), firstTextRunStyle(paragraphWith(a3TemplateXml, 'w:name="ATR"')))
+    assert.equal(withoutA3BaselineShift(firstTextRunStyle(paragraphs[atrIndex + 1])), withoutA3BaselineShift(firstTextRunStyle(paragraphs[atrIndex])))
+    assert.match(firstTextRunStyle(paragraphs[atrIndex]), /<w:position w:val="-22"\/>/, 'Numărul ATR este coborât sub eticheta sa')
+    assert.match(firstTextRunStyle(paragraphs[atrIndex + 1]), /<w:position w:val="-20"\/>/, 'Data ATR este coborâtă sub eticheta sa')
+    const powerParagraph = paragraphWith(a3Xml, 'w:name="KW2"')
+    assert.match(powerParagraph, /<w:position w:val="-18"\/>/, 'Pmax este coborât pe linia sa')
+    const rightPower = paragraphs.find((paragraph) => /<w:instrText\b[^>]*>\s*REF\s+KW2\b/.test(paragraph)) || ''
+    assert.match(rightPower, /<w:position w:val="-20"\/>/, 'Puterea din coloana dreaptă este coborâtă pe linia sa')
     const addressIndex = paragraphs.findIndex((paragraph) => paragraph.includes('w:name="AmplasamentA3"'))
     assert.ok(addressIndex >= 0)
     assert.match(visibleText(paragraphs[addressIndex]), /județul TEST, - ORAȘ TEST,/)
@@ -355,8 +379,10 @@ async function main() {
     assert.match(paragraphs[addressIndex + 1], /<w:bookmarkStart\b(?=[^>]*w:name="Nrloc")/)
     assert.equal((visibleText(paragraphs[addressIndex + 1]).match(new RegExp(`\\b${number}\\b`, 'g')) || []).length, 1,
       'Numărul locului de consum apare o singură dată')
-    assert.equal(firstTextRunStyle(paragraphs[addressIndex]), firstTextRunStyle(paragraphWith(a3TemplateXml, 'w:name="AmplasamentA3"')))
-    assert.equal(firstTextRunStyle(paragraphs[addressIndex + 1]), firstTextRunStyle(paragraphs[addressIndex]))
+    assert.equal(withoutA3BaselineShift(firstTextRunStyle(paragraphs[addressIndex])), firstTextRunStyle(paragraphWith(a3TemplateXml, 'w:name="AmplasamentA3"')))
+    assert.equal(withoutA3BaselineShift(firstTextRunStyle(paragraphs[addressIndex + 1])), withoutA3BaselineShift(firstTextRunStyle(paragraphs[addressIndex])))
+    assert.ok(textRunStyles(paragraphs[addressIndex]).every((style) => /<w:position w:val="-20"\/>/.test(style)))
+    assert.ok(textRunStyles(paragraphs[addressIndex + 1]).every((style) => /<w:position w:val="-20"\/>/.test(style)), 'Toată adresa, inclusiv numărul, este coborâtă împreună')
     assert.ok(!/<w:br\b(?=[^>]*w:type="page")/.test(paragraphs[atrIndex] + paragraphs[atrIndex + 1] + paragraphs[addressIndex] + paragraphs[addressIndex + 1]))
     assert.match(visibleText(paragraphWith(a3Xml, 'w:name="Beneficiar"')), new RegExp(beneficiary))
   }

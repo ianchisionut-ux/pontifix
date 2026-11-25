@@ -12,6 +12,54 @@ export type IdentityCardData = {
 function clean(value = '') { return value.replace(/\s+/g, ' ').replace(/\s+([,.;:])/g, '$1').trim() }
 function fold(value = '') { return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '') }
 
+function normalizeDate(value = '') {
+  const match = value.match(/(\d{1,2})[.,/-](\d{1,2})[.,/-](\d{2,4})/)
+  if (!match) return ''
+  const day = Number(match[1]); const month = Number(match[2]); const shortYear = Number(match[3])
+  const year = match[3].length === 2 ? (shortYear > 35 ? 1900 : 2000) + shortYear : shortYear
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return ''
+  return `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`
+}
+
+function validCnp(value: string) {
+  if (!/^[1-9]\d{12}$/.test(value)) return false
+  const key = '279146358279'
+  const checksum = [...key].reduce((sum, digit, index) => sum + Number(digit) * Number(value[index]), 0) % 11
+  return Number(value[12]) === (checksum === 10 ? 1 : checksum)
+}
+
+const OCR_DATE = '(\\d{1,2}[.,/-]\\d{1,2}[.,/-]\\d{2,4})'
+
+function dateAfterLabel(text: string, label: RegExp) {
+  const match = label.exec(text)
+  if (!match) return ''
+  const nearby = text.slice(match.index + match[0].length, match.index + match[0].length + 48)
+  return normalizeDate(nearby.match(new RegExp(OCR_DATE))?.[1])
+}
+
+function identitySeriesNumber(text: string) {
+  const labeled = text.match(/\bSERIA?\s*[:.\-]?\s*([A-Z]{2})\s*(?:NR\.?|NO\.?)?\s*[:.\-]?\s*(\d{6})\b/i)
+  if (labeled) return [labeled[1].toUpperCase(), labeled[2]] as const
+  // On older Romanian identity cards the machine-readable line starts with
+  // the two-letter series and six-digit number, followed by a check digit.
+  const mrz = text.match(/\b([A-Z2][A-Z5])([0-9OISB]{6})\s*[<]\s*\d?\s*ROU/i)
+  if (mrz) return [mrz[1].toUpperCase().replace(/^2/, 'Z').replace(/5$/, 'S'), mrz[2].toUpperCase().replace(/O/g, '0').replace(/[IL]/g, '1').replace(/S/g, '5').replace(/B/g, '8')] as const
+  const nearLabel = text.match(/\b(?:SERIA|SERIE)\s*[:.\-]?\s*([A-Z]{2})[\s\S]{0,25}?\b(?:NR\.?|NO\.?)?\s*[:.\-]?\s*(\d{6})\b/i)
+  if (nearLabel) return [nearLabel[1].toUpperCase(), nearLabel[2]] as const
+  return ['', ''] as const
+}
+
+function issuer(lines: string[]) {
+  const office = /\b(?:SPC[L1I]EP|SPCRPCIV|DLEP|DEPABD|S[P]?CEP|SERVICIUL\s+PUBLIC\s+COMUNITAR)\b/i
+  const trim = (value: string) => clean(value.split(/\b(?:VALABILITATE|VALIDITY|VALIDITE|EXPIRY|EXPIRARE|EMISA|ISSUED|DATA\s+EMITERII)\b|\d{1,2}[.,/-]\d{1,2}[.,/-]\d{2,4}/i)[0]).replace(/\s*[~–—-]\s*$/, '')
+  const candidate = lines.find((line) => office.test(line))
+  if (candidate) return trim(candidate.slice(candidate.search(office)))
+  const labeledValue = labeled(lines, /\bEMISA\s+DE(?:\s*\/\s*DELIVREE\s+PAR)?(?:\s*\/\s*ISSUED\s*BY)?\b/i)
+  const fallback = trim(labeledValue)
+  return /^[A-Z][A-Z .-]{3,}$/i.test(fallback) && !/^(?:VALABILITATE|VALIDITY|VALIDITE|EXPIRY)$/i.test(fallback) ? fallback : ''
+}
+
 function labeled(lines: string[], label: RegExp) {
   for (let index = 0; index < lines.length; index++) {
     if (!label.test(lines[index])) continue
@@ -26,28 +74,30 @@ export function extractIdentityCardText(rawText: string): IdentityCardData {
   const text = fold(rawText).replace(/[|]/g, 'I')
   const lines = text.split(/\r?\n/).map(clean).filter(Boolean)
   const joined = lines.join('\n')
-  const cnp = (joined.match(/(?:CNP|COD\s+NUMERIC\s+PERSONAL)?\s*[:.-]?\s*([1-8](?:[\s.-]?\d){12})/i)?.[1] || '').replace(/\D/g, '')
-  const seriesNumber = joined.match(/(?:SERIA|SERIE|SERIES?)\s*[:.-]?\s*([A-Z]{2})\s*(?:NR\.?|NO\.?)?\s*[:.-]?\s*(\d{6})/i)
-    || joined.match(/\b([A-Z]{2})\s*(\d{6})\b/)
-  const mrzName = joined.match(/IDROU([A-Z]+)<<([A-Z<]+)/i)
+  const cnpCandidates = [...joined.matchAll(/\b[1-9](?:[\s.-]?\d){12}\b/g)].map((match) => match[0].replace(/\D/g, ''))
+  const cnp = cnpCandidates.find(validCnp) || ''
+  const [series, number] = identitySeriesNumber(joined)
+  const mrzName = joined.match(/IDROU([A-Z]+)<<([A-Z]+)(?:<([A-Z]+))?/i)
   const surname = mrzName?.[1] || labeled(lines, /\bNUME(?:\s*\/\s*NOM)?(?:\s*\/\s*LAST\s*NAME)?\b/i)
-  const given = mrzName?.[2]?.replace(/<+/g, ' ') || labeled(lines, /\bPRENUME(?:\s*\/\s*PRENOM)?(?:\s*\/\s*FIRST\s*NAME)?\b/i)
+  const given = mrzName ? [mrzName[2], mrzName[3]].filter(Boolean).join(' ') : labeled(lines, /\bPRENUME(?:\s*\/\s*PRENOM)?(?:\s*\/\s*FIRST\s*NAME)?\b/i)
   const fallbackName = labeled(lines, /\bNUME\s+SI\s+PRENUME\b/i)
-  const validity = joined.match(/(?:VALABILITATE|VALIDITY|VALIDITE)[^\d]{0,60}(\d{2}[.\/-]\d{2}[.\/-]\d{2,4})\s*[-–]\s*(\d{2}[.\/-]\d{2}[.\/-]\d{2,4})/i)
-  const dates = [...joined.matchAll(/\b\d{2}[.\/-]\d{2}[.\/-]\d{2,4}\b/g)].map((match) => match[0])
+  const validity = joined.match(/\b(\d{1,2}[.,/-]\d{1,2}[.,/-]\d{2,4})\s*[-–—~]\s*(\d{1,2}[.,/-]\d{1,2}[.,/-]\d{2,4})\b/)
   const domicileBlock = joined.match(/DOMICILIU(?:\s*\/\s*ADRESSE)?(?:\s*\/\s*ADDRESS)?([\s\S]{3,260}?)(?=EMISA\s+DE|DELIVREE\s+PAR|ISSUED\s*BY)/i)?.[1] || ''
   const domicileStart = domicileBlock.search(/\b(?:JUD\.?|MUN\.?|ORAS|COM\.?|SAT|STR\.?)\b/i)
-  const domicile = clean(domicileStart >= 0 ? domicileBlock.slice(domicileStart) : labeled(lines, /\bDOMICILIU(?:\s*\/\s*ADRESSE)?(?:\s*\/\s*ADDRESS)?\b/i))
-  const issuedBy = clean(joined.match(/\b((?:SPCLEP|SPCRPCIV|DLEP|DEPABD)\s+[A-Z][A-Z .-]{1,60})/i)?.[1] || labeled(lines, /\bEMISA\s+DE(?:\s*\/\s*DELIVREE\s+PAR)?(?:\s*\/\s*ISSUED\s*BY)?\b/i))
+  const domicileCandidate = clean(domicileStart >= 0 ? domicileBlock.slice(domicileStart) : labeled(lines, /\bDOMICILIU(?:\s*\/\s*ADRESSE)?(?:\s*\/\s*ADDRESS)?\b/i))
+  const domicile = /[\\‘’|]/.test(domicileCandidate) || (domicileCandidate.match(/[A-Z]{3,}/gi)?.length || 0) < 2 ? '' : domicileCandidate
+  const issuedBy = issuer(lines)
+  const issueDate = normalizeDate(validity?.[1]) || dateAfterLabel(joined, /\b(?:EMISA\s+LA|ELIBERATA\s+LA|DATA\s+EMITERII|DATE\s+OF\s+ISSUE|ISSUE\s+DATE|ISSUED\b(?!\s*BY))\b/i)
+  const expiryDate = normalizeDate(validity?.[2]) || dateAfterLabel(joined, /\b(?:VALABILA\s+PANA\s+LA|DATA\s+EXPIRARII|EXPIRY(?:\s+DATE)?|DATE\s+OF\s+EXPIRY|EXPIRES|VALID\s+UNTIL)\b/i)
   return {
     fullName: clean([surname, given].filter(Boolean).join(' ') || fallbackName),
     cnp,
-    series: seriesNumber?.[1] || '',
-    number: seriesNumber?.[2] || '',
+    series,
+    number,
     domicile,
     issuedBy,
-    validFrom: validity?.[1] || dates.at(-2) || '',
-    validUntil: validity?.[2] || dates.at(-1) || '',
+    validFrom: issueDate,
+    validUntil: expiryDate,
   }
 }
 
@@ -82,16 +132,63 @@ async function imageCanvas(file: File) {
   } finally { URL.revokeObjectURL(url) }
 }
 
+function focusedCardCrop(canvas: HTMLCanvasElement) {
+  if (canvas.height < canvas.width * 1.15) return null
+  const width = canvas.width; const height = canvas.height
+  // Score a small preview instead of allocating another full-resolution image.
+  const preview = document.createElement('canvas')
+  const previewScale = Math.min(480 / width, 720 / height, 1)
+  preview.width = Math.max(1, Math.round(width * previewScale))
+  preview.height = Math.max(1, Math.round(height * previewScale))
+  preview.getContext('2d', { willReadFrequently: true })?.drawImage(canvas, 0, 0, preview.width, preview.height)
+  const pixels = preview.getContext('2d', { willReadFrequently: true })?.getImageData(0, 0, preview.width, preview.height).data
+  if (!pixels) return null
+  const sampleWidth = preview.width; const sampleHeight = preview.height
+  const sampleCropWidth = Math.round(sampleWidth * .65); const sampleCropHeight = Math.round(sampleHeight * .55)
+  const candidates = [
+    { x: 0, y: 0 }, { x: sampleWidth - sampleCropWidth, y: 0 },
+    { x: 0, y: sampleHeight - sampleCropHeight }, { x: sampleWidth - sampleCropWidth, y: sampleHeight - sampleCropHeight },
+  ]
+  let best = candidates[0]; let bestScore = 0
+  for (const candidate of candidates) {
+    let score = 0
+    for (let y = candidate.y + 4; y < candidate.y + sampleCropHeight - 4; y += 4) {
+      for (let x = candidate.x + 4; x < candidate.x + sampleCropWidth - 4; x += 4) {
+        const index = (y * sampleWidth + x) * 4
+        const red = pixels[index]; const green = pixels[index + 1]; const blue = pixels[index + 2]
+        const spread = Math.max(red, green, blue) - Math.min(red, green, blue)
+        if (spread > 28 && Math.min(red, green, blue) < 245) score += 3
+        else if ((red + green + blue) / 3 < 180) score++
+      }
+    }
+    if (score > bestScore) { best = candidate; bestScore = score }
+  }
+  if (!bestScore) return null
+  const cropWidth = Math.round(width * .65); const cropHeight = Math.round(height * .55)
+  const sourceX = best.x === 0 ? 0 : width - cropWidth
+  const sourceY = best.y === 0 ? 0 : height - cropHeight
+  const crop = document.createElement('canvas')
+  crop.width = cropWidth; crop.height = cropHeight
+  crop.getContext('2d', { willReadFrequently: true })?.drawImage(canvas, sourceX, sourceY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
+  return crop
+}
+
 export async function analyzeIdentityCardInBrowser(file: File, onProgress?: (message: string) => void) {
   onProgress?.('Pregătesc imaginea local…')
   const canvas = await imageCanvas(file)
-  const { createWorker } = await import('tesseract.js')
+  const { createWorker, PSM } = await import('tesseract.js')
   const worker = await createWorker('ron+eng', 1, { logger: (event) => {
     if (event.status === 'recognizing text') onProgress?.(`Citesc CI: ${Math.round((event.progress || 0) * 100)}%`)
   } })
   try {
-    await worker.setParameters({ preserve_interword_spaces: '1' })
+    await worker.setParameters({ preserve_interword_spaces: '1', tessedit_pageseg_mode: PSM.SPARSE_TEXT })
     const result = await worker.recognize(canvas)
-    return extractIdentityCardText(result.data.text)
+    const extracted = extractIdentityCardText(result.data.text)
+    if (extracted.fullName && extracted.cnp && extracted.series && extracted.number && extracted.issuedBy && extracted.validFrom && extracted.validUntil) return extracted
+    const crop = focusedCardCrop(canvas)
+    if (!crop) return extracted
+    onProgress?.('Verific detaliile din zona cărții de identitate…')
+    const focused = extractIdentityCardText((await worker.recognize(crop)).data.text)
+    return { ...extracted, ...Object.fromEntries(Object.entries(focused).filter(([, value]) => value)) } as IdentityCardData
   } finally { await worker.terminate() }
 }

@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 import PizZip from 'pizzip'
-import { CONNECTION_FIELDS, getConnectionBeneficiaryType, type ConnectionFields } from '@/lib/connection-fields'
+import { CONNECTION_FIELDS, getConnectionBeneficiaryType, normalizeConnectionBeneficiaryFields, type ConnectionFields } from '@/lib/connection-fields'
 import { connectionAmountToWordsRO } from '@/lib/connection-amount-words'
 
 function xmlEscape(value: string) {
@@ -428,6 +428,34 @@ function a3AddressLines(address: string, locationNumber: string) {
   return [lines[0], lines[1], number, separator] as const
 }
 
+// The A3 form is an image behind the document text. Lower only the filled
+// glyphs relative to their paragraphs, so the printed labels and lines stay
+// in their original places and later fields do not inherit the offset.
+function lowerA3TextRuns(fragment: string, halfPoints: number) {
+  return fragment.replace(/<w:r\b[^>]*>[\s\S]*?<\/w:r>/g, (run) => {
+    if (!/<w:t\b/.test(run)) return run
+    const position = `<w:position w:val="-${halfPoints}"/>`
+    const properties = /<w:rPr\b[\s\S]*?<\/w:rPr>/.exec(run)?.[0]
+    if (properties) {
+      return run.replace(properties, properties.replace(/<w:position\b[^>]*\/>/g, '').replace('</w:rPr>', `${position}</w:rPr>`))
+    }
+    return run.replace(/^<w:r\b[^>]*>/, (opening) => `${opening}<w:rPr>${position}</w:rPr>`)
+  })
+}
+
+function lowerA3ParagraphAtBookmark(xml: string, name: string, halfPoints: number) {
+  const match = a3ParagraphAtBookmark(xml, name)
+  return xml.slice(0, match.start) + lowerA3TextRuns(match.paragraph, halfPoints) + xml.slice(match.end)
+}
+
+function lowerA3PowerReference(xml: string, halfPoints: number) {
+  const reference = [...xml.matchAll(/<w:p\b[^>]*>[\s\S]*?<\/w:p>/g)]
+    .find((item) => /<w:instrText\b[^>]*>\s*REF\s+KW2\b/.test(item[0]))
+  if (!reference) throw new Error('Șablonul A3 nu conține puterea din coloana dreaptă.')
+  return xml.slice(0, reference.index!) + lowerA3TextRuns(reference[0], halfPoints)
+    + xml.slice(reference.index! + reference[0].length)
+}
+
 // The source A3 form is a page-sized graphic with text positioned by its
 // paragraphs. Word's manually arranged examples place ATR number/date and
 // work address on two separate lines, with the same original font and indents.
@@ -450,8 +478,8 @@ function positionA3Fields(xml: string, fields: ConnectionFields) {
   const slash = fields.ATR.indexOf('/')
   const atrNumber = slash < 0 ? fields.ATR.trim() : fields.ATR.slice(0, slash).trim()
   const atrDate = slash < 0 ? '' : fields.ATR.slice(slash + 1).trim()
-  const atrNumberParagraph = `${atrParts.opening}${atrParts.properties}${atrTags.start}${runLike(atrParts.textRuns[0], ` ${atrNumber}`)}</w:p>`
-  const atrDateParagraph = `${atrParts.opening}${atrParts.properties}${runLike(atrParts.textRuns[0], `${atrDate} `)}${atrTags.end}</w:p>`
+  const atrNumberParagraph = `${atrParts.opening}${atrParts.properties}${atrTags.start}${lowerA3TextRuns(runLike(atrParts.textRuns[0], ` ${atrNumber}`), 22)}</w:p>`
+  const atrDateParagraph = `${atrParts.opening}${atrParts.properties}${lowerA3TextRuns(runLike(atrParts.textRuns[0], `${atrDate} `), 20)}${atrTags.end}</w:p>`
   xml = xml.slice(0, atr.start) + atrNumberParagraph + atrDateParagraph + xml.slice(atr.end)
 
   const location = a3ParagraphAtBookmark(xml, 'AmplasamentA3')
@@ -463,11 +491,14 @@ function positionA3Fields(xml: string, fields: ConnectionFields) {
     ? locationParts.properties.replace(/<w:rPr\b[\s\S]*?<\/w:rPr>/, textStyle)
     : locationParts.properties
   const [firstLine, secondLine, locationNumber, numberSeparator] = a3AddressLines(fields.AmplasamentA3, fields.Nrloc)
-  const lineOne = `${locationParts.opening}${locationProperties}${addressTags.start}${runLike(locationParts.textRuns[0], ` ${firstLine}`)}</w:p>`
-  const lineTwo = `${locationParts.opening}${locationProperties}${runLike(locationParts.textRuns[0], secondLine ? ` ${secondLine}` : ' ')}${addressTags.end}`
+  const lineOne = `${locationParts.opening}${locationProperties}${addressTags.start}${lowerA3TextRuns(runLike(locationParts.textRuns[0], ` ${firstLine}`), 20)}</w:p>`
+  const lineTwo = lowerA3TextRuns(`${locationParts.opening}${locationProperties}${runLike(locationParts.textRuns[0], secondLine ? ` ${secondLine}` : ' ')}${addressTags.end}`
     + `${runLike(locationParts.textRuns[1] || locationParts.textRuns[0], locationNumber ? `${numberSeparator}nr.` : '')}${locationNumberTags.start}`
-    + `${runLike(locationParts.textRuns.at(-1)!, locationNumber ? ` ${locationNumber} ` : '')}${locationNumberTags.end}</w:p>`
-  return xml.slice(0, location.start) + lineOne + lineTwo + xml.slice(location.end)
+    + `${runLike(locationParts.textRuns.at(-1)!, locationNumber ? ` ${locationNumber} ` : '')}${locationNumberTags.end}</w:p>`, 20)
+  xml = xml.slice(0, location.start) + lineOne + lineTwo + xml.slice(location.end)
+  xml = lowerA3ParagraphAtBookmark(xml, 'KW2', 18)
+  xml = lowerA3PowerReference(xml, 20)
+  return xml
 }
 
 export function parseConnectionMoney(value: string) {
@@ -497,7 +528,10 @@ export async function generateConnectionDocx(fields: ConnectionFields, type: 'co
   const buffer = await fs.readFile(path.join(process.cwd(), 'assets', 'bransamente', filename))
   const zip = new PizZip(buffer)
   const amount = parseConnectionMoney(fields.SumaFaraTVA)
-  const documentFields = { ...fields, SumaFaraTVA: amount === null ? fields.SumaFaraTVA : money(amount) }
+  const documentFields = {
+    ...normalizeConnectionBeneficiaryFields(fields),
+    SumaFaraTVA: amount === null ? fields.SumaFaraTVA : money(amount),
+  }
   if (getConnectionBeneficiaryType(fields) === 'PJ') {
     // These identify a natural person and must not leak from older PJ dossiers.
     for (const field of ['CNP', 'NrSX', 'DataSX', 'DataExpirareSX', 'CiSerie', 'CiNumar',
@@ -523,7 +557,7 @@ export async function generateConnectionDocx(fields: ConnectionFields, type: 'co
       xml = replaceFormulaResult(xml, '=SUM\\s*\\(\\s*SumaFaraTVA', money(amount * 1.21))
       xml = replaceFormulaResult(xml, '=PRODUCT\\s*\\(\\s*SumaFaraTVA', money(amount * .21))
     }
-    if (type === 'contract' && name === 'word/document.xml') xml = routeBeneficiarySections(xml, fields)
+    if (type === 'contract' && name === 'word/document.xml') xml = routeBeneficiarySections(xml, documentFields)
     if (type === 'contract' && part === 'contract-notification' && name === 'word/document.xml') xml = keepContractAndNotification(xml)
     if (type === 'contract' && part !== 'full' && part !== 'contract-notification' && name === 'word/document.xml') {
       xml = keepSingleContractPart(xml, part)

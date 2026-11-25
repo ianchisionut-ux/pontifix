@@ -18,8 +18,8 @@ export const CONNECTION_FIELD_LABELS: Record<string, string> = {
   AmplasamentA3: 'Amplasament dosar A3', NrCad: 'NR. CAD', ATR: 'Număr / dată ATR', TipBransament: 'Tip branșament',
   PTA: 'PTA / sursa de alimentare', Solutia: 'Soluția tehnică', KW: 'Putere (kW)', KW2: 'Putere A3 (kW)',
   KVA: 'Putere (kVA)', SumaFaraTVA: 'Sumă fără TVA', NrContract: 'Număr contract',
-  DATA: 'Data contractului', NrSX: 'Număr SX', DataSX: 'Data SX', DataExpirareSX: 'Data expirare SX',
-  CiSerie: 'Serie CI', CiNumar: 'Număr CI', CiDomiciliu: 'Domiciliu CI', CiEmisaDe: 'CI emisă de',
+  DATA: 'Data contractului', NrSX: 'Număr CI', DataSX: 'Data CI', DataExpirareSX: 'Data expirării CI',
+  CiSerie: 'Serie CI', CiNumar: 'Număr CI', CiDomiciliu: 'Domiciliu CI', CiEmisaDe: 'Eliberată de (SPCLEP)',
   CiValabilaDeLa: 'CI valabilă de la', CiValabilaPanaLa: 'CI valabilă până la',
 }
 
@@ -48,6 +48,18 @@ function identifierType(value: string): ConnectionBeneficiaryType | null {
   return null
 }
 
+function normalizeLegacyCiDate(value: string) {
+  const match = /^(\d{1,2})[.,/-](\d{1,2})[.,/-](\d{2}|\d{4})$/.exec(value.trim())
+  if (!match) return value.trim()
+  const day = Number(match[1])
+  const month = Number(match[2])
+  const shortYear = Number(match[3])
+  const year = match[3].length === 2 ? (shortYear <= 40 ? 2000 : 1900) + shortYear : shortYear
+  const date = new Date(Date.UTC(year, month - 1, day))
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return value.trim()
+  return `${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.${year}`
+}
+
 export function getConnectionBeneficiaryType(fields: Partial<Record<string, string>>): ConnectionBeneficiaryType {
   if (fields.TipBeneficiar === 'PF' || fields.TipBeneficiar === 'PJ') return fields.TipBeneficiar
   if (fields.CUI?.trim()) return 'PJ'
@@ -67,6 +79,16 @@ export function normalizeConnectionBeneficiaryFields(input: Partial<Record<strin
   }
   // Existing offer/DEER matching still reads CnpCif. Keep it in sync with the selected type.
   fields.CnpCif = type === 'PF' ? fields.CNP : fields.CUI
+  // Older dossiers stored identity-card data under SX names. Keep those
+  // records usable in the notification while the UI moves to generic CI names.
+  if (type === 'PF') {
+    const legacyNumber = fields.NrSX.trim()
+    const combined = /^([A-Z]{1,3})[\s./-]*(\d{5,9})$/i.exec(legacyNumber)
+    if (!fields.CiSerie.trim() && combined) fields.CiSerie = combined[1].toUpperCase()
+    if (!fields.CiNumar.trim()) fields.CiNumar = combined?.[2] || legacyNumber
+    if (!fields.CiValabilaDeLa.trim()) fields.CiValabilaDeLa = normalizeLegacyCiDate(fields.DataSX)
+    if (!fields.CiValabilaPanaLa.trim()) fields.CiValabilaPanaLa = normalizeLegacyCiDate(fields.DataExpirareSX)
+  }
   return fields
 }
 
